@@ -1,0 +1,281 @@
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
+
+export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.1"
+  }
+  public: {
+    Tables: {
+      discovered_rules: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          detected_value: number | null
+          id: string
+          impact_weight: number | null
+          metadata: Json | null
+          pattern_type: string
+          rule_name: string
+          status: Database["public"]["Enums"]["rule_status"] | null
+          tolerance_max: number | null
+          tolerance_min: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          detected_value?: number | null
+          id?: string
+          impact_weight?: number | null
+          metadata?: Json | null
+          pattern_type: string
+          rule_name: string
+          status?: Database["public"]["Enums"]["rule_status"] | null
+          tolerance_max?: number | null
+          tolerance_min?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          detected_value?: number | null
+          id?: string
+          impact_weight?: number | null
+          metadata?: Json | null
+          pattern_type?: string
+          rule_name?: string
+          status?: Database["public"]["Enums"]["rule_status"] | null
+          tolerance_max?: number | null
+          tolerance_min?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      font_library: {
+        Row: {
+          character: string
+          created_at: string | null
+          display_name: string | null
+          id: string
+          mean_slant_angle: number | null
+          normalized_bezier: Json
+          pressure_variance: number | null
+          stroke_count: number | null
+          updated_at: string | null
+          vector_paths: Json
+        }
+        Insert: {
+          character: string
+          created_at?: string | null
+          display_name?: string | null
+          id?: string
+          mean_slant_angle?: number | null
+          normalized_bezier?: Json
+          pressure_variance?: number | null
+          stroke_count?: number | null
+          updated_at?: string | null
+          vector_paths?: Json
+        }
+        Update: {
+          character?: string
+          created_at?: string | null
+          display_name?: string | null
+          id?: string
+          mean_slant_angle?: number | null
+          normalized_bezier?: Json
+          pressure_variance?: number | null
+          stroke_count?: number | null
+          updated_at?: string | null
+          vector_paths?: Json
+        }
+        Relationships: []
+      }
+      stroke_recordings: {
+        Row: {
+          avg_pressure: number | null
+          avg_velocity: number | null
+          created_at: string | null
+          duration_ms: number | null
+          font_library_id: string | null
+          id: string
+          slant_angle: number | null
+          stroke_data: Json
+        }
+        Insert: {
+          avg_pressure?: number | null
+          avg_velocity?: number | null
+          created_at?: string | null
+          duration_ms?: number | null
+          font_library_id?: string | null
+          id?: string
+          slant_angle?: number | null
+          stroke_data?: Json
+        }
+        Update: {
+          avg_pressure?: number | null
+          avg_velocity?: number | null
+          created_at?: string | null
+          duration_ms?: number | null
+          font_library_id?: string | null
+          id?: string
+          slant_angle?: number | null
+          stroke_data?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stroke_recordings_font_library_id_fkey"
+            columns: ["font_library_id"]
+            isOneToOne: false
+            referencedRelation: "font_library"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      rule_status: "pending" | "approved" | "rejected"
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+}
+
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {
+      rule_status: ["pending", "approved", "rejected"],
+    },
+  },
+} as const
