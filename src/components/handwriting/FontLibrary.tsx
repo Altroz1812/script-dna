@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Library, Trash2, Eye, Loader2 } from 'lucide-react';
+import { Library, Trash2, Eye, Loader2, Play } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { StrokeReplayCanvas } from './StrokeReplayCanvas';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,12 +17,32 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+
+interface StrokePoint {
+  x: number;
+  y: number;
+  pressure: number;
+}
+
+interface NormalizedStroke {
+  points: StrokePoint[];
+  color: string;
+  width: number;
+}
 
 interface FontCharacter {
   id: string;
   character: string;
   display_name: string | null;
   vector_paths: string[];
+  normalized_bezier: NormalizedStroke[];
   mean_slant_angle: number | null;
   pressure_variance: number | null;
   stroke_count: number | null;
@@ -43,11 +64,14 @@ export function FontLibrary() {
 
       if (error) throw error;
 
-      // Parse vector_paths from JSON
+      // Parse vector_paths and normalized_bezier from JSON
       const parsed = (data || []).map((item) => ({
         ...item,
         vector_paths: Array.isArray(item.vector_paths) 
           ? item.vector_paths as string[]
+          : [],
+        normalized_bezier: Array.isArray(item.normalized_bezier)
+          ? (item.normalized_bezier as unknown as NormalizedStroke[])
           : [],
       }));
 
@@ -265,7 +289,34 @@ export function FontLibrary() {
               </div>
 
               {/* Actions */}
-              <div className="pt-3 border-t border-border/50">
+              <div className="pt-3 border-t border-border/50 space-y-2">
+                {/* Replay Button */}
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button
+                      size="sm"
+                      className="w-full bg-gradient-to-r from-primary to-accent"
+                      disabled={!selectedCharacter.normalized_bezier || selectedCharacter.normalized_bezier.length === 0}
+                    >
+                      <Play className="w-4 h-4 mr-2" />
+                      Replay Writing
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
+                        <Play className="w-5 h-5 text-accent" />
+                        Stroke Replay: "{selectedCharacter.character}"
+                      </DialogTitle>
+                    </DialogHeader>
+                    <StrokeReplayCanvas
+                      normalizedBezier={selectedCharacter.normalized_bezier}
+                      canvasWidth={450}
+                      canvasHeight={360}
+                    />
+                  </DialogContent>
+                </Dialog>
+
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button

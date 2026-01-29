@@ -120,11 +120,17 @@ export function CharacterTraining({ strokes, metrics, onSave }: CharacterTrainin
           </label>
           <Input
             value={character}
-            onChange={(e) => setCharacter(e.target.value.slice(0, 1))}
+            onChange={(e) => {
+              const value = e.target.value;
+              // Only allow uppercase and lowercase letters (A-Z, a-z)
+              const filtered = value.replace(/[^a-zA-Z]/g, '').slice(0, 1);
+              setCharacter(filtered);
+            }}
             placeholder="A"
             className="mt-1.5 text-center text-2xl font-mono h-14 bg-secondary/50 border-border/50"
             maxLength={1}
           />
+          <p className="text-[10px] text-muted-foreground mt-1">Only A-Z, a-z allowed</p>
         </div>
 
         <div>
