@@ -1,8 +1,10 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
-import { Play, Pause, RotateCcw, Volume2, VolumeX } from 'lucide-react';
+import { Play, Pause, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
+import { useAudioRecorder } from '@/hooks/useAudioRecorder';
+import { VoiceNarrationControls } from './VoiceNarrationControls';
 
 interface StrokePoint {
   x: number;
@@ -33,12 +35,21 @@ export function StrokeReplayCanvas({
 }: StrokeReplayCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [progress, setProgress] = useState(0);
   const [speed, setSpeed] = useState(1);
-  const [isMuted, setIsMuted] = useState(true);
+  
+  const {
+    isRecording,
+    recordedAudio,
+    error: recordingError,
+    startRecording,
+    stopRecording,
+    clearRecording,
+  } = useAudioRecorder();
   
   // Flatten all points for sequential playback
   const allPoints = useCallback(() => {
@@ -131,6 +142,13 @@ export function StrokeReplayCanvas({
     setIsPlaying(true);
     setIsPaused(false);
 
+    // Start audio playback if we have a recording
+    if (recordedAudio && audioRef.current) {
+      audioRef.current.currentTime = (progress / 100) * audioRef.current.duration || 0;
+      audioRef.current.playbackRate = speed;
+      audioRef.current.play().catch(console.error);
+    }
+
     let currentIndex = Math.floor((progress / 100) * (points.length - 1));
     const baseInterval = 30 / speed; // ms per point
 
@@ -138,6 +156,9 @@ export function StrokeReplayCanvas({
       if (currentIndex >= points.length) {
         setIsPlaying(false);
         setProgress(100);
+        if (audioRef.current) {
+          audioRef.current.pause();
+        }
         onReplayComplete?.();
         return;
       }
@@ -152,12 +173,15 @@ export function StrokeReplayCanvas({
     };
 
     animate();
-  }, [allPoints, drawPoint, progress, speed, onReplayComplete]);
+  }, [allPoints, drawPoint, progress, speed, onReplayComplete, recordedAudio]);
 
   const pauseReplay = useCallback(() => {
     if (animationRef.current) {
       clearTimeout(animationRef.current);
       animationRef.current = null;
+    }
+    if (audioRef.current) {
+      audioRef.current.pause();
     }
     setIsPaused(true);
     setIsPlaying(false);
@@ -167,6 +191,10 @@ export function StrokeReplayCanvas({
     if (animationRef.current) {
       clearTimeout(animationRef.current);
       animationRef.current = null;
+    }
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
     }
     setIsPlaying(false);
     setIsPaused(false);
@@ -280,17 +308,6 @@ export function StrokeReplayCanvas({
         >
           <RotateCcw className="w-4 h-4" />
         </Button>
-
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => setIsMuted(!isMuted)}
-          className="opacity-50 cursor-not-allowed"
-          disabled
-          title="AI Voice (Coming Soon)"
-        >
-          {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-        </Button>
       </div>
 
       {/* Speed Control */}
@@ -304,13 +321,34 @@ export function StrokeReplayCanvas({
               variant={speed === s ? 'default' : 'outline'}
               onClick={() => setSpeed(s)}
               className="h-7 px-2 text-xs"
-              disabled={isPlaying}
+              disabled={isPlaying || isRecording}
             >
               {s}x
             </Button>
           ))}
         </div>
       </div>
+
+      {/* Voice Narration Controls */}
+      <VoiceNarrationControls
+        isRecording={isRecording}
+        recordedAudio={recordedAudio}
+        error={recordingError}
+        isPlaying={isPlaying}
+        onStartRecording={startRecording}
+        onStopRecording={stopRecording}
+        onClearRecording={clearRecording}
+      />
+
+      {/* Hidden audio element for playback */}
+      {recordedAudio && (
+        <audio
+          ref={audioRef}
+          src={recordedAudio.url}
+          preload="auto"
+          className="hidden"
+        />
+      )}
     </div>
   );
 }
