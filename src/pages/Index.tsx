@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { PenTool, Database, BarChart3, Settings } from 'lucide-react';
+import { PenTool, Database, BarChart3, Settings, Library } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CanvasNotepad } from '@/components/handwriting/CanvasNotepad';
 import { CanvasToolbar } from '@/components/handwriting/CanvasToolbar';
@@ -7,6 +7,7 @@ import { LiveMetricsPanel } from '@/components/handwriting/LiveMetricsPanel';
 import { CharacterTraining } from '@/components/handwriting/CharacterTraining';
 import { DiscoveryAgent } from '@/components/handwriting/DiscoveryAgent';
 import { RuleGovernance } from '@/components/handwriting/RuleGovernance';
+import { FontLibrary } from '@/components/handwriting/FontLibrary';
 import { useStrokeCapture } from '@/hooks/useStrokeCapture';
 import { ToolbarConfig, OverlayType } from '@/types/handwriting';
 
@@ -82,6 +83,10 @@ const Index = () => {
               <Settings className="w-4 h-4 mr-2" />
               Rule Governance
             </TabsTrigger>
+            <TabsTrigger value="library" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <Library className="w-4 h-4 mr-2" />
+              Font Library
+            </TabsTrigger>
           </TabsList>
 
           {/* Pattern Recorder Tab */}
@@ -133,6 +138,11 @@ const Index = () => {
           {/* Rule Governance Tab */}
           <TabsContent value="governance">
             <RuleGovernance />
+          </TabsContent>
+
+          {/* Font Library Tab */}
+          <TabsContent value="library">
+            <FontLibrary />
           </TabsContent>
         </Tabs>
       </main>
