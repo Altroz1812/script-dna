@@ -1,6 +1,8 @@
 import { useState, useCallback } from 'react';
-import { PenTool, Database, BarChart3, Settings, Library } from 'lucide-react';
+import { PenTool, Database, BarChart3, Settings, Library, Wand2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
 import { CanvasNotepad } from '@/components/handwriting/CanvasNotepad';
 import { CanvasToolbar } from '@/components/handwriting/CanvasToolbar';
 import { LiveMetricsPanel } from '@/components/handwriting/LiveMetricsPanel';
@@ -63,7 +65,13 @@ const Index = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <Link to="/font-compiler">
+              <Button className="bg-gradient-to-r from-primary to-accent hover:opacity-90">
+                <Wand2 className="w-4 h-4 mr-2" />
+                Font Compiler
+              </Button>
+            </Link>
             <span className="px-3 py-1 bg-primary/10 text-primary text-xs font-medium rounded-full">
               Admin
             </span>
