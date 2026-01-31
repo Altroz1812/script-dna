@@ -3,24 +3,32 @@ import { PenTool, Database, BarChart3, Settings, Library, Wand2 } from 'lucide-r
 import { Link } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { CanvasNotepad } from '@/components/handwriting/CanvasNotepad';
-import { CanvasToolbar } from '@/components/handwriting/CanvasToolbar';
+import { AdvancedCanvasNotepad } from '@/components/handwriting/AdvancedCanvasNotepad';
+import { AdvancedCanvasControls } from '@/components/handwriting/AdvancedCanvasControls';
 import { LiveMetricsPanel } from '@/components/handwriting/LiveMetricsPanel';
 import { CharacterTraining } from '@/components/handwriting/CharacterTraining';
 import { DiscoveryAgent } from '@/components/handwriting/DiscoveryAgent';
 import { RuleGovernance } from '@/components/handwriting/RuleGovernance';
 import { FontLibrary } from '@/components/handwriting/FontLibrary';
-import { useStrokeCapture } from '@/hooks/useStrokeCapture';
-import { ToolbarConfig, OverlayType } from '@/types/handwriting';
+import { useAdvancedStrokeCapture } from '@/hooks/useAdvancedStrokeCapture';
+import { AdvancedCanvasConfig } from '@/types/handwriting';
 
 const Index = () => {
-  const [toolbarConfig, setToolbarConfig] = useState<ToolbarConfig>({
+  const [canvasConfig, setCanvasConfig] = useState<AdvancedCanvasConfig>({
     brushWidth: 3,
     penColor: '#3b82f6',
-    overlay: 'lines',
+    pressureCurve: 'linear',
+    pressureMultiplier: 1.0,
+    penAngleLock: false,
+    lockedAngle: 75,
+    overlay: 'fourline',
+    slantAngle: 75,
+    targetSamplingRate: 120,
+    enablePrediction: true,
+    enableCoalescing: true,
+    smoothingLevel: 0.3,
+    bezierFitting: true,
   });
-
-  const [undoStack, setUndoStack] = useState<string[]>([]);
 
   const {
     strokes,
@@ -31,16 +39,19 @@ const Index = () => {
     continueStroke,
     endStroke,
     undo,
+    redo,
     clear,
-  } = useStrokeCapture();
+    canUndo,
+    canRedo,
+  } = useAdvancedStrokeCapture(canvasConfig);
 
-  const handleConfigChange = useCallback((config: Partial<ToolbarConfig>) => {
-    setToolbarConfig(prev => ({ ...prev, ...config }));
+  const handleConfigChange = useCallback((config: Partial<AdvancedCanvasConfig>) => {
+    setCanvasConfig(prev => ({ ...prev, ...config }));
   }, []);
 
   const handleEndStroke = useCallback(() => {
-    endStroke(toolbarConfig.penColor, toolbarConfig.brushWidth);
-  }, [endStroke, toolbarConfig.penColor, toolbarConfig.brushWidth]);
+    endStroke(canvasConfig.penColor, canvasConfig.brushWidth);
+  }, [endStroke, canvasConfig.penColor, canvasConfig.brushWidth]);
 
   const handleClear = useCallback(() => {
     clear();
@@ -99,15 +110,16 @@ const Index = () => {
 
           {/* Pattern Recorder Tab */}
           <TabsContent value="recorder" className="space-y-4">
-            {/* Toolbar */}
-            <CanvasToolbar
-              config={toolbarConfig}
+            {/* Advanced Toolbar */}
+            <AdvancedCanvasControls
+              config={canvasConfig}
               onConfigChange={handleConfigChange}
               onUndo={undo}
-              onRedo={() => {}}
+              onRedo={redo}
               onClear={handleClear}
-              canUndo={strokes.length > 0}
-              canRedo={undoStack.length > 0}
+              canUndo={canUndo}
+              canRedo={canRedo}
+              samplingRate={metrics.samplingRate}
             />
 
             {/* Main Grid */}
@@ -115,12 +127,13 @@ const Index = () => {
               {/* Canvas Area */}
               <div className="lg:col-span-8 space-y-4">
                 <div className="h-[500px]">
-                  <CanvasNotepad
+                  <AdvancedCanvasNotepad
                     strokes={strokes}
                     currentStroke={currentStroke}
-                    penColor={toolbarConfig.penColor}
-                    brushWidth={toolbarConfig.brushWidth}
-                    overlay={toolbarConfig.overlay}
+                    penColor={canvasConfig.penColor}
+                    brushWidth={canvasConfig.brushWidth}
+                    overlay={canvasConfig.overlay}
+                    slantAngle={canvasConfig.slantAngle}
                     onStartStroke={startStroke}
                     onContinueStroke={continueStroke}
                     onEndStroke={handleEndStroke}
