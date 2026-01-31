@@ -270,10 +270,19 @@ export function FourLineCanvas({
         onPointerLeave={handlePointerUp}
       />
       
-      {/* Target Character Display */}
+      {/* Target Character Display - Centered Ghost Guide */}
       {targetCharacter && (
-        <div className="absolute top-3 right-3 w-16 h-16 flex items-center justify-center bg-primary/10 border border-primary/30 rounded-xl">
-          <span className="text-4xl font-mono text-primary">{targetCharacter}</span>
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <span className="text-[180px] font-serif text-muted-foreground/10 select-none leading-none" style={{ marginTop: '-5%' }}>
+            {targetCharacter}
+          </span>
+        </div>
+      )}
+      
+      {/* Target Character Label */}
+      {targetCharacter && (
+        <div className="absolute top-3 right-3 px-3 py-1.5 bg-primary/20 border border-primary/40 rounded-lg">
+          <span className="text-lg font-mono font-bold text-primary">{targetCharacter}</span>
         </div>
       )}
       
