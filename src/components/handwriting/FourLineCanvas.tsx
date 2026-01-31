@@ -12,6 +12,7 @@ interface FourLineCanvasProps {
   onContinueStroke: (x: number, y: number, pressure: number) => void;
   onEndStroke: () => void;
   onOutOfBounds?: () => void;
+  onCanvasSizeChange?: (height: number) => void;
 }
 
 // Line positions as percentages of canvas height
@@ -32,6 +33,7 @@ export function FourLineCanvas({
   onContinueStroke,
   onEndStroke,
   onOutOfBounds,
+  onCanvasSizeChange,
 }: FourLineCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -200,6 +202,7 @@ export function FourLineCanvas({
       canvas.style.height = `${rect.height}px`;
       
       setCanvasSize({ width: rect.width, height: rect.height });
+      onCanvasSizeChange?.(rect.height);
       
       const ctx = canvas.getContext('2d');
       if (ctx) {
@@ -211,7 +214,7 @@ export function FourLineCanvas({
 
     resizeObserver.observe(container);
     return () => resizeObserver.disconnect();
-  }, [redrawCanvas]);
+  }, [redrawCanvas, onCanvasSizeChange]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
