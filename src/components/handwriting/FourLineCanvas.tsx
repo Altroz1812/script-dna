@@ -240,7 +240,6 @@ export function FourLineCanvas({
     if (!isPointInBounds(normalizedY)) {
       if (!isOutOfBounds) {
         setIsOutOfBounds(true);
-        onOutOfBounds?.();
       }
       return;
     }
