@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { ArrowLeft, Wand2, Download, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CharacterGrid } from '@/components/handwriting/CharacterGrid';
@@ -43,6 +43,8 @@ const FontCompiler = () => {
     undo,
     clear,
   } = useStrokeCapture();
+
+  const lastOutOfBoundsToastAtRef = useRef<number>(0);
 
   // Real-time stroke validation
   const validationMetrics = useStrokeValidator({
@@ -210,11 +212,20 @@ const FontCompiler = () => {
   };
 
   const handleOutOfBounds = () => {
-    toast({
+    // Prevent toast spam during pointer jitter; also auto-dismiss quickly
+    const now = Date.now();
+    if (now - lastOutOfBoundsToastAtRef.current < 1500) return;
+    lastOutOfBoundsToastAtRef.current = now;
+
+    const t = toast({
       title: "Stay Within Lines",
       description: "Write between the guide lines for consistent font metrics.",
       variant: "destructive",
     });
+
+    window.setTimeout(() => {
+      t.dismiss();
+    }, 1600);
   };
 
   return (
