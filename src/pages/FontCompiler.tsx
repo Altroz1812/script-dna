@@ -1,14 +1,15 @@
 import { useState, useCallback } from 'react';
 import { ArrowLeft, Wand2, Download, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CharacterGrid } from '@/components/handwriting/CharacterGrid';
 import { FourLineCanvas } from '@/components/handwriting/FourLineCanvas';
 import { FontMetadataConfig, FontMetadata } from '@/components/handwriting/FontMetadataConfig';
 import { LiveTypeTester } from '@/components/handwriting/LiveTypeTester';
 import { LigatureEngine } from '@/components/handwriting/LigatureEngine';
 import { CanvasToolbar } from '@/components/handwriting/CanvasToolbar';
+import { StrokeValidationFeedback } from '@/components/handwriting/StrokeValidationFeedback';
 import { useStrokeCapture } from '@/hooks/useStrokeCapture';
+import { useStrokeValidator } from '@/hooks/useStrokeValidator';
 import { ToolbarConfig } from '@/types/handwriting';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
@@ -17,6 +18,7 @@ import { Link } from 'react-router-dom';
 const FontCompiler = () => {
   const [selectedCharacter, setSelectedCharacter] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [canvasHeight, setCanvasHeight] = useState(0);
   const [toolbarConfig, setToolbarConfig] = useState<ToolbarConfig>({
     brushWidth: 4,
     penColor: '#3b82f6',
@@ -41,6 +43,13 @@ const FontCompiler = () => {
     undo,
     clear,
   } = useStrokeCapture();
+
+  // Real-time stroke validation
+  const validationMetrics = useStrokeValidator({
+    strokes,
+    currentStroke,
+    canvasHeight,
+  });
 
   const handleConfigChange = useCallback((config: Partial<ToolbarConfig>) => {
     setToolbarConfig(prev => ({ ...prev, ...config }));
@@ -279,8 +288,15 @@ const FontCompiler = () => {
                 onContinueStroke={continueStroke}
                 onEndStroke={handleEndStroke}
                 onOutOfBounds={handleOutOfBounds}
+                onCanvasSizeChange={setCanvasHeight}
               />
             </div>
+
+            {/* Real-time Validation Feedback */}
+            <StrokeValidationFeedback
+              metrics={validationMetrics}
+              hasStrokes={strokes.length > 0 || currentStroke.length > 0}
+            />
 
             {/* Save Button */}
             <div className="flex items-center gap-3">
