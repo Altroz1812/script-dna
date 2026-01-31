@@ -7,6 +7,7 @@ import { Slider } from '@/components/ui/slider';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { FontMetadata } from './FontMetadataConfig';
+import { HandwritingRenderer } from './HandwritingRenderer';
 
 interface LiveTypeTesterProps {
   metadata: FontMetadata;
@@ -155,45 +156,44 @@ export function LiveTypeTester({ metadata, onExportFont, isExporting }: LiveType
       </div>
 
       {/* Font Preview Area */}
-      <div className="relative">
+      <div className="relative min-h-[200px] bg-secondary/30 border border-border/50 rounded-lg p-4">
         {isLoadingFont && selectedFont === 'generated' && (
           <div className="absolute inset-0 bg-background/80 flex items-center justify-center rounded-lg z-10">
             <Loader2 className="w-6 h-6 animate-spin text-primary" />
           </div>
         )}
 
-        {/* Inject custom font face if available */}
-        {fontUrl && (
-          <style>
-            {`
-              @font-face {
-                font-family: 'MyGeneratedFont';
-                src: url(${fontUrl}) format('opentype');
-              }
-            `}
-          </style>
-        )}
-
-        <Textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Type here to test your font..."
-          className="min-h-[200px] bg-secondary/30 border-border/50 resize-none"
-          style={{
-            fontFamily: getFontFamily(),
-            fontSize: `${fontSize}px`,
-            lineHeight: `${metadata.lineHeight}%`,
-            letterSpacing: `${metadata.globalKerning / 100}em`,
-          }}
-        />
-
-        {/* Font info overlay */}
-        {selectedFont === 'generated' && !fontUrl && (
-          <div className="absolute bottom-3 right-3 bg-warning/20 text-warning px-3 py-1.5 rounded-lg text-xs">
-            Preview mode • Font not yet compiled
+        {selectedFont === 'generated' ? (
+          /* Render using handwriting vectors */
+          <HandwritingRenderer
+            text={text}
+            fontSize={fontSize}
+            lineHeight={metadata.lineHeight}
+            letterSpacing={metadata.globalKerning}
+          />
+        ) : (
+          /* Render using system font */
+          <div
+            className="whitespace-pre-wrap break-words"
+            style={{
+              fontFamily: getFontFamily(),
+              fontSize: `${fontSize}px`,
+              lineHeight: `${metadata.lineHeight}%`,
+              letterSpacing: `${metadata.globalKerning / 100}em`,
+            }}
+          >
+            {text}
           </div>
         )}
       </div>
+
+      {/* Text Input */}
+      <Textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Type here to test your font..."
+        className="min-h-[80px] bg-secondary/30 border-border/50 resize-none text-sm"
+      />
 
       {/* Sample Texts */}
       <div className="space-y-2">
