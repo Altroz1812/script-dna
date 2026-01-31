@@ -1,6 +1,10 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { StrokePoint, StrokeData } from '@/types/handwriting';
+import { WritingMode } from '@/types/writingAssistance';
 import { cn } from '@/lib/utils';
+import { useWritingAssistance } from '@/hooks/useWritingAssistance';
+import { WritingAssistanceOverlay } from './WritingAssistanceOverlay';
+import { WritingModeToggle } from './WritingModeToggle';
 
 interface FourLineCanvasProps {
   strokes: StrokeData[];
@@ -39,6 +43,21 @@ export function FourLineCanvas({
   const containerRef = useRef<HTMLDivElement>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [isOutOfBounds, setIsOutOfBounds] = useState(false);
+
+  // Writing Assistance System
+  const {
+    state: assistanceState,
+    config: assistanceConfig,
+    setMode,
+    updateConfig,
+    applyMagneticSnap,
+    issues,
+    curveAnalysis,
+  } = useWritingAssistance({
+    currentStroke,
+    targetCharacter,
+    canvasHeight: canvasSize.height,
+  });
 
   // Calculate the allowed writing zone
   const getWritingZone = useCallback(() => {
@@ -245,7 +264,20 @@ export function FourLineCanvas({
     }
     
     setIsOutOfBounds(false);
-    onContinueStroke(x / window.devicePixelRatio, normalizedY, pressure);
+    
+    // Apply magnetic snapping in perfection mode
+    if (assistanceConfig.mode === 'perfection') {
+      const snappedPoint = applyMagneticSnap({
+        x: x / window.devicePixelRatio,
+        y: normalizedY,
+        pressure,
+        velocity: 0,
+        timestamp: Date.now(),
+      });
+      onContinueStroke(snappedPoint.x, snappedPoint.y, pressure);
+    } else {
+      onContinueStroke(x / window.devicePixelRatio, normalizedY, pressure);
+    }
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
@@ -271,6 +303,17 @@ export function FourLineCanvas({
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
       />
+
+      {/* Writing Assistance Overlay */}
+      <WritingAssistanceOverlay
+        issues={issues}
+        currentStroke={currentStroke}
+        mode={assistanceConfig.mode}
+        curveAnalysis={curveAnalysis}
+        canvasWidth={canvasSize.width}
+        canvasHeight={canvasSize.height}
+        ghostOpacity={assistanceConfig.ghostOpacity}
+      />
       
       {/* Target Character Display - Centered Ghost Guide */}
       {targetCharacter && (
@@ -281,17 +324,22 @@ export function FourLineCanvas({
         </div>
       )}
       
+      {/* Writing Mode Toggle */}
+      <div className="absolute top-3 left-3 z-10">
+        <WritingModeToggle
+          mode={assistanceConfig.mode}
+          config={assistanceConfig}
+          onModeChange={setMode}
+          onConfigChange={updateConfig}
+        />
+      </div>
+
       {/* Target Character Label */}
       {targetCharacter && (
         <div className="absolute top-3 right-3 px-3 py-1.5 bg-primary/20 border border-primary/40 rounded-lg">
           <span className="text-lg font-mono font-bold text-primary">{targetCharacter}</span>
         </div>
       )}
-      
-      {/* Canvas Label */}
-      <div className="absolute top-3 left-3 px-2 py-1 bg-background/60 backdrop-blur-sm rounded text-xs font-mono text-muted-foreground">
-        FONT TRAINING • 4-Line Guide
-      </div>
 
       {/* Out of bounds warning */}
       {isOutOfBounds && (
