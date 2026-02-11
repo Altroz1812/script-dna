@@ -45,6 +45,11 @@ export function CursiveOverlay({
 
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
+    // Encourage kerning/ligatures when supported by the browser
+    try {
+      (ctx as any).fontKerning = 'normal';
+    } catch {}
+
     const baselineY = canvasHeight * lineConfig.baseline / 100;
     const xHeightY = canvasHeight * lineConfig.xHeight / 100;
     const ascenderY = canvasHeight * lineConfig.ascender / 100;
