@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { StrokePoint, StrokeData, ShapeSuggestion, CanvasTool } from '@/types/handwriting';
+import { CursiveOverlay } from './CursiveOverlay';
 import { WritingMode } from '@/types/writingAssistance';
 import { cn } from '@/lib/utils';
 import { useWritingAssistance } from '@/hooks/useWritingAssistance';
@@ -15,6 +16,8 @@ interface FourLineCanvasProps {
   brushWidth: number;
   activeTool: CanvasTool;
   targetCharacter: string | null;
+  overlayText?: string;
+  overlayFontFamily?: string;
   onStartStroke: (x: number, y: number, pressure: number) => void;
   onContinueStroke: (x: number, y: number, pressure: number) => void;
   onEndStroke: () => void;
@@ -31,6 +34,7 @@ interface FourLineCanvasProps {
   onRotateStrokes?: (strokeIds: string[], angleDeg?: number) => void;
   onOutOfBounds?: () => void;
   onCanvasSizeChange?: (height: number) => void;
+  children?: React.ReactNode;
 }
 
 // Line positions as percentages of canvas height — equal 25% spacing
@@ -48,6 +52,8 @@ export function FourLineCanvas({
   brushWidth,
   activeTool,
   targetCharacter,
+  overlayText,
+  overlayFontFamily,
   onStartStroke,
   onContinueStroke,
   onEndStroke,
@@ -64,6 +70,7 @@ export function FourLineCanvas({
   onRotateStrokes,
   onOutOfBounds,
   onCanvasSizeChange,
+  children,
 }: FourLineCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -600,7 +607,19 @@ export function FourLineCanvas({
         onPointerLeave={handlePointerUp}
       />
 
-      {/* Stamp drag preview */}
+      {/* Cursive font overlay (underlay for tracing) */}
+      {overlayText && overlayFontFamily && canvasSize.width > 0 && (
+        <CursiveOverlay
+          text={overlayText}
+          fontFamily={overlayFontFamily}
+          canvasWidth={canvasSize.width}
+          canvasHeight={canvasSize.height}
+        />
+      )}
+
+      {/* Children (extra overlays) */}
+      {children}
+
       {stampPreview && stampPreview.length > 1 && (
         <svg
           className="absolute inset-0 w-full h-full pointer-events-none z-10"
