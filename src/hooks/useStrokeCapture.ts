@@ -268,6 +268,63 @@ export function useStrokeCapture() {
     applyStrokes(updated);
   }, [strokes, applyStrokes]);
 
+  // Flip strokes horizontally or vertically around their centroid
+  const flipStrokes = useCallback((strokeIds: string[], axis: 'horizontal' | 'vertical') => {
+    const selected = strokes.filter(s => strokeIds.includes(s.id));
+    const allPts = selected.flatMap(s => s.points);
+    if (allPts.length === 0) return;
+    const cx = allPts.reduce((s, p) => s + p.x, 0) / allPts.length;
+    const cy = allPts.reduce((s, p) => s + p.y, 0) / allPts.length;
+    const updated = strokes.map(s => {
+      if (!strokeIds.includes(s.id)) return s;
+      return {
+        ...s,
+        points: s.points.map(p => ({
+          ...p,
+          x: axis === 'horizontal' ? 2 * cx - p.x : p.x,
+          y: axis === 'vertical' ? 2 * cy - p.y : p.y,
+        })),
+      };
+    });
+    applyStrokes(updated);
+  }, [strokes, applyStrokes]);
+
+  // Rotate strokes 90° clockwise around their centroid
+  const rotateStrokes = useCallback((strokeIds: string[], angleDeg: number = 90) => {
+    const selected = strokes.filter(s => strokeIds.includes(s.id));
+    const allPts = selected.flatMap(s => s.points);
+    if (allPts.length === 0) return;
+    const cx = allPts.reduce((s, p) => s + p.x, 0) / allPts.length;
+    const cy = allPts.reduce((s, p) => s + p.y, 0) / allPts.length;
+    const rad = (angleDeg * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const updated = strokes.map(s => {
+      if (!strokeIds.includes(s.id)) return s;
+      return {
+        ...s,
+        points: s.points.map(p => {
+          const dx = p.x - cx;
+          const dy = p.y - cy;
+          return { ...p, x: cx + dx * cos - dy * sin, y: cy + dx * sin + dy * cos };
+        }),
+      };
+    });
+    applyStrokes(updated);
+  }, [strokes, applyStrokes]);
+
+  // Flip ALL strokes on canvas
+  const flipAll = useCallback((axis: 'horizontal' | 'vertical') => {
+    if (strokes.length === 0) return;
+    flipStrokes(strokes.map(s => s.id), axis);
+  }, [strokes, flipStrokes]);
+
+  // Rotate ALL strokes on canvas
+  const rotateAll = useCallback((angleDeg: number = 90) => {
+    if (strokes.length === 0) return;
+    rotateStrokes(strokes.map(s => s.id), angleDeg);
+  }, [strokes, rotateStrokes]);
+
   return {
     strokes,
     currentStroke,
@@ -290,5 +347,9 @@ export function useStrokeCapture() {
     scaleStrokes,
     changeStrokeWidth,
     resizeStrokes,
+    flipStrokes,
+    rotateStrokes,
+    flipAll,
+    rotateAll,
   };
 }
