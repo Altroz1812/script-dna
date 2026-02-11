@@ -151,6 +151,10 @@ export function LiveTypeTester({ metadata, onExportFont, isExporting }: LiveType
       return `'${generatedFontFamily}', cursive`;
     }
     if (selectedFont === 'default') return 'inherit';
+    if (selectedFont === 'cursive') {
+      // Generic 'cursive' varies a lot by OS; use a script stack to prefer connected cursive faces.
+      return `"Segoe Script", "Apple Chancery", "Snell Roundhand", "Brush Script MT", cursive`;
+    }
     return selectedFont;
   };
 
