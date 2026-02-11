@@ -35,23 +35,36 @@ export function FontUploadPanel({ activeFont, onFontSelect }: FontUploadPanelPro
 
   useEffect(() => { loadFonts(); }, [loadFonts]);
 
-  // Inject @font-face whenever activeFont changes – use cache-busting URL
+  // Inject font using FontFace API for reliable cross-font switching
   useEffect(() => {
     if (!activeFont) return;
     const familyName = `uploaded-${activeFont.id}`;
-    // Always remove old style first so the browser fetches the latest file
-    const existingStyle = document.getElementById(`font-face-${activeFont.id}`);
-    existingStyle?.remove();
+    let cancelled = false;
 
-    const bustCache = `?v=${Date.now()}`;
-    const style = document.createElement('style');
-    style.id = `font-face-${activeFont.id}`;
-    style.textContent = `@font-face { font-family: '${familyName}'; src: url('${activeFont.file_url}${bustCache}') format('truetype'); font-display: swap; }`;
-    document.head.appendChild(style);
+    const face = new FontFace(familyName, `url('${activeFont.file_url}?v=${Date.now()}')`, {
+      display: 'swap' as FontDisplay,
+    });
+
+    face.load().then((loadedFace) => {
+      if (cancelled) return;
+      // Remove any prior version of this family
+      const toDelete: FontFace[] = [];
+      document.fonts.forEach((f) => {
+        if (f.family === familyName) toDelete.push(f);
+      });
+      toDelete.forEach((f) => document.fonts.delete(f));
+      document.fonts.add(loadedFace);
+    }).catch((err) => {
+      console.error('Font load error:', err);
+    });
 
     return () => {
-      const el = document.getElementById(`font-face-${activeFont.id}`);
-      el?.remove();
+      cancelled = true;
+      const toDelete: FontFace[] = [];
+      document.fonts.forEach((f) => {
+        if (f.family === familyName) toDelete.push(f);
+      });
+      toDelete.forEach((f) => document.fonts.delete(f));
     };
   }, [activeFont]);
 
