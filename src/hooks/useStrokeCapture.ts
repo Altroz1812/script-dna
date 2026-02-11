@@ -173,15 +173,18 @@ export function useStrokeCapture() {
 
   const eraseAtPoint = useCallback((x: number, y: number, radius: number) => {
     setStrokes(prev => {
-      const updated = prev.filter(stroke => {
-        // Keep stroke if no point is within eraser radius
-        return !stroke.points.some(p => {
+      const updated = prev.map(stroke => {
+        // Filter out points within eraser radius, splitting the stroke
+        const remaining = stroke.points.filter(p => {
           const dx = p.x - x;
           const dy = p.y - y;
-          return Math.sqrt(dx * dx + dy * dy) < radius;
+          return Math.sqrt(dx * dx + dy * dy) >= radius;
         });
-      });
-      if (updated.length !== prev.length) {
+        if (remaining.length === stroke.points.length) return stroke;
+        if (remaining.length === 0) return null;
+        return { ...stroke, points: remaining };
+      }).filter(Boolean) as StrokeData[];
+      if (updated.length !== prev.length || updated.some((s, i) => s !== prev[i])) {
         updateMetrics(updated, []);
       }
       return updated;

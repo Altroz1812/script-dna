@@ -1,4 +1,4 @@
-import { Undo2, Redo2, Trash2, Grid3X3, AlignJustify, X, Pen, Eraser, Circle, Minus, MoveUpRight, Ellipsis } from 'lucide-react';
+import { Undo2, Redo2, Trash2, Grid3X3, AlignJustify, X, Pen, Eraser, Circle, Minus, MoveUpRight, Ellipsis, Square, Triangle } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ToolbarConfig, OverlayType, CanvasTool } from '@/types/handwriting';
@@ -27,6 +27,8 @@ const TOOLS: { value: CanvasTool; icon: React.ReactNode; label: string }[] = [
 const STAMP_TOOLS: { value: CanvasTool; icon: React.ReactNode; label: string }[] = [
   { value: 'stamp_circle', icon: <Circle className="w-3.5 h-3.5" />, label: 'Circle' },
   { value: 'stamp_ellipse', icon: <Ellipsis className="w-3.5 h-3.5" />, label: 'Ellipse' },
+  { value: 'stamp_rectangle', icon: <Square className="w-3.5 h-3.5" />, label: 'Rectangle' },
+  { value: 'stamp_triangle', icon: <Triangle className="w-3.5 h-3.5" />, label: 'Triangle' },
   { value: 'stamp_line', icon: <Minus className="w-3.5 h-3.5" />, label: 'Line' },
   { value: 'stamp_arc', icon: <MoveUpRight className="w-3.5 h-3.5" />, label: 'Arc' },
 ];
