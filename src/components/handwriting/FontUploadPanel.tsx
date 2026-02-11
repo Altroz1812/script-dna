@@ -118,26 +118,23 @@ export function FontUploadPanel({ activeFont, onFontSelect }: FontUploadPanelPro
           />
 
           {/* Upload button */}
-          <label className="block">
+          <div className="relative">
             <Button
               variant="outline"
-              className="w-full relative"
+              className="w-full pointer-events-none"
               disabled={isUploading || !fontName.trim()}
-              asChild
             >
-              <span>
-                <Upload className="w-4 h-4 mr-2" />
-                {isUploading ? 'Uploading...' : 'Upload .ttf File'}
-                <input
-                  type="file"
-                  accept=".ttf"
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                  onChange={handleUpload}
-                  disabled={isUploading || !fontName.trim()}
-                />
-              </span>
+              <Upload className="w-4 h-4 mr-2" />
+              {isUploading ? 'Uploading...' : 'Upload .ttf File'}
             </Button>
-          </label>
+            <input
+              type="file"
+              accept=".ttf"
+              className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
+              onChange={handleUpload}
+              disabled={isUploading || !fontName.trim()}
+            />
+          </div>
 
           {/* Previously uploaded fonts */}
           {fonts.length > 0 && (

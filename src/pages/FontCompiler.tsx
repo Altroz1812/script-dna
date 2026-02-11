@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import { Slider } from '@/components/ui/slider';
 import { ArrowLeft, Wand2, Download, RotateCcw, PenTool, Type } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,6 +46,8 @@ const FontCompiler = () => {
   const [activeFont, setActiveFont] = useState<UploadedFont | null>(null);
   const [wordMode, setWordMode] = useState(false);
   const [wordText, setWordText] = useState('');
+  const [overlayOpacity, setOverlayOpacity] = useState(0.2);
+  const [overlayColor, setOverlayColor] = useState('#94a3b8');
 
   const {
     strokes, currentStroke, metrics,
@@ -329,6 +332,36 @@ const FontCompiler = () => {
                     className="text-sm"
                   />
                 )}
+
+                {/* Overlay Opacity */}
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Overlay Opacity: {Math.round(overlayOpacity * 100)}%
+                  </label>
+                  <Slider
+                    min={5}
+                    max={80}
+                    step={1}
+                    value={[Math.round(overlayOpacity * 100)]}
+                    onValueChange={([v]) => setOverlayOpacity(v / 100)}
+                  />
+                </div>
+
+                {/* Overlay Color */}
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Overlay Color
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={overlayColor}
+                      onChange={(e) => setOverlayColor(e.target.value)}
+                      className="w-8 h-8 rounded border border-border cursor-pointer"
+                    />
+                    <span className="text-xs text-muted-foreground">{overlayColor}</span>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -363,6 +396,8 @@ const FontCompiler = () => {
                 targetCharacter={selectedCharacter}
                 overlayText={overlayText}
                 overlayFontFamily={overlayFontFamily}
+                overlayOpacity={overlayOpacity}
+                overlayColor={overlayColor}
                 onStartStroke={startStroke}
                 onContinueStroke={continueStroke}
                 onEndStroke={handleEndStroke}
