@@ -18,6 +18,8 @@ interface FourLineCanvasProps {
   targetCharacter: string | null;
   overlayText?: string;
   overlayFontFamily?: string;
+  overlayOpacity?: number;
+  overlayColor?: string;
   onStartStroke: (x: number, y: number, pressure: number) => void;
   onContinueStroke: (x: number, y: number, pressure: number) => void;
   onEndStroke: () => void;
@@ -54,6 +56,8 @@ export function FourLineCanvas({
   targetCharacter,
   overlayText,
   overlayFontFamily,
+  overlayOpacity,
+  overlayColor,
   onStartStroke,
   onContinueStroke,
   onEndStroke,
@@ -614,6 +618,8 @@ export function FourLineCanvas({
           fontFamily={overlayFontFamily}
           canvasWidth={canvasSize.width}
           canvasHeight={canvasSize.height}
+          opacity={overlayOpacity}
+          color={overlayColor}
         />
       )}
 
