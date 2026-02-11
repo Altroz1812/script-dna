@@ -486,6 +486,7 @@ const FontCompiler = () => {
               metadata={fontMetadata}
               onExportFont={handleExportFont}
               isExporting={isExporting}
+              uploadedFont={activeFont ? { id: activeFont.id, font_name: activeFont.font_name } : null}
             />
           </div>
 

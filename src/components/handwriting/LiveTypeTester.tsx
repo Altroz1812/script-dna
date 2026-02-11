@@ -9,10 +9,16 @@ import { toast } from '@/hooks/use-toast';
 import { FontMetadata } from './FontMetadataConfig';
 import { HandwritingRenderer } from './HandwritingRenderer';
 
+interface UploadedFontRef {
+  id: string;
+  font_name: string;
+}
+
 interface LiveTypeTesterProps {
   metadata: FontMetadata;
   onExportFont: () => void;
   isExporting: boolean;
+  uploadedFont?: UploadedFontRef | null;
 }
 
 const SYSTEM_FONTS = [
@@ -24,11 +30,13 @@ const SYSTEM_FONTS = [
 ];
 
 // Unique font family name per generation to bust cache
+
+// Unique font family name per generation to bust cache
 let fontGenCounter = 0;
 
-export function LiveTypeTester({ metadata, onExportFont, isExporting }: LiveTypeTesterProps) {
+export function LiveTypeTester({ metadata, onExportFont, isExporting, uploadedFont }: LiveTypeTesterProps) {
   const [text, setText] = useState('The quick brown fox jumps over the lazy dog.');
-  const [selectedFont, setSelectedFont] = useState('generated');
+  const [selectedFont, setSelectedFont] = useState(uploadedFont ? 'uploaded' : 'generated');
   const [fontSize, setFontSize] = useState(32);
   const [characterCount, setCharacterCount] = useState(0);
   const [isLoadingFont, setIsLoadingFont] = useState(false);
@@ -146,18 +154,28 @@ export function LiveTypeTester({ metadata, onExportFont, isExporting }: LiveType
     });
   }, [lastTtfBlob, metadata.fontName, onExportFont]);
 
+  // Auto-select uploaded font when it changes
+  useEffect(() => {
+    if (uploadedFont) {
+      setSelectedFont('uploaded');
+    }
+  }, [uploadedFont]);
+
   const getFontFamily = () => {
+    if (selectedFont === 'uploaded' && uploadedFont) {
+      return `'uploaded-${uploadedFont.id}', cursive`;
+    }
     if (selectedFont === 'generated' && generatedFontFamily) {
       return `'${generatedFontFamily}', cursive`;
     }
     if (selectedFont === 'default') return 'inherit';
     if (selectedFont === 'cursive') {
-      // Generic 'cursive' varies a lot by OS; use a script stack to prefer connected cursive faces.
       return `"Segoe Script", "Apple Chancery", "Snell Roundhand", "Brush Script MT", cursive`;
     }
     return selectedFont;
   };
 
+  const showUploadedPreview = selectedFont === 'uploaded' && uploadedFont;
   const showGeneratedPreview = selectedFont === 'generated' && generatedFontFamily;
   const showVectorFallback = selectedFont === 'generated' && !generatedFontFamily;
 
@@ -180,6 +198,11 @@ export function LiveTypeTester({ metadata, onExportFont, isExporting }: LiveType
             <SelectValue placeholder="Select font" />
           </SelectTrigger>
           <SelectContent>
+            {uploadedFont && (
+              <SelectItem value="uploaded">
+                <span className="text-accent">🖋️</span> {uploadedFont.font_name}
+              </SelectItem>
+            )}
             <SelectItem value="generated">
               <span className="text-accent">✨</span> My Generated Font
             </SelectItem>
@@ -277,6 +300,24 @@ export function LiveTypeTester({ metadata, onExportFont, isExporting }: LiveType
               </div>
             )}
           </>
+        )}
+
+        {showUploadedPreview && (
+          <div
+            className="whitespace-pre-wrap break-words text-foreground"
+            style={{
+              fontFamily: getFontFamily(),
+              fontSize: `${fontSize}px`,
+              lineHeight: `${metadata.lineHeight}%`,
+              letterSpacing: `${metadata.globalKerning / 100}em`,
+              fontKerning: 'normal',
+              fontVariantLigatures: 'normal',
+              fontFeatureSettings: '"liga" 1, "clig" 1, "calt" 1, "kern" 1',
+              textRendering: 'optimizeLegibility',
+            }}
+          >
+            {text}
+          </div>
         )}
 
         {showGeneratedPreview && (
