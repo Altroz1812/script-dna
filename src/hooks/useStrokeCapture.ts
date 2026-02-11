@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { StrokePoint, StrokeData, LiveMetrics } from '@/types/handwriting';
+import { StrokePoint, StrokeData, LiveMetrics, ShapeSuggestion } from '@/types/handwriting';
 
 export function useStrokeCapture() {
   const [strokes, setStrokes] = useState<StrokeData[]>([]);
@@ -160,6 +160,17 @@ export function useStrokeCapture() {
     });
   }, []);
 
+  const replaceLastStroke = useCallback((newPoints: StrokePoint[]) => {
+    setStrokes(prev => {
+      if (prev.length === 0) return prev;
+      const updated = [...prev];
+      const last = updated[updated.length - 1];
+      updated[updated.length - 1] = { ...last, points: newPoints };
+      updateMetrics(updated, []);
+      return updated;
+    });
+  }, [updateMetrics]);
+
   return {
     strokes,
     currentStroke,
@@ -170,5 +181,6 @@ export function useStrokeCapture() {
     endStroke,
     undo,
     clear,
+    replaceLastStroke,
   };
 }

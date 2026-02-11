@@ -42,6 +42,7 @@ const FontCompiler = () => {
     endStroke,
     undo,
     clear,
+    replaceLastStroke,
   } = useStrokeCapture();
 
   const lastOutOfBoundsToastAtRef = useRef<number>(0);
@@ -298,6 +299,7 @@ const FontCompiler = () => {
                 onStartStroke={startStroke}
                 onContinueStroke={continueStroke}
                 onEndStroke={handleEndStroke}
+                onReplaceLastStroke={replaceLastStroke}
                 onOutOfBounds={handleOutOfBounds}
                 onCanvasSizeChange={setCanvasHeight}
               />

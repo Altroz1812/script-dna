@@ -106,3 +106,11 @@ export interface AdvancedCanvasConfig {
   smoothingLevel: number;      // 0-1 (0 = raw, 1 = heavy smoothing)
   bezierFitting: boolean;
 }
+
+export interface ShapeSuggestion {
+  type: 'circle' | 'ellipse' | 'semi_circle' | 'arc' | 'straight_line' | 'slant_line';
+  confidence: number;
+  correctedPoints: StrokePoint[];
+  originalStrokeId: string;
+  label: string;
+}

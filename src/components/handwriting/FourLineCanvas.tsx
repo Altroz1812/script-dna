@@ -1,10 +1,12 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
-import { StrokePoint, StrokeData } from '@/types/handwriting';
+import { StrokePoint, StrokeData, ShapeSuggestion } from '@/types/handwriting';
 import { WritingMode } from '@/types/writingAssistance';
 import { cn } from '@/lib/utils';
 import { useWritingAssistance } from '@/hooks/useWritingAssistance';
+import { useShapeDetector } from '@/hooks/useShapeDetector';
 import { WritingAssistanceOverlay } from './WritingAssistanceOverlay';
 import { WritingModeToggle } from './WritingModeToggle';
+import { ShapeCorrectionOverlay } from './ShapeCorrectionOverlay';
 
 interface FourLineCanvasProps {
   strokes: StrokeData[];
@@ -15,6 +17,7 @@ interface FourLineCanvasProps {
   onStartStroke: (x: number, y: number, pressure: number) => void;
   onContinueStroke: (x: number, y: number, pressure: number) => void;
   onEndStroke: () => void;
+  onReplaceLastStroke?: (points: StrokePoint[]) => void;
   onOutOfBounds?: () => void;
   onCanvasSizeChange?: (height: number) => void;
 }
@@ -36,6 +39,7 @@ export function FourLineCanvas({
   onStartStroke,
   onContinueStroke,
   onEndStroke,
+  onReplaceLastStroke,
   onOutOfBounds,
   onCanvasSizeChange,
 }: FourLineCanvasProps) {
@@ -43,6 +47,9 @@ export function FourLineCanvas({
   const containerRef = useRef<HTMLDivElement>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [isOutOfBounds, setIsOutOfBounds] = useState(false);
+  const [shapeSuggestion, setShapeSuggestion] = useState<ShapeSuggestion | null>(null);
+
+  const { detectShape } = useShapeDetector();
 
   // Writing Assistance System
   const {
@@ -282,9 +289,28 @@ export function FourLineCanvas({
 
   const handlePointerUp = (e: React.PointerEvent) => {
     e.preventDefault();
+    const completedPoints = [...currentStroke];
     onEndStroke();
     setIsOutOfBounds(false);
     (e.target as HTMLCanvasElement).releasePointerCapture(e.pointerId);
+
+    // Run shape detection on completed stroke
+    if (completedPoints.length >= 8) {
+      const lastStrokeId = strokes.length > 0 ? strokes[strokes.length - 1].id : crypto.randomUUID();
+      const suggestion = detectShape(completedPoints, lastStrokeId);
+      setShapeSuggestion(suggestion);
+    }
+  };
+
+  const handleAcceptShape = () => {
+    if (shapeSuggestion && onReplaceLastStroke) {
+      onReplaceLastStroke(shapeSuggestion.correctedPoints);
+    }
+    setShapeSuggestion(null);
+  };
+
+  const handleRejectShape = () => {
+    setShapeSuggestion(null);
   };
 
   return (
@@ -314,6 +340,17 @@ export function FourLineCanvas({
         canvasHeight={canvasSize.height}
         ghostOpacity={assistanceConfig.ghostOpacity}
       />
+
+      {/* Shape Correction Overlay */}
+      {shapeSuggestion && (
+        <ShapeCorrectionOverlay
+          suggestion={shapeSuggestion}
+          canvasWidth={canvasSize.width}
+          canvasHeight={canvasSize.height}
+          onAccept={handleAcceptShape}
+          onReject={handleRejectShape}
+        />
+      )}
       
       {/* Target Character Display - Centered Ghost Guide */}
       {targetCharacter && (
