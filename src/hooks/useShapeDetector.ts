@@ -1,8 +1,19 @@
 import { useCallback } from 'react';
 import { StrokePoint, ShapeSuggestion } from '@/types/handwriting';
 
-const MIN_POINTS = 8;
-const MIN_CONFIDENCE = 0.7;
+const MIN_POINTS = 6;
+const MIN_CONFIDENCE = 0.45;
+
+// Snap angles in degrees
+const SNAP_ANGLES = [0, 15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165, 180, -15, -30, -45, -60, -75, -90, -105, -120, -135, -150, -165, -180];
+const SNAP_TOLERANCE = 7; // degrees
+
+function snapAngle(angleDeg: number): number {
+  for (const snap of SNAP_ANGLES) {
+    if (Math.abs(angleDeg - snap) <= SNAP_TOLERANCE) return snap;
+  }
+  return angleDeg;
+}
 
 function distance(a: { x: number; y: number }, b: { x: number; y: number }) {
   return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
@@ -96,7 +107,7 @@ function detectCircle(points: StrokePoint[]): ShapeSuggestion | null {
   if (avgR < 5) return null;
 
   const variance = radii.reduce((s, r) => s + ((r - avgR) / avgR) ** 2, 0) / radii.length;
-  const confidence = Math.max(0, 1 - variance * 8);
+  const confidence = Math.max(0, 1 - variance * 5);
 
   if (confidence < MIN_CONFIDENCE) return null;
 
@@ -145,20 +156,28 @@ function detectLine(points: StrokePoint[]): ShapeSuggestion | null {
   }
 
   const deviation = maxDev / lineLen;
-  const confidence = Math.max(0, 1 - deviation * 6);
+  const confidence = Math.max(0, 1 - deviation * 4);
 
   if (confidence < MIN_CONFIDENCE) return null;
 
-  const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-  const isSlant = Math.abs(angle) > 10 && Math.abs(angle) < 80;
+  const rawAngle = Math.atan2(dy, dx) * (180 / Math.PI);
+  const snappedAngle = snapAngle(rawAngle);
+  const snappedRad = (snappedAngle * Math.PI) / 180;
+  const isSlant = Math.abs(snappedAngle) > 10 && Math.abs(snappedAngle) < 80;
 
-  const corrected = generateLinePoints(first, last, points.length, points);
+  // Generate line using snapped angle
+  const snappedEnd = {
+    x: first.x + lineLen * Math.cos(snappedRad),
+    y: first.y + lineLen * Math.sin(snappedRad),
+  };
+
+  const corrected = generateLinePoints(first, snappedEnd, points.length, points);
   return {
     type: isSlant ? 'slant_line' : 'straight_line',
     confidence,
     correctedPoints: corrected,
     originalStrokeId: '',
-    label: `${isSlant ? 'Slant' : 'Straight'} line detected (${Math.round(confidence * 100)}%)`,
+    label: `${isSlant ? 'Slant' : 'Straight'} line ${snappedAngle}° (${Math.round(confidence * 100)}%)`,
   };
 }
 
@@ -177,7 +196,7 @@ function detectArc(points: StrokePoint[]): ShapeSuggestion | null {
   if (avgR < 5) return null;
 
   const variance = radii.reduce((s, r) => s + ((r - avgR) / avgR) ** 2, 0) / radii.length;
-  const curvatureConsistency = Math.max(0, 1 - variance * 10);
+  const curvatureConsistency = Math.max(0, 1 - variance * 6);
 
   if (curvatureConsistency < MIN_CONFIDENCE) return null;
 

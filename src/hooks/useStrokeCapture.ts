@@ -171,6 +171,40 @@ export function useStrokeCapture() {
     });
   }, [updateMetrics]);
 
+  const eraseAtPoint = useCallback((x: number, y: number, radius: number) => {
+    setStrokes(prev => {
+      const updated = prev.filter(stroke => {
+        // Keep stroke if no point is within eraser radius
+        return !stroke.points.some(p => {
+          const dx = p.x - x;
+          const dy = p.y - y;
+          return Math.sqrt(dx * dx + dy * dy) < radius;
+        });
+      });
+      if (updated.length !== prev.length) {
+        updateMetrics(updated, []);
+      }
+      return updated;
+    });
+  }, [updateMetrics]);
+
+  const addStamp = useCallback((points: StrokePoint[], color: string, width: number) => {
+    const now = performance.now();
+    const newStroke: StrokeData = {
+      id: crypto.randomUUID(),
+      points,
+      color,
+      width,
+      startTime: now,
+      endTime: now,
+    };
+    setStrokes(prev => {
+      const newStrokes = [...prev, newStroke];
+      updateMetrics(newStrokes, []);
+      return newStrokes;
+    });
+  }, [updateMetrics]);
+
   return {
     strokes,
     currentStroke,
@@ -182,5 +216,7 @@ export function useStrokeCapture() {
     undo,
     clear,
     replaceLastStroke,
+    eraseAtPoint,
+    addStamp,
   };
 }

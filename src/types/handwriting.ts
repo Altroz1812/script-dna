@@ -70,6 +70,9 @@ export interface DiscoveredRule {
 // Smart Overlay Types
 export type OverlayType = 'none' | 'grid' | 'lines' | 'ruled' | 'fourline' | 'slant';
 
+// Canvas tool types
+export type CanvasTool = 'pen' | 'eraser' | 'stamp_circle' | 'stamp_line' | 'stamp_arc' | 'stamp_ellipse';
+
 // Pressure Sensitivity Curve Types
 export type PressureCurveType = 'linear' | 'calligraphic' | 'elastic' | 'soft' | 'firm';
 
@@ -78,6 +81,7 @@ export interface ToolbarConfig {
   brushWidth: number;
   penColor: string;
   overlay: OverlayType;
+  activeTool: CanvasTool;
 }
 
 export interface AdvancedCanvasConfig {

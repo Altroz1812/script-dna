@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
-import { StrokePoint, StrokeData, ShapeSuggestion } from '@/types/handwriting';
+import { StrokePoint, StrokeData, ShapeSuggestion, CanvasTool } from '@/types/handwriting';
 import { WritingMode } from '@/types/writingAssistance';
 import { cn } from '@/lib/utils';
 import { useWritingAssistance } from '@/hooks/useWritingAssistance';
@@ -13,11 +13,14 @@ interface FourLineCanvasProps {
   currentStroke: StrokePoint[];
   penColor: string;
   brushWidth: number;
+  activeTool: CanvasTool;
   targetCharacter: string | null;
   onStartStroke: (x: number, y: number, pressure: number) => void;
   onContinueStroke: (x: number, y: number, pressure: number) => void;
   onEndStroke: () => void;
   onReplaceLastStroke?: (points: StrokePoint[]) => void;
+  onEraseAtPoint?: (x: number, y: number, radius: number) => void;
+  onAddStamp?: (points: StrokePoint[], color: string, width: number) => void;
   onOutOfBounds?: () => void;
   onCanvasSizeChange?: (height: number) => void;
 }
@@ -35,11 +38,14 @@ export function FourLineCanvas({
   currentStroke,
   penColor,
   brushWidth,
+  activeTool,
   targetCharacter,
   onStartStroke,
   onContinueStroke,
   onEndStroke,
   onReplaceLastStroke,
+  onEraseAtPoint,
+  onAddStamp,
   onOutOfBounds,
   onCanvasSizeChange,
 }: FourLineCanvasProps) {
@@ -242,9 +248,44 @@ export function FourLineCanvas({
     return () => resizeObserver.disconnect();
   }, [redrawCanvas, onCanvasSizeChange]);
 
+  // Generate stamp points at a position
+  const generateStampPoints = useCallback((cx: number, cy: number): StrokePoint[] => {
+    const n = 40;
+    const r = brushWidth * 4;
+    const now = performance.now();
+    const base = { pressure: 0.6, velocity: 0, timestamp: now };
+
+    if (activeTool === 'stamp_circle') {
+      return Array.from({ length: n + 1 }, (_, i) => {
+        const angle = (2 * Math.PI * i) / n;
+        return { ...base, x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle), timestamp: now + i };
+      });
+    }
+    if (activeTool === 'stamp_ellipse') {
+      return Array.from({ length: n + 1 }, (_, i) => {
+        const angle = (2 * Math.PI * i) / n;
+        return { ...base, x: cx + r * 1.5 * Math.cos(angle), y: cy + r * Math.sin(angle), timestamp: now + i };
+      });
+    }
+    if (activeTool === 'stamp_line') {
+      return Array.from({ length: n }, (_, i) => {
+        const t = i / (n - 1);
+        return { ...base, x: cx - r + 2 * r * t, y: cy, timestamp: now + i };
+      });
+    }
+    if (activeTool === 'stamp_arc') {
+      return Array.from({ length: n }, (_, i) => {
+        const angle = Math.PI + (Math.PI * i) / (n - 1);
+        return { ...base, x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle), timestamp: now + i };
+      });
+    }
+    return [];
+  }, [activeTool, brushWidth]);
+
   const handlePointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
     const { x, y, pressure } = getPointerPosition(e);
+    const normalizedX = x / window.devicePixelRatio;
     const normalizedY = y / window.devicePixelRatio;
     
     if (!isPointInBounds(normalizedY)) {
@@ -254,13 +295,31 @@ export function FourLineCanvas({
     }
     
     setIsOutOfBounds(false);
-    onStartStroke(x / window.devicePixelRatio, normalizedY, pressure);
+
+    // Handle stamp tools - place shape immediately
+    if (activeTool.startsWith('stamp_')) {
+      const stampPoints = generateStampPoints(normalizedX, normalizedY);
+      if (stampPoints.length > 0 && onAddStamp) {
+        onAddStamp(stampPoints, penColor, brushWidth);
+      }
+      return;
+    }
+
+    // Handle eraser
+    if (activeTool === 'eraser') {
+      onEraseAtPoint?.(normalizedX, normalizedY, brushWidth);
+      (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
+      return;
+    }
+
+    onStartStroke(normalizedX, normalizedY, pressure);
     (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
     e.preventDefault();
     const { x, y, pressure } = getPointerPosition(e);
+    const normalizedX = x / window.devicePixelRatio;
     const normalizedY = y / window.devicePixelRatio;
     
     if (!isPointInBounds(normalizedY)) {
@@ -271,11 +330,19 @@ export function FourLineCanvas({
     }
     
     setIsOutOfBounds(false);
+
+    // Eraser continuous erase
+    if (activeTool === 'eraser') {
+      onEraseAtPoint?.(normalizedX, normalizedY, brushWidth);
+      return;
+    }
+
+    if (activeTool.startsWith('stamp_')) return;
     
     // Apply magnetic snapping in perfection mode
     if (assistanceConfig.mode === 'perfection') {
       const snappedPoint = applyMagneticSnap({
-        x: x / window.devicePixelRatio,
+        x: normalizedX,
         y: normalizedY,
         pressure,
         velocity: 0,
@@ -283,19 +350,26 @@ export function FourLineCanvas({
       });
       onContinueStroke(snappedPoint.x, snappedPoint.y, pressure);
     } else {
-      onContinueStroke(x / window.devicePixelRatio, normalizedY, pressure);
+      onContinueStroke(normalizedX, normalizedY, pressure);
     }
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
     e.preventDefault();
+
+    if (activeTool === 'eraser' || activeTool.startsWith('stamp_')) {
+      setIsOutOfBounds(false);
+      (e.target as HTMLCanvasElement).releasePointerCapture(e.pointerId);
+      return;
+    }
+
     const completedPoints = [...currentStroke];
     onEndStroke();
     setIsOutOfBounds(false);
     (e.target as HTMLCanvasElement).releasePointerCapture(e.pointerId);
 
     // Run shape detection on completed stroke
-    if (completedPoints.length >= 8) {
+    if (completedPoints.length >= 6) {
       const lastStrokeId = strokes.length > 0 ? strokes[strokes.length - 1].id : crypto.randomUUID();
       const suggestion = detectShape(completedPoints, lastStrokeId);
       setShapeSuggestion(suggestion);
