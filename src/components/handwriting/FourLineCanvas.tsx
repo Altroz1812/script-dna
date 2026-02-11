@@ -76,6 +76,7 @@ export function FourLineCanvas({
   type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
   const [resizeHandle, setResizeHandle] = useState<ResizeHandle | null>(null);
   const resizeStartBoundsRef = useRef<{ minX: number; minY: number; maxX: number; maxY: number } | null>(null);
+  const resizeOrigBoundsRef = useRef<{ minX: number; minY: number; maxX: number; maxY: number } | null>(null);
   const resizeAnchorRef = useRef<{ x: number; y: number } | null>(null);
 
   const { detectShape } = useShapeDetector();
@@ -497,6 +498,7 @@ export function FourLineCanvas({
       setSelectDragLast(null);
       setResizeHandle(null);
       resizeStartBoundsRef.current = null;
+      resizeOrigBoundsRef.current = null;
       resizeAnchorRef.current = null;
       setIsOutOfBounds(false);
       return;
@@ -640,6 +642,7 @@ export function FourLineCanvas({
           e.preventDefault();
           setResizeHandle(handle);
           resizeStartBoundsRef.current = { minX: bx, minY: by, maxX: bx + bw, maxY: by + bh };
+          resizeOrigBoundsRef.current = { minX: bx, minY: by, maxX: bx + bw, maxY: by + bh };
           (e.target as HTMLElement).setPointerCapture(e.pointerId);
         };
         return (
@@ -679,6 +682,25 @@ export function FourLineCanvas({
                   if (h.key.includes('s')) nb.maxY = ny;
                   if (h.key.includes('w')) nb.minX = nx;
                   if (h.key.includes('e')) nb.maxX = nx;
+                  // Shift = proportional resize for corner handles
+                  const isCorner = ['nw','ne','sw','se'].includes(h.key);
+                  if (e.shiftKey && isCorner && resizeOrigBoundsRef.current) {
+                    const origW = resizeOrigBoundsRef.current.maxX - resizeOrigBoundsRef.current.minX;
+                    const origH = resizeOrigBoundsRef.current.maxY - resizeOrigBoundsRef.current.minY;
+                    if (origW > 0 && origH > 0) {
+                      const aspect = origW / origH;
+                      let newW = nb.maxX - nb.minX;
+                      let newH = nb.maxY - nb.minY;
+                      if (newW / newH > aspect) {
+                        newW = newH * aspect;
+                      } else {
+                        newH = newW / aspect;
+                      }
+                      // Anchor to the opposite corner
+                      if (h.key.includes('e')) nb.maxX = nb.minX + newW; else nb.minX = nb.maxX - newW;
+                      if (h.key.includes('s')) nb.maxY = nb.minY + newH; else nb.minY = nb.maxY - newH;
+                    }
+                  }
                   if (nb.maxX - nb.minX < 5) nb.maxX = nb.minX + 5;
                   if (nb.maxY - nb.minY < 5) nb.maxY = nb.minY + 5;
                   onResizeStrokes?.(selectedStrokeIds, ob, nb);
@@ -688,6 +710,7 @@ export function FourLineCanvas({
                   (e.target as HTMLElement).releasePointerCapture(e.pointerId);
                   setResizeHandle(null);
                   resizeStartBoundsRef.current = null;
+                  resizeOrigBoundsRef.current = null;
                 }}
               />
             ))}
