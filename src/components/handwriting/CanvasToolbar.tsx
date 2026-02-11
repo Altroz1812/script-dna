@@ -1,4 +1,4 @@
-import { Undo2, Redo2, Trash2, Grid3X3, AlignJustify, X, Pen, Eraser, Circle, Minus, MoveUpRight, Ellipsis, Square, Triangle } from 'lucide-react';
+import { Undo2, Redo2, Trash2, Grid3X3, AlignJustify, X, Pen, Eraser, Circle, Minus, MoveUpRight, Ellipsis, Square, Triangle, MousePointer2 } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ToolbarConfig, OverlayType, CanvasTool } from '@/types/handwriting';
@@ -22,6 +22,7 @@ const COLORS = [
 const TOOLS: { value: CanvasTool; icon: React.ReactNode; label: string }[] = [
   { value: 'pen', icon: <Pen className="w-4 h-4" />, label: 'Pen' },
   { value: 'eraser', icon: <Eraser className="w-4 h-4" />, label: 'Eraser' },
+  { value: 'select', icon: <MousePointer2 className="w-4 h-4" />, label: 'Select & Move' },
 ];
 
 const STAMP_TOOLS: { value: CanvasTool; icon: React.ReactNode; label: string }[] = [

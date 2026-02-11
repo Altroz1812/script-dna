@@ -71,7 +71,7 @@ export interface DiscoveredRule {
 export type OverlayType = 'none' | 'grid' | 'lines' | 'ruled' | 'fourline' | 'slant';
 
 // Canvas tool types
-export type CanvasTool = 'pen' | 'eraser' | 'stamp_circle' | 'stamp_line' | 'stamp_arc' | 'stamp_ellipse' | 'stamp_rectangle' | 'stamp_triangle';
+export type CanvasTool = 'pen' | 'eraser' | 'select' | 'stamp_circle' | 'stamp_line' | 'stamp_arc' | 'stamp_ellipse' | 'stamp_rectangle' | 'stamp_triangle';
 
 // Pressure Sensitivity Curve Types
 export type PressureCurveType = 'linear' | 'calligraphic' | 'elastic' | 'soft' | 'firm';

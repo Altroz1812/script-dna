@@ -20,7 +20,11 @@ interface FourLineCanvasProps {
   onEndStroke: () => void;
   onReplaceLastStroke?: (points: StrokePoint[]) => void;
   onEraseAtPoint?: (x: number, y: number, radius: number) => void;
+  onStartErase?: () => void;
+  onEndErase?: () => void;
   onAddStamp?: (points: StrokePoint[], color: string, width: number) => void;
+  onMoveStrokes?: (strokeIds: string[], dx: number, dy: number) => void;
+  onScaleStrokes?: (strokeIds: string[], scaleFactor: number) => void;
   onOutOfBounds?: () => void;
   onCanvasSizeChange?: (height: number) => void;
 }
@@ -45,7 +49,11 @@ export function FourLineCanvas({
   onEndStroke,
   onReplaceLastStroke,
   onEraseAtPoint,
+  onStartErase,
+  onEndErase,
   onAddStamp,
+  onMoveStrokes,
+  onScaleStrokes,
   onOutOfBounds,
   onCanvasSizeChange,
 }: FourLineCanvasProps) {
@@ -56,6 +64,10 @@ export function FourLineCanvas({
   const [shapeSuggestion, setShapeSuggestion] = useState<ShapeSuggestion | null>(null);
   const [stampDragStart, setStampDragStart] = useState<{ x: number; y: number } | null>(null);
   const [stampPreview, setStampPreview] = useState<StrokePoint[] | null>(null);
+  // Select tool state
+  const [selectedStrokeIds, setSelectedStrokeIds] = useState<string[]>([]);
+  const [selectDragStart, setSelectDragStart] = useState<{ x: number; y: number } | null>(null);
+  const [selectDragLast, setSelectDragLast] = useState<{ x: number; y: number } | null>(null);
 
   const { detectShape } = useShapeDetector();
 
@@ -208,6 +220,25 @@ export function FourLineCanvas({
     
     // Draw all strokes
     strokes.forEach(stroke => {
+      const isSelected = selectedStrokeIds.includes(stroke.id);
+      if (isSelected) {
+        // Draw selection highlight
+        ctx.save();
+        ctx.strokeStyle = 'hsl(217, 91%, 60%)';
+        ctx.lineWidth = stroke.width + 4;
+        ctx.globalAlpha = 0.3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        if (stroke.points.length >= 2) {
+          ctx.beginPath();
+          ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+          for (let i = 1; i < stroke.points.length; i++) {
+            ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+          }
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
       drawStroke(ctx, stroke.points, stroke.color, stroke.width);
     });
     
@@ -215,7 +246,7 @@ export function FourLineCanvas({
     if (currentStroke.length > 0) {
       drawStroke(ctx, currentStroke, penColor, brushWidth);
     }
-  }, [strokes, currentStroke, penColor, brushWidth, drawStroke, drawGuideLines]);
+  }, [strokes, currentStroke, penColor, brushWidth, drawStroke, drawGuideLines, selectedStrokeIds]);
 
   useEffect(() => {
     redrawCanvas();
@@ -305,6 +336,21 @@ export function FourLineCanvas({
     return [];
   }, [activeTool]);
 
+  // Find stroke at a point (for select tool)
+  const findStrokeAtPoint = useCallback((px: number, py: number, threshold: number = 10): string | null => {
+    for (let i = strokes.length - 1; i >= 0; i--) {
+      const stroke = strokes[i];
+      for (const p of stroke.points) {
+        const dx = p.x - px;
+        const dy = p.y - py;
+        if (Math.sqrt(dx * dx + dy * dy) < threshold) {
+          return stroke.id;
+        }
+      }
+    }
+    return null;
+  }, [strokes]);
+
   const handlePointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
     const { x, y, pressure } = getPointerPosition(e);
@@ -319,6 +365,20 @@ export function FourLineCanvas({
     
     setIsOutOfBounds(false);
 
+    // Handle select tool
+    if (activeTool === 'select') {
+      const hitId = findStrokeAtPoint(normalizedX, normalizedY);
+      if (hitId) {
+        setSelectedStrokeIds([hitId]);
+        setSelectDragStart({ x: normalizedX, y: normalizedY });
+        setSelectDragLast({ x: normalizedX, y: normalizedY });
+      } else {
+        setSelectedStrokeIds([]);
+      }
+      (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
+      return;
+    }
+
     // Handle stamp tools - start drag for sizing
     if (activeTool.startsWith('stamp_')) {
       setStampDragStart({ x: normalizedX, y: normalizedY });
@@ -329,6 +389,7 @@ export function FourLineCanvas({
 
     // Handle eraser
     if (activeTool === 'eraser') {
+      onStartErase?.();
       onEraseAtPoint?.(normalizedX, normalizedY, brushWidth);
       (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
       return;
@@ -353,6 +414,17 @@ export function FourLineCanvas({
     
     setIsOutOfBounds(false);
 
+    // Select tool: drag to move
+    if (activeTool === 'select' && selectDragLast && selectedStrokeIds.length > 0) {
+      const dx = normalizedX - selectDragLast.x;
+      const dy = normalizedY - selectDragLast.y;
+      if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+        onMoveStrokes?.(selectedStrokeIds, dx, dy);
+        setSelectDragLast({ x: normalizedX, y: normalizedY });
+      }
+      return;
+    }
+
     // Eraser continuous erase
     if (activeTool === 'eraser') {
       onEraseAtPoint?.(normalizedX, normalizedY, brushWidth);
@@ -370,6 +442,8 @@ export function FourLineCanvas({
       return;
     }
     
+    if (activeTool.startsWith('stamp_')) return;
+
     // Apply magnetic snapping in perfection mode
     if (assistanceConfig.mode === 'perfection') {
       const snappedPoint = applyMagneticSnap({
@@ -389,7 +463,16 @@ export function FourLineCanvas({
     e.preventDefault();
     (e.target as HTMLCanvasElement).releasePointerCapture(e.pointerId);
 
+    // Select tool
+    if (activeTool === 'select') {
+      setSelectDragStart(null);
+      setSelectDragLast(null);
+      setIsOutOfBounds(false);
+      return;
+    }
+
     if (activeTool === 'eraser') {
+      onEndErase?.();
       setIsOutOfBounds(false);
       return;
     }
@@ -403,7 +486,6 @@ export function FourLineCanvas({
       const ry = Math.abs(normalizedY - stampDragStart.y);
       const cx = (stampDragStart.x + normalizedX) / 2;
       const cy = (stampDragStart.y + normalizedY) / 2;
-      // Use dragged size, or fallback to brush-based size if just a click
       const finalRx = rx > 5 ? rx / 2 : brushWidth * 4;
       const finalRy = ry > 5 ? ry / 2 : brushWidth * 4;
       const points = generateStampPoints(cx, cy, finalRx, finalRy);
@@ -495,6 +577,48 @@ export function FourLineCanvas({
           onReject={handleRejectShape}
         />
       )}
+
+      {/* Selection bounding box with scale controls */}
+      {selectedStrokeIds.length > 0 && activeTool === 'select' && (() => {
+        const selectedStrokes = strokes.filter(s => selectedStrokeIds.includes(s.id));
+        const allPts = selectedStrokes.flatMap(s => s.points);
+        if (allPts.length === 0) return null;
+        const minX = Math.min(...allPts.map(p => p.x));
+        const minY = Math.min(...allPts.map(p => p.y));
+        const maxX = Math.max(...allPts.map(p => p.x));
+        const maxY = Math.max(...allPts.map(p => p.y));
+        const pad = 8;
+        return (
+          <>
+            <svg
+              className="absolute inset-0 w-full h-full pointer-events-none z-15"
+              viewBox={`0 0 ${canvasSize.width} ${canvasSize.height}`}
+              preserveAspectRatio="none"
+            >
+              <rect
+                x={minX - pad} y={minY - pad}
+                width={maxX - minX + pad * 2} height={maxY - minY + pad * 2}
+                fill="none" stroke="hsl(217, 91%, 60%)" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.7"
+              />
+            </svg>
+            <div
+              className="absolute pointer-events-auto flex items-center gap-1 z-20"
+              style={{ left: maxX + 12, top: minY - 4 }}
+            >
+              <button
+                onClick={() => onScaleStrokes?.(selectedStrokeIds, 1.15)}
+                className="w-6 h-6 rounded bg-card/90 border border-border text-foreground text-xs font-bold hover:bg-accent/30"
+                title="Scale up"
+              >+</button>
+              <button
+                onClick={() => onScaleStrokes?.(selectedStrokeIds, 0.85)}
+                className="w-6 h-6 rounded bg-card/90 border border-border text-foreground text-xs font-bold hover:bg-accent/30"
+                title="Scale down"
+              >−</button>
+            </div>
+          </>
+        );
+      })()}
       
       {/* Target Character Display - Centered Ghost Guide */}
       {targetCharacter && (
