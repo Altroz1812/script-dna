@@ -79,7 +79,6 @@ function pathToGlyph(pathStr: string, unitsPerEm: number, canvasW: number, canva
       rawPts.push({ x, y });
       i += 3;
     } else if (!isNaN(parseFloat(cmd))) {
-      // Implicit L
       const x = parseFloat(tokens[i]);
       const y = parseFloat(tokens[i + 1]);
       rawPts.push({ x, y });
@@ -98,15 +97,13 @@ function pathToGlyph(pathStr: string, unitsPerEm: number, canvasW: number, canva
   const scale = unitsPerEm / Math.max(canvasW, canvasH);
   const pts = rawPts.map(p => ({
     x: Math.round(p.x * scale),
-    y: Math.round((canvasH - p.y) * scale), // flip Y
+    y: Math.round((canvasH - p.y) * scale),
   }));
 
   // Build a stroke outline by creating a closed contour with thickness
-  const thickness = Math.round(unitsPerEm * 0.04); // ~4% of em for stroke width
+  const thickness = Math.round(unitsPerEm * 0.04);
 
-  // Forward path
   const forward = pts.map(p => p);
-  // Backward path offset
   const backward: { x: number; y: number }[] = [];
   for (let j = 0; j < pts.length; j++) {
     let nx = 0, ny = 0;
@@ -128,9 +125,18 @@ function pathToGlyph(pathStr: string, unitsPerEm: number, canvasW: number, canva
   backward.reverse();
 
   const allPts = [...forward, ...backward];
+
+  // Normalize: shift x so that glyph starts at a small left side bearing
+  const rawXMin = Math.min(...allPts.map(p => p.x));
+  const lsb = Math.round(unitsPerEm * 0.03); // small left bearing for tight spacing
+  const xShift = rawXMin - lsb;
+  for (const p of allPts) {
+    p.x -= xShift;
+  }
+
   const xCoords = allPts.map(p => p.x);
   const yCoords = allPts.map(p => p.y);
-  const flags = allPts.map(() => 1); // all on-curve
+  const flags = allPts.map(() => 1);
   const contourEnds = [allPts.length - 1];
 
   const xMin = Math.min(...xCoords);
@@ -138,10 +144,13 @@ function pathToGlyph(pathStr: string, unitsPerEm: number, canvasW: number, canva
   const xMax = Math.max(...xCoords);
   const yMax = Math.max(...yCoords);
 
+  // Advance width = glyph width + small right bearing (tight for cursive)
+  const advanceWidth = xMax + Math.round(unitsPerEm * 0.02);
+
   return {
     xCoords, yCoords, flags, contourEnds,
     xMin, yMin, xMax, yMax,
-    advanceWidth: (xMax - xMin) + Math.round(unitsPerEm * 0.1),
+    advanceWidth,
     lsb: xMin,
   };
 }
@@ -150,6 +159,12 @@ function mergeGlyphOutlines(outlines: GlyphOutline[]): GlyphOutline {
   if (outlines.length === 0) {
     return { xCoords: [], yCoords: [], flags: [], contourEnds: [], xMin: 0, yMin: 0, xMax: 0, yMax: 0, advanceWidth: 500, lsb: 0 };
   }
+
+  // Normalize all outlines to the same origin before merging
+  const allXPts: number[] = [];
+  for (const o of outlines) allXPts.push(...o.xCoords);
+  const globalXMin = allXPts.length > 0 ? Math.min(...allXPts) : 0;
+
   const xCoords: number[] = [];
   const yCoords: number[] = [];
   const flags: number[] = [];
@@ -168,13 +183,20 @@ function mergeGlyphOutlines(outlines: GlyphOutline[]): GlyphOutline {
   const yMin = Math.min(...yCoords);
   const xMax = Math.max(...xCoords);
   const yMax = Math.max(...yCoords);
+
+  // Use the full merged width for advance
+  const unitsPerEm = 1000;
+  const advanceWidth = xMax + Math.round(unitsPerEm * 0.02);
+
   return {
     xCoords, yCoords, flags, contourEnds,
     xMin, yMin, xMax, yMax,
-    advanceWidth: outlines[0].advanceWidth,
-    lsb: outlines[0].lsb,
+    advanceWidth,
+    lsb: xMin,
   };
 }
+
+
 
 function writeGlyf(glyph: GlyphOutline): Uint8Array {
   const w = new BinaryWriter();
