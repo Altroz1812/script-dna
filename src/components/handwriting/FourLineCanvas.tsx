@@ -20,6 +20,7 @@ interface FourLineCanvasProps {
   overlayFontFamily?: string;
   overlayOpacity?: number;
   overlayColor?: string;
+  lineConfig?: { ascender: number; xHeight: number; baseline: number; descender: number };
   onStartStroke: (x: number, y: number, pressure: number) => void;
   onContinueStroke: (x: number, y: number, pressure: number) => void;
   onEndStroke: () => void;
@@ -39,12 +40,12 @@ interface FourLineCanvasProps {
   children?: React.ReactNode;
 }
 
-// Line positions as percentages of canvas height — equal 25% spacing
-const LINE_CONFIG = {
-  ascender: 12.5,  // Top dotted line (for ascenders like 'b', 'd', 'h')
-  xHeight: 37.5,   // Upper solid line (cap height / x-height)
-  baseline: 62.5,  // Main baseline (where letters sit)
-  descender: 87.5, // Bottom dotted line (for descenders like 'g', 'p', 'y')
+// Default line positions as percentages of canvas height
+const DEFAULT_LINE_CONFIG = {
+  ascender: 12.5,
+  xHeight: 37.5,
+  baseline: 62.5,
+  descender: 87.5,
 };
 
 export function FourLineCanvas({
@@ -58,6 +59,7 @@ export function FourLineCanvas({
   overlayFontFamily,
   overlayOpacity,
   overlayColor,
+  lineConfig: lineConfigProp,
   onStartStroke,
   onContinueStroke,
   onEndStroke,
@@ -111,6 +113,8 @@ export function FourLineCanvas({
     canvasHeight: canvasSize.height,
   });
 
+  const LINE_CONFIG = lineConfigProp || DEFAULT_LINE_CONFIG;
+
   // Calculate the allowed writing zone
   const getWritingZone = useCallback(() => {
     const padding = canvasSize.height * 0.05;
@@ -118,7 +122,7 @@ export function FourLineCanvas({
       top: (canvasSize.height * LINE_CONFIG.ascender / 100) - padding,
       bottom: (canvasSize.height * LINE_CONFIG.descender / 100) + padding,
     };
-  }, [canvasSize.height]);
+  }, [canvasSize.height, LINE_CONFIG.ascender, LINE_CONFIG.descender]);
 
   const isPointInBounds = useCallback((y: number): boolean => {
     const zone = getWritingZone();
@@ -223,7 +227,7 @@ export function FourLineCanvas({
     
     ctx.fillStyle = 'hsla(217, 91%, 60%, 0.03)';
     ctx.fillRect(0, zone.top, width, zone.bottom - zone.top);
-  }, []);
+  }, [LINE_CONFIG]);
 
   const redrawCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -620,6 +624,7 @@ export function FourLineCanvas({
           canvasHeight={canvasSize.height}
           opacity={overlayOpacity}
           color={overlayColor}
+          lineConfig={LINE_CONFIG}
         />
       )}
 

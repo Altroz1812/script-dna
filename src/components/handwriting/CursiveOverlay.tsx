@@ -1,7 +1,7 @@
 import { useRef, useEffect } from 'react';
 
-// Must match FourLineCanvas LINE_CONFIG
-const LINE_CONFIG = {
+// Default line positions (must match FourLineCanvas defaults)
+const DEFAULT_LINE_CONFIG = {
   ascender: 12.5,
   xHeight: 37.5,
   baseline: 62.5,
@@ -15,6 +15,7 @@ interface CursiveOverlayProps {
   canvasHeight: number;
   opacity?: number;
   color?: string;
+  lineConfig?: { ascender: number; xHeight: number; baseline: number; descender: number };
 }
 
 export function CursiveOverlay({
@@ -24,6 +25,7 @@ export function CursiveOverlay({
   canvasHeight,
   opacity = 0.2,
   color = '#94a3b8',
+  lineConfig = DEFAULT_LINE_CONFIG,
 }: CursiveOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -43,64 +45,48 @@ export function CursiveOverlay({
 
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
-    // Target positions on canvas (px)
-    const baselineY = canvasHeight * LINE_CONFIG.baseline / 100;
-    const xHeightY = canvasHeight * LINE_CONFIG.xHeight / 100;
-    const ascenderY = canvasHeight * LINE_CONFIG.ascender / 100;
-    const descenderY = canvasHeight * LINE_CONFIG.descender / 100;
+    const baselineY = canvasHeight * lineConfig.baseline / 100;
+    const xHeightY = canvasHeight * lineConfig.xHeight / 100;
+    const ascenderY = canvasHeight * lineConfig.ascender / 100;
+    const descenderY = canvasHeight * lineConfig.descender / 100;
 
-    // The vertical space between x-height line and baseline line
     const xHeightZonePx = baselineY - xHeightY;
 
-    // Measure the font's x-height using the letter 'x' at a reference size
-    const refSize = 200; // large reference for accuracy
+    // Measure font's x-height using letter 'x' at reference size
+    const refSize = 200;
     ctx.font = `${refSize}px '${fontFamily}', cursive`;
     const xMetrics = ctx.measureText('x');
-    // actualBoundingBoxAscent of 'x' ≈ font's x-height in px at refSize
     const fontXHeight = xMetrics.actualBoundingBoxAscent || refSize * 0.5;
 
-    // Scale so the font's x-height fills the x-height zone on canvas
-    const fontSize = (xHeightZonePx / fontXHeight) * refSize;
-
+    // Scale so font x-height fills the x-height zone
+    let fontSize = (xHeightZonePx / fontXHeight) * refSize;
     ctx.font = `${fontSize}px '${fontFamily}', cursive`;
 
-    // Measure the actual text to center horizontally and check fit
+    // Shrink if wider than canvas
     const textMetrics = ctx.measureText(text);
-    let finalFontSize = fontSize;
-
-    // Shrink if wider than canvas (with margin)
     if (textMetrics.width > canvasWidth * 0.92) {
-      const scale = (canvasWidth * 0.92) / textMetrics.width;
-      finalFontSize = fontSize * scale;
-      ctx.font = `${finalFontSize}px '${fontFamily}', cursive`;
+      fontSize *= (canvasWidth * 0.92) / textMetrics.width;
+      ctx.font = `${fontSize}px '${fontFamily}', cursive`;
     }
 
-    // Also ensure ascenders don't go above ascender line and descenders below descender line
+    // Clamp so glyphs stay within ascender–descender zone
     const fullMetrics = ctx.measureText(text);
-    const ascent = fullMetrics.actualBoundingBoxAscent || finalFontSize * 0.8;
-    const descent = fullMetrics.actualBoundingBoxDescent || finalFontSize * 0.2;
-
-    // If the full glyph height exceeds the ascender-to-descender zone, scale down
+    const ascent = fullMetrics.actualBoundingBoxAscent || fontSize * 0.8;
+    const descent = fullMetrics.actualBoundingBoxDescent || fontSize * 0.2;
     const availableHeight = descenderY - ascenderY;
-    const totalGlyphHeight = ascent + descent;
-    if (totalGlyphHeight > availableHeight) {
-      const vScale = availableHeight / totalGlyphHeight;
-      finalFontSize = finalFontSize * vScale;
-      ctx.font = `${finalFontSize}px '${fontFamily}', cursive`;
+    if (ascent + descent > availableHeight) {
+      fontSize *= availableHeight / (ascent + descent);
+      ctx.font = `${fontSize}px '${fontFamily}', cursive`;
     }
 
-    // Re-measure with final font size
     const finalMetrics = ctx.measureText(text);
-    const finalWidth = finalMetrics.width;
-
-    // Place text on baseline, centered horizontally
-    const textX = (canvasWidth - finalWidth) / 2;
+    const textX = (canvasWidth - finalMetrics.width) / 2;
 
     ctx.globalAlpha = opacity;
     ctx.fillStyle = color;
     ctx.fillText(text, textX, baselineY);
     ctx.globalAlpha = 1;
-  }, [text, fontFamily, canvasWidth, canvasHeight, opacity, color]);
+  }, [text, fontFamily, canvasWidth, canvasHeight, opacity, color, lineConfig]);
 
   if (!text) return null;
 
