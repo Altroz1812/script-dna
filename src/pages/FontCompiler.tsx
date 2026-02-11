@@ -48,6 +48,12 @@ const FontCompiler = () => {
   const [wordText, setWordText] = useState('');
   const [overlayOpacity, setOverlayOpacity] = useState(0.2);
   const [overlayColor, setOverlayColor] = useState('#94a3b8');
+  const [lineConfig, setLineConfig] = useState({
+    ascender: 12.5,
+    xHeight: 37.5,
+    baseline: 62.5,
+    descender: 87.5,
+  });
 
   const {
     strokes, currentStroke, metrics,
@@ -370,6 +376,34 @@ const FontCompiler = () => {
               selectedCharacter={selectedCharacter}
             />
             {mode === 'build' && <LigatureEngine onRecordLigature={handleRecordLigature} />}
+
+            {/* Guide Line Adjustments */}
+            <div className="panel-glass rounded-xl p-4 space-y-3">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Guide Lines (%)</h3>
+              {(['ascender', 'xHeight', 'baseline', 'descender'] as const).map((key) => (
+                <div key={key} className="space-y-1">
+                  <label className="text-[10px] uppercase tracking-wider text-muted-foreground flex justify-between">
+                    <span>{key === 'xHeight' ? 'X-Height' : key.charAt(0).toUpperCase() + key.slice(1)}</span>
+                    <span>{lineConfig[key].toFixed(1)}%</span>
+                  </label>
+                  <Slider
+                    min={1}
+                    max={99}
+                    step={0.5}
+                    value={[lineConfig[key]]}
+                    onValueChange={([v]) => setLineConfig(prev => ({ ...prev, [key]: v }))}
+                  />
+                </div>
+              ))}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full text-xs"
+                onClick={() => setLineConfig({ ascender: 12.5, xHeight: 37.5, baseline: 62.5, descender: 87.5 })}
+              >
+                <RotateCcw className="w-3 h-3 mr-1" /> Reset Defaults
+              </Button>
+            </div>
           </div>
 
           {/* Center: Canvas */}
@@ -398,6 +432,7 @@ const FontCompiler = () => {
                 overlayFontFamily={overlayFontFamily}
                 overlayOpacity={overlayOpacity}
                 overlayColor={overlayColor}
+                lineConfig={lineConfig}
                 onStartStroke={startStroke}
                 onContinueStroke={continueStroke}
                 onEndStroke={handleEndStroke}
