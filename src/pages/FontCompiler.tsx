@@ -186,6 +186,22 @@ const FontCompiler = () => {
   const handleExportFont = async () => {
     setIsExporting(true);
     try {
+      // Pre-check: ensure at least some characters are saved
+      const { count, error: countError } = await supabase
+        .from('font_library')
+        .select('*', { count: 'exact', head: true });
+
+      if (countError) throw countError;
+      if (!count || count === 0) {
+        toast({
+          title: "No Characters Recorded",
+          description: "Please draw and save at least a few characters before exporting a font.",
+          variant: "destructive",
+        });
+        setIsExporting(false);
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('compile-font', {
         body: { metadata: fontMetadata },
       });
