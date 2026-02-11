@@ -35,16 +35,18 @@ export function FontUploadPanel({ activeFont, onFontSelect }: FontUploadPanelPro
 
   useEffect(() => { loadFonts(); }, [loadFonts]);
 
-  // Inject @font-face whenever activeFont changes
+  // Inject @font-face whenever activeFont changes – use cache-busting URL
   useEffect(() => {
     if (!activeFont) return;
     const familyName = `uploaded-${activeFont.id}`;
+    // Always remove old style first so the browser fetches the latest file
     const existingStyle = document.getElementById(`font-face-${activeFont.id}`);
-    if (existingStyle) return;
+    existingStyle?.remove();
 
+    const bustCache = `?v=${Date.now()}`;
     const style = document.createElement('style');
     style.id = `font-face-${activeFont.id}`;
-    style.textContent = `@font-face { font-family: '${familyName}'; src: url('${activeFont.file_url}') format('truetype'); font-display: swap; }`;
+    style.textContent = `@font-face { font-family: '${familyName}'; src: url('${activeFont.file_url}${bustCache}') format('truetype'); font-display: swap; }`;
     document.head.appendChild(style);
 
     return () => {
@@ -67,6 +69,7 @@ export function FontUploadPanel({ activeFont, onFontSelect }: FontUploadPanelPro
 
     setIsUploading(true);
     try {
+      const trimmedName = fontName.trim();
       const fileName = `${Date.now()}-${file.name}`;
       const { error: uploadError } = await supabase.storage
         .from('uploaded-fonts')
@@ -77,17 +80,38 @@ export function FontUploadPanel({ activeFont, onFontSelect }: FontUploadPanelPro
         .from('uploaded-fonts')
         .getPublicUrl(fileName);
 
-      const { data: row, error: insertError } = await supabase
-        .from('uploaded_fonts')
-        .insert({ font_name: fontName.trim(), file_url: urlData.publicUrl })
-        .select()
-        .single();
-      if (insertError) throw insertError;
+      // Check for existing font with same name and overwrite
+      const existing = fonts.find(f => f.font_name.toLowerCase() === trimmedName.toLowerCase());
+      let resultRow: UploadedFont;
 
-      toast({ title: 'Font Uploaded', description: `"${fontName}" is ready to use.` });
+      if (existing) {
+        // Remove old @font-face style so browser doesn't cache stale file
+        const oldStyle = document.getElementById(`font-face-${existing.id}`);
+        oldStyle?.remove();
+
+        const { data: row, error: updateError } = await supabase
+          .from('uploaded_fonts')
+          .update({ file_url: urlData.publicUrl })
+          .eq('id', existing.id)
+          .select()
+          .single();
+        if (updateError) throw updateError;
+        resultRow = row as UploadedFont;
+        toast({ title: 'Font Updated', description: `"${trimmedName}" has been overwritten.` });
+      } else {
+        const { data: row, error: insertError } = await supabase
+          .from('uploaded_fonts')
+          .insert({ font_name: trimmedName, file_url: urlData.publicUrl })
+          .select()
+          .single();
+        if (insertError) throw insertError;
+        resultRow = row as UploadedFont;
+        toast({ title: 'Font Uploaded', description: `"${trimmedName}" is ready to use.` });
+      }
+
       setFontName('');
       await loadFonts();
-      onFontSelect(row as UploadedFont);
+      onFontSelect(resultRow);
     } catch (err) {
       console.error('Upload error:', err);
       toast({ title: 'Upload Failed', description: 'Could not upload font file.', variant: 'destructive' });
