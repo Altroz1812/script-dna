@@ -202,24 +202,25 @@ const FontCompiler = () => {
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke('compile-font', {
-        body: { metadata: fontMetadata },
+      // Use direct fetch for binary TTF response
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const response = await fetch(`${supabaseUrl}/functions/v1/compile-font`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseKey}`,
+          'apikey': supabaseKey,
+        },
+        body: JSON.stringify({ metadata: fontMetadata }),
       });
 
-      if (error) throw error;
-
-      // The response is the raw TTF binary
-      let blob: Blob;
-      if (data instanceof Blob) {
-        blob = data;
-      } else if (data instanceof ArrayBuffer) {
-        blob = new Blob([data], { type: 'font/ttf' });
-      } else {
-        // If it returned JSON with an error message
-        const parsed = typeof data === 'string' ? JSON.parse(data) : data;
-        if (parsed?.error) throw new Error(parsed.message || parsed.error);
-        throw new Error('Unexpected response format');
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errBody.message || errBody.error || `HTTP ${response.status}`);
       }
+
+      const blob = await response.blob();
 
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
