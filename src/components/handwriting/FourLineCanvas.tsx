@@ -26,6 +26,7 @@ interface FourLineCanvasProps {
   onMoveStrokes?: (strokeIds: string[], dx: number, dy: number) => void;
   onScaleStrokes?: (strokeIds: string[], scaleFactor: number) => void;
   onChangeStrokeWidth?: (strokeIds: string[], delta: number) => void;
+  onResizeStrokes?: (strokeIds: string[], oldBounds: { minX: number; minY: number; maxX: number; maxY: number }, newBounds: { minX: number; minY: number; maxX: number; maxY: number }) => void;
   onOutOfBounds?: () => void;
   onCanvasSizeChange?: (height: number) => void;
 }
@@ -56,6 +57,7 @@ export function FourLineCanvas({
   onMoveStrokes,
   onScaleStrokes,
   onChangeStrokeWidth,
+  onResizeStrokes,
   onOutOfBounds,
   onCanvasSizeChange,
 }: FourLineCanvasProps) {
@@ -70,6 +72,11 @@ export function FourLineCanvas({
   const [selectedStrokeIds, setSelectedStrokeIds] = useState<string[]>([]);
   const [selectDragStart, setSelectDragStart] = useState<{ x: number; y: number } | null>(null);
   const [selectDragLast, setSelectDragLast] = useState<{ x: number; y: number } | null>(null);
+  // Resize handle drag state
+  type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
+  const [resizeHandle, setResizeHandle] = useState<ResizeHandle | null>(null);
+  const resizeStartBoundsRef = useRef<{ minX: number; minY: number; maxX: number; maxY: number } | null>(null);
+  const resizeAnchorRef = useRef<{ x: number; y: number } | null>(null);
 
   const { detectShape } = useShapeDetector();
 
@@ -416,14 +423,33 @@ export function FourLineCanvas({
     
     setIsOutOfBounds(false);
 
-    // Select tool: drag to move
-    if (activeTool === 'select' && selectDragLast && selectedStrokeIds.length > 0) {
+    // Select tool: drag to move (skip if resizing via handle)
+    if (activeTool === 'select' && selectDragLast && selectedStrokeIds.length > 0 && !resizeHandle) {
       const dx = normalizedX - selectDragLast.x;
       const dy = normalizedY - selectDragLast.y;
       if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
         onMoveStrokes?.(selectedStrokeIds, dx, dy);
         setSelectDragLast({ x: normalizedX, y: normalizedY });
       }
+      return;
+    }
+
+    // Select tool: resize via handle drag
+    if (activeTool === 'select' && resizeHandle && resizeStartBoundsRef.current && resizeAnchorRef.current) {
+      const ob = resizeStartBoundsRef.current;
+      const anchor = resizeAnchorRef.current;
+      let newBounds = { ...ob };
+      // Compute new bounds based on handle
+      if (resizeHandle.includes('n')) newBounds.minY = normalizedY;
+      if (resizeHandle.includes('s')) newBounds.maxY = normalizedY;
+      if (resizeHandle.includes('w')) newBounds.minX = normalizedX;
+      if (resizeHandle.includes('e')) newBounds.maxX = normalizedX;
+      // Enforce minimum size
+      if (newBounds.maxX - newBounds.minX < 5) newBounds.maxX = newBounds.minX + 5;
+      if (newBounds.maxY - newBounds.minY < 5) newBounds.maxY = newBounds.minY + 5;
+      onResizeStrokes?.(selectedStrokeIds, ob, newBounds);
+      // Update start bounds for next move delta
+      resizeStartBoundsRef.current = newBounds;
       return;
     }
 
@@ -469,6 +495,9 @@ export function FourLineCanvas({
     if (activeTool === 'select') {
       setSelectDragStart(null);
       setSelectDragLast(null);
+      setResizeHandle(null);
+      resizeStartBoundsRef.current = null;
+      resizeAnchorRef.current = null;
       setIsOutOfBounds(false);
       return;
     }
@@ -580,7 +609,7 @@ export function FourLineCanvas({
         />
       )}
 
-      {/* Selection bounding box with scale controls */}
+      {/* Selection bounding box with resize handles */}
       {selectedStrokeIds.length > 0 && activeTool === 'select' && (() => {
         const selectedStrokes = strokes.filter(s => selectedStrokeIds.includes(s.id));
         const allPts = selectedStrokes.flatMap(s => s.points);
@@ -591,50 +620,91 @@ export function FourLineCanvas({
         const maxY = Math.max(...allPts.map(p => p.y));
         const pad = 8;
         const currentWidth = selectedStrokes[0]?.width ?? 4;
+        const bx = minX - pad;
+        const by = minY - pad;
+        const bw = maxX - minX + pad * 2;
+        const bh = maxY - minY + pad * 2;
+        const hs = 8; // handle size
+        const handles: { key: ResizeHandle; cx: number; cy: number; cursor: string }[] = [
+          { key: 'nw', cx: bx, cy: by, cursor: 'nwse-resize' },
+          { key: 'n', cx: bx + bw / 2, cy: by, cursor: 'ns-resize' },
+          { key: 'ne', cx: bx + bw, cy: by, cursor: 'nesw-resize' },
+          { key: 'e', cx: bx + bw, cy: by + bh / 2, cursor: 'ew-resize' },
+          { key: 'se', cx: bx + bw, cy: by + bh, cursor: 'nwse-resize' },
+          { key: 's', cx: bx + bw / 2, cy: by + bh, cursor: 'ns-resize' },
+          { key: 'sw', cx: bx, cy: by + bh, cursor: 'nesw-resize' },
+          { key: 'w', cx: bx, cy: by + bh / 2, cursor: 'ew-resize' },
+        ];
+        const startResize = (handle: ResizeHandle, e: React.PointerEvent) => {
+          e.stopPropagation();
+          e.preventDefault();
+          setResizeHandle(handle);
+          resizeStartBoundsRef.current = { minX: bx, minY: by, maxX: bx + bw, maxY: by + bh };
+          (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        };
         return (
           <>
             <svg
-              className="absolute inset-0 w-full h-full pointer-events-none z-15"
+              className="absolute inset-0 w-full h-full pointer-events-none z-[15]"
               viewBox={`0 0 ${canvasSize.width} ${canvasSize.height}`}
               preserveAspectRatio="none"
             >
               <rect
-                x={minX - pad} y={minY - pad}
-                width={maxX - minX + pad * 2} height={maxY - minY + pad * 2}
+                x={bx} y={by} width={bw} height={bh}
                 fill="none" stroke="hsl(217, 91%, 60%)" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.7"
               />
             </svg>
+            {/* Resize handles */}
+            {handles.map(h => (
+              <div
+                key={h.key}
+                className="absolute z-20 pointer-events-auto rounded-sm bg-primary border-2 border-primary-foreground shadow-md"
+                style={{
+                  left: h.cx - hs / 2,
+                  top: h.cy - hs / 2,
+                  width: hs,
+                  height: hs,
+                  cursor: h.cursor,
+                }}
+                onPointerDown={(e) => startResize(h.key, e)}
+                onPointerMove={(e) => {
+                  if (resizeHandle !== h.key) return;
+                  const rect = containerRef.current?.getBoundingClientRect();
+                  if (!rect || !resizeStartBoundsRef.current) return;
+                  const nx = e.clientX - rect.left;
+                  const ny = e.clientY - rect.top;
+                  const ob = resizeStartBoundsRef.current;
+                  const nb = { ...ob };
+                  if (h.key.includes('n')) nb.minY = ny;
+                  if (h.key.includes('s')) nb.maxY = ny;
+                  if (h.key.includes('w')) nb.minX = nx;
+                  if (h.key.includes('e')) nb.maxX = nx;
+                  if (nb.maxX - nb.minX < 5) nb.maxX = nb.minX + 5;
+                  if (nb.maxY - nb.minY < 5) nb.maxY = nb.minY + 5;
+                  onResizeStrokes?.(selectedStrokeIds, ob, nb);
+                  resizeStartBoundsRef.current = nb;
+                }}
+                onPointerUp={(e) => {
+                  (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+                  setResizeHandle(null);
+                  resizeStartBoundsRef.current = null;
+                }}
+              />
+            ))}
+            {/* Scale & thickness controls */}
             <div
               className="absolute pointer-events-auto flex flex-col gap-1.5 z-20"
-              style={{ left: maxX + 14, top: minY - 4 }}
+              style={{ left: bx + bw + 14, top: by }}
             >
-              {/* Scale controls */}
               <div className="flex items-center gap-0.5">
                 <span className="text-[9px] text-muted-foreground w-7">Size</span>
-                <button
-                  onClick={() => onScaleStrokes?.(selectedStrokeIds, 1.15)}
-                  className="w-6 h-6 rounded bg-card/90 border border-border text-foreground text-xs font-bold hover:bg-accent/30"
-                  title="Scale up"
-                >+</button>
-                <button
-                  onClick={() => onScaleStrokes?.(selectedStrokeIds, 0.85)}
-                  className="w-6 h-6 rounded bg-card/90 border border-border text-foreground text-xs font-bold hover:bg-accent/30"
-                  title="Scale down"
-                >−</button>
+                <button onClick={() => onScaleStrokes?.(selectedStrokeIds, 1.15)} className="w-6 h-6 rounded bg-card/90 border border-border text-foreground text-xs font-bold hover:bg-accent/30" title="Scale up">+</button>
+                <button onClick={() => onScaleStrokes?.(selectedStrokeIds, 0.85)} className="w-6 h-6 rounded bg-card/90 border border-border text-foreground text-xs font-bold hover:bg-accent/30" title="Scale down">−</button>
               </div>
-              {/* Thickness controls */}
               <div className="flex items-center gap-0.5">
                 <span className="text-[9px] text-muted-foreground w-7">Wt</span>
-                <button
-                  onClick={() => onChangeStrokeWidth?.(selectedStrokeIds, 1)}
-                  className="w-6 h-6 rounded bg-card/90 border border-border text-foreground text-xs font-bold hover:bg-accent/30"
-                  title="Increase thickness"
-                >+</button>
-                <button
-                  onClick={() => onChangeStrokeWidth?.(selectedStrokeIds, -1)}
-                  className="w-6 h-6 rounded bg-card/90 border border-border text-foreground text-xs font-bold hover:bg-accent/30"
-                  title="Decrease thickness"
-                >−</button>
+                <button onClick={() => onChangeStrokeWidth?.(selectedStrokeIds, 1)} className="w-6 h-6 rounded bg-card/90 border border-border text-foreground text-xs font-bold hover:bg-accent/30" title="Increase thickness">+</button>
+                <button onClick={() => onChangeStrokeWidth?.(selectedStrokeIds, -1)} className="w-6 h-6 rounded bg-card/90 border border-border text-foreground text-xs font-bold hover:bg-accent/30" title="Decrease thickness">−</button>
                 <span className="text-[9px] font-mono text-muted-foreground ml-0.5">{currentWidth}px</span>
               </div>
             </div>
