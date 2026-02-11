@@ -20,7 +20,8 @@ const SYSTEM_FONTS = [
   { value: 'serif', label: 'Serif' },
   { value: 'sans-serif', label: 'Sans-Serif' },
   { value: 'monospace', label: 'Monospace' },
-  { value: 'cursive', label: 'Cursive' },
+  { value: 'dancing-script', label: 'Cursive (Dancing Script)' },
+  { value: 'great-vibes', label: 'Cursive (Great Vibes)' },
 ];
 
 // Unique font family name per generation to bust cache
@@ -151,10 +152,8 @@ export function LiveTypeTester({ metadata, onExportFont, isExporting }: LiveType
       return `'${generatedFontFamily}', cursive`;
     }
     if (selectedFont === 'default') return 'inherit';
-    if (selectedFont === 'cursive') {
-      // Generic 'cursive' varies a lot by OS; use a script stack to prefer connected cursive faces.
-      return `"Segoe Script", "Apple Chancery", "Snell Roundhand", "Brush Script MT", cursive`;
-    }
+    if (selectedFont === 'dancing-script') return `'Dancing Script', cursive`;
+    if (selectedFont === 'great-vibes') return `'Great Vibes', cursive`;
     return selectedFont;
   };
 
