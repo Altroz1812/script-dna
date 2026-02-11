@@ -12,6 +12,7 @@ const UPPERCASE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 const LOWERCASE = 'abcdefghijklmnopqrstuvwxyz'.split('');
 const NUMBERS = '0123456789'.split('');
 const PUNCTUATION = '.,;:!?\'"()-@#$%&'.split('');
+const SYMBOLS = ['/','\\','+','=','<','>','[',']','{','}','|','~','^','_','*'];
 
 export function CharacterGrid({ onSelectCharacter, selectedCharacter }: CharacterGridProps) {
   const [recordedChars, setRecordedChars] = useState<Set<string>>(new Set());
@@ -68,6 +69,7 @@ export function CharacterGrid({ onSelectCharacter, selectedCharacter }: Characte
     lowercase: LOWERCASE.filter(c => recordedChars.has(c)).length,
     numbers: NUMBERS.filter(c => recordedChars.has(c)).length,
     punctuation: PUNCTUATION.filter(c => recordedChars.has(c)).length,
+    symbols: SYMBOLS.filter(c => recordedChars.has(c)).length,
   };
 
   const totalRecorded = recordedChars.size;
@@ -156,6 +158,21 @@ export function CharacterGrid({ onSelectCharacter, selectedCharacter }: Characte
             </div>
             <div className="flex flex-wrap gap-1">
               {PUNCTUATION.map(renderCharacterButton)}
+            </div>
+          </div>
+
+          {/* Symbols */}
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Symbols
+              </span>
+              <span className="text-[10px] text-muted-foreground">
+                ({completionStats.symbols}/{SYMBOLS.length})
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {SYMBOLS.map(renderCharacterButton)}
             </div>
           </div>
         </div>

@@ -27,6 +27,8 @@ interface FourLineCanvasProps {
   onScaleStrokes?: (strokeIds: string[], scaleFactor: number) => void;
   onChangeStrokeWidth?: (strokeIds: string[], delta: number) => void;
   onResizeStrokes?: (strokeIds: string[], oldBounds: { minX: number; minY: number; maxX: number; maxY: number }, newBounds: { minX: number; minY: number; maxX: number; maxY: number }) => void;
+  onFlipStrokes?: (strokeIds: string[], axis: 'horizontal' | 'vertical') => void;
+  onRotateStrokes?: (strokeIds: string[], angleDeg?: number) => void;
   onOutOfBounds?: () => void;
   onCanvasSizeChange?: (height: number) => void;
 }
@@ -58,6 +60,8 @@ export function FourLineCanvas({
   onScaleStrokes,
   onChangeStrokeWidth,
   onResizeStrokes,
+  onFlipStrokes,
+  onRotateStrokes,
   onOutOfBounds,
   onCanvasSizeChange,
 }: FourLineCanvasProps) {
@@ -729,6 +733,16 @@ export function FourLineCanvas({
                 <button onClick={() => onChangeStrokeWidth?.(selectedStrokeIds, 1)} className="w-6 h-6 rounded bg-card/90 border border-border text-foreground text-xs font-bold hover:bg-accent/30" title="Increase thickness">+</button>
                 <button onClick={() => onChangeStrokeWidth?.(selectedStrokeIds, -1)} className="w-6 h-6 rounded bg-card/90 border border-border text-foreground text-xs font-bold hover:bg-accent/30" title="Decrease thickness">−</button>
                 <span className="text-[9px] font-mono text-muted-foreground ml-0.5">{currentWidth}px</span>
+              </div>
+              <div className="flex items-center gap-0.5">
+                <span className="text-[9px] text-muted-foreground w-7">Flip</span>
+                <button onClick={() => onFlipStrokes?.(selectedStrokeIds, 'horizontal')} className="w-6 h-6 rounded bg-card/90 border border-border text-foreground text-[9px] font-bold hover:bg-accent/30" title="Flip Horizontal">H</button>
+                <button onClick={() => onFlipStrokes?.(selectedStrokeIds, 'vertical')} className="w-6 h-6 rounded bg-card/90 border border-border text-foreground text-[9px] font-bold hover:bg-accent/30" title="Flip Vertical">V</button>
+              </div>
+              <div className="flex items-center gap-0.5">
+                <span className="text-[9px] text-muted-foreground w-7">Rot</span>
+                <button onClick={() => onRotateStrokes?.(selectedStrokeIds, 90)} className="w-6 h-6 rounded bg-card/90 border border-border text-foreground text-[9px] font-bold hover:bg-accent/30" title="Rotate 90° CW">↻</button>
+                <button onClick={() => onRotateStrokes?.(selectedStrokeIds, -90)} className="w-6 h-6 rounded bg-card/90 border border-border text-foreground text-[9px] font-bold hover:bg-accent/30" title="Rotate 90° CCW">↺</button>
               </div>
             </div>
           </>

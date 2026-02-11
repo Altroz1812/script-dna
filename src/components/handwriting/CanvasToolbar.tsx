@@ -1,4 +1,4 @@
-import { Undo2, Redo2, Trash2, Grid3X3, AlignJustify, X, Pen, Eraser, Circle, Minus, MoveUpRight, Ellipsis, Square, Triangle, MousePointer2 } from 'lucide-react';
+import { Undo2, Redo2, Trash2, Grid3X3, AlignJustify, X, Pen, Eraser, Circle, Minus, MoveUpRight, Ellipsis, Square, Triangle, MousePointer2, FlipHorizontal2, FlipVertical2, RotateCw } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ToolbarConfig, OverlayType, CanvasTool } from '@/types/handwriting';
@@ -12,6 +12,8 @@ interface CanvasToolbarProps {
   onClear: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  onFlipAll?: (axis: 'horizontal' | 'vertical') => void;
+  onRotateAll?: (angleDeg?: number) => void;
 }
 
 const COLORS = [
@@ -42,6 +44,8 @@ export function CanvasToolbar({
   onClear,
   canUndo,
   canRedo,
+  onFlipAll,
+  onRotateAll,
 }: CanvasToolbarProps) {
   const overlayOptions: { value: OverlayType; icon: React.ReactNode; label: string }[] = [
     { value: 'none', icon: <X className="w-4 h-4" />, label: 'No Overlay' },
@@ -154,6 +158,33 @@ export function CanvasToolbar({
           </PopoverContent>
         </Popover>
       )}
+
+      <div className="w-px h-6 bg-border" />
+
+      {/* Flip & Rotate */}
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => onFlipAll?.('horizontal')}
+          className="toolbar-button"
+          title="Flip Horizontal"
+        >
+          <FlipHorizontal2 className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => onFlipAll?.('vertical')}
+          className="toolbar-button"
+          title="Flip Vertical"
+        >
+          <FlipVertical2 className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => onRotateAll?.(90)}
+          className="toolbar-button"
+          title="Rotate 90°"
+        >
+          <RotateCw className="w-4 h-4" />
+        </button>
+      </div>
 
       <div className="w-px h-6 bg-border" />
 

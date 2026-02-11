@@ -55,6 +55,10 @@ const FontCompiler = () => {
     scaleStrokes,
     changeStrokeWidth,
     resizeStrokes,
+    flipStrokes,
+    rotateStrokes,
+    flipAll,
+    rotateAll,
   } = useStrokeCapture();
 
   const lastOutOfBoundsToastAtRef = useRef<number>(0);
@@ -322,6 +326,8 @@ const FontCompiler = () => {
               onClear={clear}
               canUndo={canUndo}
               canRedo={canRedo}
+              onFlipAll={flipAll}
+              onRotateAll={rotateAll}
             />
 
             <div className="h-[350px]">
@@ -344,6 +350,8 @@ const FontCompiler = () => {
                 onScaleStrokes={scaleStrokes}
                 onChangeStrokeWidth={changeStrokeWidth}
                 onResizeStrokes={resizeStrokes}
+                onFlipStrokes={flipStrokes}
+                onRotateStrokes={rotateStrokes}
                 onOutOfBounds={handleOutOfBounds}
                 onCanvasSizeChange={setCanvasHeight}
               />
