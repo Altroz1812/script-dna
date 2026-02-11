@@ -106,6 +106,7 @@ export type Database = {
           duration_ms: number | null
           font_library_id: string | null
           id: string
+          narration_url: string | null
           slant_angle: number | null
           stroke_data: Json
         }
@@ -116,6 +117,7 @@ export type Database = {
           duration_ms?: number | null
           font_library_id?: string | null
           id?: string
+          narration_url?: string | null
           slant_angle?: number | null
           stroke_data?: Json
         }
@@ -126,6 +128,7 @@ export type Database = {
           duration_ms?: number | null
           font_library_id?: string | null
           id?: string
+          narration_url?: string | null
           slant_angle?: number | null
           stroke_data?: Json
         }
@@ -138,6 +141,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      uploaded_fonts: {
+        Row: {
+          created_at: string
+          file_url: string
+          font_name: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          file_url: string
+          font_name: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          file_url?: string
+          font_name?: string
+          id?: string
+        }
+        Relationships: []
       }
     }
     Views: {
