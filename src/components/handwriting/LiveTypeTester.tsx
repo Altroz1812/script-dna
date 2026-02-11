@@ -20,8 +20,7 @@ const SYSTEM_FONTS = [
   { value: 'serif', label: 'Serif' },
   { value: 'sans-serif', label: 'Sans-Serif' },
   { value: 'monospace', label: 'Monospace' },
-  { value: 'dancing-script', label: 'Cursive (Dancing Script)' },
-  { value: 'great-vibes', label: 'Cursive (Great Vibes)' },
+  { value: 'cursive', label: 'Cursive' },
 ];
 
 // Unique font family name per generation to bust cache
@@ -152,8 +151,6 @@ export function LiveTypeTester({ metadata, onExportFont, isExporting }: LiveType
       return `'${generatedFontFamily}', cursive`;
     }
     if (selectedFont === 'default') return 'inherit';
-    if (selectedFont === 'dancing-script') return `'Dancing Script', cursive`;
-    if (selectedFont === 'great-vibes') return `'Great Vibes', cursive`;
     return selectedFont;
   };
 
