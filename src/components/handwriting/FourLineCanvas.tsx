@@ -25,16 +25,17 @@ interface FourLineCanvasProps {
   onAddStamp?: (points: StrokePoint[], color: string, width: number) => void;
   onMoveStrokes?: (strokeIds: string[], dx: number, dy: number) => void;
   onScaleStrokes?: (strokeIds: string[], scaleFactor: number) => void;
+  onChangeStrokeWidth?: (strokeIds: string[], delta: number) => void;
   onOutOfBounds?: () => void;
   onCanvasSizeChange?: (height: number) => void;
 }
 
-// Line positions as percentages of canvas height
+// Line positions as percentages of canvas height — equal 25% spacing
 const LINE_CONFIG = {
-  ascender: 15,    // Top dotted line (for ascenders like 'b', 'd', 'h')
-  xHeight: 40,     // Upper solid line (cap height / x-height)
-  baseline: 70,    // Main baseline (where letters sit)
-  descender: 90,   // Bottom dotted line (for descenders like 'g', 'p', 'y')
+  ascender: 12.5,  // Top dotted line (for ascenders like 'b', 'd', 'h')
+  xHeight: 37.5,   // Upper solid line (cap height / x-height)
+  baseline: 62.5,  // Main baseline (where letters sit)
+  descender: 87.5, // Bottom dotted line (for descenders like 'g', 'p', 'y')
 };
 
 export function FourLineCanvas({
@@ -54,6 +55,7 @@ export function FourLineCanvas({
   onAddStamp,
   onMoveStrokes,
   onScaleStrokes,
+  onChangeStrokeWidth,
   onOutOfBounds,
   onCanvasSizeChange,
 }: FourLineCanvasProps) {
@@ -588,6 +590,7 @@ export function FourLineCanvas({
         const maxX = Math.max(...allPts.map(p => p.x));
         const maxY = Math.max(...allPts.map(p => p.y));
         const pad = 8;
+        const currentWidth = selectedStrokes[0]?.width ?? 4;
         return (
           <>
             <svg
@@ -602,19 +605,38 @@ export function FourLineCanvas({
               />
             </svg>
             <div
-              className="absolute pointer-events-auto flex items-center gap-1 z-20"
-              style={{ left: maxX + 12, top: minY - 4 }}
+              className="absolute pointer-events-auto flex flex-col gap-1.5 z-20"
+              style={{ left: maxX + 14, top: minY - 4 }}
             >
-              <button
-                onClick={() => onScaleStrokes?.(selectedStrokeIds, 1.15)}
-                className="w-6 h-6 rounded bg-card/90 border border-border text-foreground text-xs font-bold hover:bg-accent/30"
-                title="Scale up"
-              >+</button>
-              <button
-                onClick={() => onScaleStrokes?.(selectedStrokeIds, 0.85)}
-                className="w-6 h-6 rounded bg-card/90 border border-border text-foreground text-xs font-bold hover:bg-accent/30"
-                title="Scale down"
-              >−</button>
+              {/* Scale controls */}
+              <div className="flex items-center gap-0.5">
+                <span className="text-[9px] text-muted-foreground w-7">Size</span>
+                <button
+                  onClick={() => onScaleStrokes?.(selectedStrokeIds, 1.15)}
+                  className="w-6 h-6 rounded bg-card/90 border border-border text-foreground text-xs font-bold hover:bg-accent/30"
+                  title="Scale up"
+                >+</button>
+                <button
+                  onClick={() => onScaleStrokes?.(selectedStrokeIds, 0.85)}
+                  className="w-6 h-6 rounded bg-card/90 border border-border text-foreground text-xs font-bold hover:bg-accent/30"
+                  title="Scale down"
+                >−</button>
+              </div>
+              {/* Thickness controls */}
+              <div className="flex items-center gap-0.5">
+                <span className="text-[9px] text-muted-foreground w-7">Wt</span>
+                <button
+                  onClick={() => onChangeStrokeWidth?.(selectedStrokeIds, 1)}
+                  className="w-6 h-6 rounded bg-card/90 border border-border text-foreground text-xs font-bold hover:bg-accent/30"
+                  title="Increase thickness"
+                >+</button>
+                <button
+                  onClick={() => onChangeStrokeWidth?.(selectedStrokeIds, -1)}
+                  className="w-6 h-6 rounded bg-card/90 border border-border text-foreground text-xs font-bold hover:bg-accent/30"
+                  title="Decrease thickness"
+                >−</button>
+                <span className="text-[9px] font-mono text-muted-foreground ml-0.5">{currentWidth}px</span>
+              </div>
             </div>
           </>
         );
