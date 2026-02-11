@@ -162,27 +162,52 @@ export function FontUploadPanel({ activeFont, onFontSelect }: FontUploadPanelPro
 
           {/* Previously uploaded fonts */}
           {fonts.length > 0 && (
-            <Select
-              value={activeFont?.id || ''}
-              onValueChange={(id) => {
-                if (id === '__none__') {
-                  onFontSelect(null);
-                } else {
-                  const font = fonts.find(f => f.id === id);
-                  if (font) onFontSelect(font);
-                }
-              }}
-            >
-              <SelectTrigger className="text-sm">
-                <SelectValue placeholder="Select uploaded font…" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">No overlay font</SelectItem>
+            <div className="space-y-1">
+              <Select
+                value={activeFont?.id || ''}
+                onValueChange={(id) => {
+                  if (id === '__none__') {
+                    onFontSelect(null);
+                  } else {
+                    const font = fonts.find(f => f.id === id);
+                    if (font) onFontSelect(font);
+                  }
+                }}
+              >
+                <SelectTrigger className="text-sm">
+                  <SelectValue placeholder="Select uploaded font…" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No overlay font</SelectItem>
+                  {fonts.map(f => (
+                    <SelectItem key={f.id} value={f.id}>{f.font_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* Delete buttons for each font */}
+              <div className="flex flex-wrap gap-1">
                 {fonts.map(f => (
-                  <SelectItem key={f.id} value={f.id}>{f.font_name}</SelectItem>
+                  <button
+                    key={f.id}
+                    onClick={async () => {
+                      if (!confirm(`Delete "${f.font_name}"?`)) return;
+                      // Remove @font-face
+                      document.getElementById(`font-face-${f.id}`)?.remove();
+                      // Delete DB row
+                      await supabase.from('uploaded_fonts').delete().eq('id', f.id);
+                      if (activeFont?.id === f.id) onFontSelect(null);
+                      await loadFonts();
+                      toast({ title: 'Deleted', description: `"${f.font_name}" removed.` });
+                    }}
+                    className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    {f.font_name}
+                  </button>
                 ))}
-              </SelectContent>
-            </Select>
+              </div>
+            </div>
           )}
 
           {/* Active font preview */}
