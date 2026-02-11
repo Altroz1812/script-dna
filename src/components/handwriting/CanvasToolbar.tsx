@@ -1,4 +1,5 @@
-import { Undo2, Redo2, Trash2, Grid3X3, AlignJustify, X, Pen, Eraser, Circle, Minus, MoveUpRight, Ellipsis, Square, Triangle, MousePointer2, FlipHorizontal2, FlipVertical2, RotateCw } from 'lucide-react';
+import { useState } from 'react';
+import { Undo2, Redo2, Trash2, Grid3X3, AlignJustify, X, Pen, Eraser, Circle, Minus, MoveUpRight, Ellipsis, Square, Triangle, MousePointer2, FlipHorizontal2, FlipVertical2, RotateCw, CircleDot } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ToolbarConfig, OverlayType, CanvasTool } from '@/types/handwriting';
@@ -29,12 +30,50 @@ const TOOLS: { value: CanvasTool; icon: React.ReactNode; label: string }[] = [
 
 const STAMP_TOOLS: { value: CanvasTool; icon: React.ReactNode; label: string }[] = [
   { value: 'stamp_circle', icon: <Circle className="w-3.5 h-3.5" />, label: 'Circle' },
+  { value: 'stamp_semicircle', icon: <CircleDot className="w-3.5 h-3.5" />, label: 'Semi-Circle' },
   { value: 'stamp_ellipse', icon: <Ellipsis className="w-3.5 h-3.5" />, label: 'Ellipse' },
   { value: 'stamp_rectangle', icon: <Square className="w-3.5 h-3.5" />, label: 'Rectangle' },
   { value: 'stamp_triangle', icon: <Triangle className="w-3.5 h-3.5" />, label: 'Triangle' },
   { value: 'stamp_line', icon: <Minus className="w-3.5 h-3.5" />, label: 'Line' },
   { value: 'stamp_arc', icon: <MoveUpRight className="w-3.5 h-3.5" />, label: 'Arc' },
 ];
+
+function CustomRotationInput({ onRotate }: { onRotate: (deg: number) => void }) {
+  const [angle, setAngle] = useState('45');
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-xs font-medium text-muted-foreground">Custom Rotation</span>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          value={angle}
+          onChange={(e) => setAngle(e.target.value)}
+          className="w-16 px-2 py-1 text-sm rounded-md bg-secondary border border-border text-foreground font-mono"
+          min={-360}
+          max={360}
+        />
+        <span className="text-xs text-muted-foreground">°</span>
+        <button
+          onClick={() => onRotate(Number(angle) || 0)}
+          className="px-3 py-1 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:opacity-90"
+        >
+          Apply
+        </button>
+      </div>
+      <div className="flex gap-1">
+        {[15, 30, 45, 90, 180].map((deg) => (
+          <button
+            key={deg}
+            onClick={() => onRotate(deg)}
+            className="px-2 py-1 text-[10px] rounded bg-secondary/80 text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+          >
+            {deg}°
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function CanvasToolbar({
   config,
@@ -184,6 +223,17 @@ export function CanvasToolbar({
         >
           <RotateCw className="w-4 h-4" />
         </button>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button className="toolbar-button flex items-center gap-1" title="Custom Rotation">
+              <RotateCw className="w-3.5 h-3.5" />
+              <span className="text-[10px] font-medium">°</span>
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-3 bg-popover border-border">
+            <CustomRotationInput onRotate={(deg) => onRotateAll?.(deg)} />
+          </PopoverContent>
+        </Popover>
       </div>
 
       <div className="w-px h-6 bg-border" />
