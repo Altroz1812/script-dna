@@ -54,6 +54,8 @@ export function FourLineCanvas({
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [isOutOfBounds, setIsOutOfBounds] = useState(false);
   const [shapeSuggestion, setShapeSuggestion] = useState<ShapeSuggestion | null>(null);
+  const [stampDragStart, setStampDragStart] = useState<{ x: number; y: number } | null>(null);
+  const [stampPreview, setStampPreview] = useState<StrokePoint[] | null>(null);
 
   const { detectShape } = useShapeDetector();
 
@@ -248,14 +250,14 @@ export function FourLineCanvas({
     return () => resizeObserver.disconnect();
   }, [redrawCanvas, onCanvasSizeChange]);
 
-  // Generate stamp points at a position
-  const generateStampPoints = useCallback((cx: number, cy: number): StrokePoint[] => {
-    const n = 40;
-    const r = brushWidth * 4;
+  // Generate stamp points with center and radius
+  const generateStampPoints = useCallback((cx: number, cy: number, rx: number, ry: number): StrokePoint[] => {
+    const n = 48;
     const now = performance.now();
     const base = { pressure: 0.6, velocity: 0, timestamp: now };
 
     if (activeTool === 'stamp_circle') {
+      const r = Math.max(rx, ry);
       return Array.from({ length: n + 1 }, (_, i) => {
         const angle = (2 * Math.PI * i) / n;
         return { ...base, x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle), timestamp: now + i };
@@ -264,23 +266,44 @@ export function FourLineCanvas({
     if (activeTool === 'stamp_ellipse') {
       return Array.from({ length: n + 1 }, (_, i) => {
         const angle = (2 * Math.PI * i) / n;
-        return { ...base, x: cx + r * 1.5 * Math.cos(angle), y: cy + r * Math.sin(angle), timestamp: now + i };
+        return { ...base, x: cx + rx * Math.cos(angle), y: cy + ry * Math.sin(angle), timestamp: now + i };
       });
+    }
+    if (activeTool === 'stamp_rectangle') {
+      // 4 corners + close
+      const pts: StrokePoint[] = [
+        { ...base, x: cx - rx, y: cy - ry, timestamp: now },
+        { ...base, x: cx + rx, y: cy - ry, timestamp: now + 1 },
+        { ...base, x: cx + rx, y: cy + ry, timestamp: now + 2 },
+        { ...base, x: cx - rx, y: cy + ry, timestamp: now + 3 },
+        { ...base, x: cx - rx, y: cy - ry, timestamp: now + 4 },
+      ];
+      return pts;
+    }
+    if (activeTool === 'stamp_triangle') {
+      const r = Math.max(rx, ry);
+      return [
+        { ...base, x: cx, y: cy - r, timestamp: now },
+        { ...base, x: cx + r * 0.87, y: cy + r * 0.5, timestamp: now + 1 },
+        { ...base, x: cx - r * 0.87, y: cy + r * 0.5, timestamp: now + 2 },
+        { ...base, x: cx, y: cy - r, timestamp: now + 3 },
+      ];
     }
     if (activeTool === 'stamp_line') {
       return Array.from({ length: n }, (_, i) => {
         const t = i / (n - 1);
-        return { ...base, x: cx - r + 2 * r * t, y: cy, timestamp: now + i };
+        return { ...base, x: cx - rx + 2 * rx * t, y: cy, timestamp: now + i };
       });
     }
     if (activeTool === 'stamp_arc') {
+      const r = Math.max(rx, ry);
       return Array.from({ length: n }, (_, i) => {
         const angle = Math.PI + (Math.PI * i) / (n - 1);
         return { ...base, x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle), timestamp: now + i };
       });
     }
     return [];
-  }, [activeTool, brushWidth]);
+  }, [activeTool]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
@@ -296,12 +319,11 @@ export function FourLineCanvas({
     
     setIsOutOfBounds(false);
 
-    // Handle stamp tools - place shape immediately
+    // Handle stamp tools - start drag for sizing
     if (activeTool.startsWith('stamp_')) {
-      const stampPoints = generateStampPoints(normalizedX, normalizedY);
-      if (stampPoints.length > 0 && onAddStamp) {
-        onAddStamp(stampPoints, penColor, brushWidth);
-      }
+      setStampDragStart({ x: normalizedX, y: normalizedY });
+      setStampPreview(null);
+      (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
       return;
     }
 
@@ -337,7 +359,16 @@ export function FourLineCanvas({
       return;
     }
 
-    if (activeTool.startsWith('stamp_')) return;
+    // Stamp drag preview
+    if (activeTool.startsWith('stamp_') && stampDragStart) {
+      const rx = Math.abs(normalizedX - stampDragStart.x);
+      const ry = Math.abs(normalizedY - stampDragStart.y);
+      const cx = (stampDragStart.x + normalizedX) / 2;
+      const cy = (stampDragStart.y + normalizedY) / 2;
+      const preview = generateStampPoints(cx, cy, rx / 2 || 10, ry / 2 || 10);
+      setStampPreview(preview);
+      return;
+    }
     
     // Apply magnetic snapping in perfection mode
     if (assistanceConfig.mode === 'perfection') {
@@ -356,17 +387,38 @@ export function FourLineCanvas({
 
   const handlePointerUp = (e: React.PointerEvent) => {
     e.preventDefault();
+    (e.target as HTMLCanvasElement).releasePointerCapture(e.pointerId);
 
-    if (activeTool === 'eraser' || activeTool.startsWith('stamp_')) {
+    if (activeTool === 'eraser') {
       setIsOutOfBounds(false);
-      (e.target as HTMLCanvasElement).releasePointerCapture(e.pointerId);
+      return;
+    }
+
+    // Stamp: finalize on pointer up
+    if (activeTool.startsWith('stamp_') && stampDragStart) {
+      const { x, y } = getPointerPosition(e);
+      const normalizedX = x / window.devicePixelRatio;
+      const normalizedY = y / window.devicePixelRatio;
+      const rx = Math.abs(normalizedX - stampDragStart.x);
+      const ry = Math.abs(normalizedY - stampDragStart.y);
+      const cx = (stampDragStart.x + normalizedX) / 2;
+      const cy = (stampDragStart.y + normalizedY) / 2;
+      // Use dragged size, or fallback to brush-based size if just a click
+      const finalRx = rx > 5 ? rx / 2 : brushWidth * 4;
+      const finalRy = ry > 5 ? ry / 2 : brushWidth * 4;
+      const points = generateStampPoints(cx, cy, finalRx, finalRy);
+      if (points.length > 0 && onAddStamp) {
+        onAddStamp(points, penColor, brushWidth);
+      }
+      setStampDragStart(null);
+      setStampPreview(null);
+      setIsOutOfBounds(false);
       return;
     }
 
     const completedPoints = [...currentStroke];
     onEndStroke();
     setIsOutOfBounds(false);
-    (e.target as HTMLCanvasElement).releasePointerCapture(e.pointerId);
 
     // Run shape detection on completed stroke
     if (completedPoints.length >= 6) {
@@ -403,6 +455,24 @@ export function FourLineCanvas({
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
       />
+
+      {/* Stamp drag preview */}
+      {stampPreview && stampPreview.length > 1 && (
+        <svg
+          className="absolute inset-0 w-full h-full pointer-events-none z-10"
+          viewBox={`0 0 ${canvasSize.width} ${canvasSize.height}`}
+          preserveAspectRatio="none"
+        >
+          <path
+            d={`M ${stampPreview[0].x} ${stampPreview[0].y} ${stampPreview.slice(1).map(p => `L ${p.x} ${p.y}`).join(' ')}`}
+            fill="none"
+            stroke="hsl(var(--primary))"
+            strokeWidth="2"
+            strokeDasharray="6 3"
+            opacity="0.6"
+          />
+        </svg>
+      )}
 
       {/* Writing Assistance Overlay */}
       <WritingAssistanceOverlay
