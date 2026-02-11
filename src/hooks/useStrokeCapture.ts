@@ -325,6 +325,12 @@ export function useStrokeCapture() {
     rotateStrokes(strokes.map(s => s.id), angleDeg);
   }, [strokes, rotateStrokes]);
 
+  // Load external strokes onto canvas (e.g. from saved font library data)
+  const loadStrokes = useCallback((newStrokes: StrokeData[]) => {
+    applyStrokes(newStrokes);
+    setCurrentStroke([]);
+  }, [applyStrokes]);
+
   return {
     strokes,
     currentStroke,
@@ -351,5 +357,6 @@ export function useStrokeCapture() {
     rotateStrokes,
     flipAll,
     rotateAll,
+    loadStrokes,
   };
 }

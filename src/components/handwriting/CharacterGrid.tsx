@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Check, Circle, Grid } from 'lucide-react';
+import { Check, Circle, Grid, Pencil } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 
@@ -58,7 +58,12 @@ export function CharacterGrid({ onSelectCharacter, selectedCharacter }: Characte
       >
         {char}
         {isRecorded && !isSelected && (
-          <Check className="absolute -top-1 -right-1 w-3 h-3 bg-success text-background rounded-full p-0.5" />
+          <div className="absolute -top-1 -right-1 flex">
+            <Check className="w-3 h-3 bg-success text-background rounded-full p-0.5" />
+          </div>
+        )}
+        {isRecorded && isSelected && (
+          <Pencil className="absolute -top-1 -right-1 w-3 h-3 text-primary-foreground" />
         )}
       </button>
     );

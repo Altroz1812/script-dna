@@ -59,6 +59,7 @@ const FontCompiler = () => {
     rotateStrokes,
     flipAll,
     rotateAll,
+    loadStrokes,
   } = useStrokeCapture();
 
   const lastOutOfBoundsToastAtRef = useRef<number>(0);
@@ -78,9 +79,65 @@ const FontCompiler = () => {
     endStroke(toolbarConfig.penColor, toolbarConfig.brushWidth);
   }, [endStroke, toolbarConfig.penColor, toolbarConfig.brushWidth]);
 
-  const handleSelectCharacter = (char: string) => {
-    clear();
+  const handleSelectCharacter = async (char: string) => {
     setSelectedCharacter(char);
+
+    // Try to load existing saved strokes for this character
+    try {
+      const { data, error } = await supabase
+        .from('font_library')
+        .select('normalized_bezier')
+        .eq('character', char)
+        .single();
+
+      if (error || !data) {
+        // No saved data — just clear canvas for fresh drawing
+        clear();
+        return;
+      }
+
+      const bezierData = data.normalized_bezier as Array<{
+        points: Array<{ x: number; y: number; pressure: number }>;
+        color: string;
+        width: number;
+      }>;
+
+      if (!Array.isArray(bezierData) || bezierData.length === 0) {
+        clear();
+        return;
+      }
+
+      // Convert normalized bezier back to canvas-scale strokes
+      // Original normalization: x / 500, y / 300
+      const canvasW = 500;
+      const canvasH = 300;
+      const now = performance.now();
+
+      const restoredStrokes: import('@/types/handwriting').StrokeData[] = bezierData.map((stroke, i) => ({
+        id: crypto.randomUUID(),
+        points: (stroke.points || []).map((p, j) => ({
+          x: p.x * canvasW,
+          y: p.y * canvasH,
+          pressure: p.pressure ?? 0.5,
+          velocity: 0,
+          timestamp: now + i * 1000 + j,
+        })),
+        color: stroke.color || '#3b82f6',
+        width: stroke.width || 4,
+        startTime: now + i * 1000,
+        endTime: now + i * 1000 + (stroke.points?.length || 0),
+      }));
+
+      loadStrokes(restoredStrokes);
+
+      toast({
+        title: "Character Loaded",
+        description: `Editing saved "${char}" — modify and save to update.`,
+      });
+    } catch (err) {
+      console.error('Error loading character:', err);
+      clear();
+    }
   };
 
   const handleSaveCharacter = async () => {
