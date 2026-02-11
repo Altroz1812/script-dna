@@ -347,6 +347,17 @@ export function FourLineCanvas({
         return { ...base, x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle), timestamp: now + i };
       });
     }
+    if (activeTool === 'stamp_semicircle') {
+      const r = Math.max(rx, ry);
+      // Semi-circle: half circle (arc) + closing line
+      const arcPoints = Array.from({ length: n }, (_, i) => {
+        const angle = Math.PI + (Math.PI * i) / (n - 1);
+        return { ...base, x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle), timestamp: now + i };
+      });
+      // Close with a straight line back to start
+      arcPoints.push({ ...base, x: arcPoints[0].x, y: arcPoints[0].y, timestamp: now + n });
+      return arcPoints;
+    }
     return [];
   }, [activeTool]);
 
@@ -743,6 +754,19 @@ export function FourLineCanvas({
                 <span className="text-[9px] text-muted-foreground w-7">Rot</span>
                 <button onClick={() => onRotateStrokes?.(selectedStrokeIds, 90)} className="w-6 h-6 rounded bg-card/90 border border-border text-foreground text-[9px] font-bold hover:bg-accent/30" title="Rotate 90° CW">↻</button>
                 <button onClick={() => onRotateStrokes?.(selectedStrokeIds, -90)} className="w-6 h-6 rounded bg-card/90 border border-border text-foreground text-[9px] font-bold hover:bg-accent/30" title="Rotate 90° CCW">↺</button>
+                <input
+                  type="number"
+                  defaultValue={45}
+                  min={-360}
+                  max={360}
+                  className="w-10 h-6 px-1 text-[9px] rounded bg-card/90 border border-border text-foreground font-mono text-center"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      onRotateStrokes?.(selectedStrokeIds, Number((e.target as HTMLInputElement).value) || 0);
+                    }
+                  }}
+                  title="Type angle and press Enter"
+                />
               </div>
             </div>
           </>
