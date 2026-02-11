@@ -340,6 +340,20 @@ export function FourLineCanvas({
         return { ...base, x: cx - rx + 2 * rx * t, y: cy, timestamp: now + i };
       });
     }
+    if (activeTool === 'stamp_line_fwd') {
+      // Forward slash / — bottom-left to top-right
+      return Array.from({ length: n }, (_, i) => {
+        const t = i / (n - 1);
+        return { ...base, x: cx - rx + 2 * rx * t, y: cy + ry - 2 * ry * t, timestamp: now + i };
+      });
+    }
+    if (activeTool === 'stamp_line_bwd') {
+      // Backslash \ — top-left to bottom-right
+      return Array.from({ length: n }, (_, i) => {
+        const t = i / (n - 1);
+        return { ...base, x: cx - rx + 2 * rx * t, y: cy - ry + 2 * ry * t, timestamp: now + i };
+      });
+    }
     if (activeTool === 'stamp_arc') {
       const r = Math.max(rx, ry);
       return Array.from({ length: n }, (_, i) => {

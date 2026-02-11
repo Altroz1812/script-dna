@@ -34,7 +34,9 @@ const STAMP_TOOLS: { value: CanvasTool; icon: React.ReactNode; label: string }[]
   { value: 'stamp_ellipse', icon: <Ellipsis className="w-3.5 h-3.5" />, label: 'Ellipse' },
   { value: 'stamp_rectangle', icon: <Square className="w-3.5 h-3.5" />, label: 'Rectangle' },
   { value: 'stamp_triangle', icon: <Triangle className="w-3.5 h-3.5" />, label: 'Triangle' },
-  { value: 'stamp_line', icon: <Minus className="w-3.5 h-3.5" />, label: 'Line' },
+  { value: 'stamp_line', icon: <Minus className="w-3.5 h-3.5" />, label: 'Line ―' },
+  { value: 'stamp_line_fwd', icon: <span className="text-sm font-bold leading-none">/</span>, label: 'Line /' },
+  { value: 'stamp_line_bwd', icon: <span className="text-sm font-bold leading-none">\</span>, label: 'Line \\' },
   { value: 'stamp_arc', icon: <MoveUpRight className="w-3.5 h-3.5" />, label: 'Arc' },
 ];
 
