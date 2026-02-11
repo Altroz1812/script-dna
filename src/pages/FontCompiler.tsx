@@ -23,6 +23,7 @@ const FontCompiler = () => {
     brushWidth: 4,
     penColor: '#3b82f6',
     overlay: 'none',
+    activeTool: 'pen',
   });
   const [fontMetadata, setFontMetadata] = useState<FontMetadata>({
     fontName: 'My Handwriting',
@@ -43,6 +44,8 @@ const FontCompiler = () => {
     undo,
     clear,
     replaceLastStroke,
+    eraseAtPoint,
+    addStamp,
   } = useStrokeCapture();
 
   const lastOutOfBoundsToastAtRef = useRef<number>(0);
@@ -295,11 +298,14 @@ const FontCompiler = () => {
                 currentStroke={currentStroke}
                 penColor={toolbarConfig.penColor}
                 brushWidth={toolbarConfig.brushWidth}
+                activeTool={toolbarConfig.activeTool}
                 targetCharacter={selectedCharacter}
                 onStartStroke={startStroke}
                 onContinueStroke={continueStroke}
                 onEndStroke={handleEndStroke}
                 onReplaceLastStroke={replaceLastStroke}
+                onEraseAtPoint={eraseAtPoint}
+                onAddStamp={addStamp}
                 onOutOfBounds={handleOutOfBounds}
                 onCanvasSizeChange={setCanvasHeight}
               />
