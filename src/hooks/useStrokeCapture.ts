@@ -239,6 +239,15 @@ export function useStrokeCapture() {
     applyStrokes(updated);
   }, [strokes, applyStrokes]);
 
+  // Select tool: change stroke width (thickness)
+  const changeStrokeWidth = useCallback((strokeIds: string[], delta: number) => {
+    const updated = strokes.map(s => {
+      if (!strokeIds.includes(s.id)) return s;
+      return { ...s, width: Math.max(1, Math.min(40, s.width + delta)) };
+    });
+    applyStrokes(updated);
+  }, [strokes, applyStrokes]);
+
   return {
     strokes,
     currentStroke,
@@ -259,5 +268,6 @@ export function useStrokeCapture() {
     addStamp,
     moveStrokes,
     scaleStrokes,
+    changeStrokeWidth,
   };
 }

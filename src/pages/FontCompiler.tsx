@@ -53,6 +53,7 @@ const FontCompiler = () => {
     addStamp,
     moveStrokes,
     scaleStrokes,
+    changeStrokeWidth,
   } = useStrokeCapture();
 
   const lastOutOfBoundsToastAtRef = useRef<number>(0);
@@ -317,6 +318,7 @@ const FontCompiler = () => {
                 onAddStamp={addStamp}
                 onMoveStrokes={moveStrokes}
                 onScaleStrokes={scaleStrokes}
+                onChangeStrokeWidth={changeStrokeWidth}
                 onOutOfBounds={handleOutOfBounds}
                 onCanvasSizeChange={setCanvasHeight}
               />
