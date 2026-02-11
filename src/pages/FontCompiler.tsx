@@ -42,10 +42,17 @@ const FontCompiler = () => {
     continueStroke,
     endStroke,
     undo,
+    redo,
+    canUndo,
+    canRedo,
     clear,
     replaceLastStroke,
     eraseAtPoint,
+    startErase,
+    endErase,
     addStamp,
+    moveStrokes,
+    scaleStrokes,
   } = useStrokeCapture();
 
   const lastOutOfBoundsToastAtRef = useRef<number>(0);
@@ -286,10 +293,10 @@ const FontCompiler = () => {
               config={toolbarConfig}
               onConfigChange={handleConfigChange}
               onUndo={undo}
-              onRedo={() => {}}
+              onRedo={redo}
               onClear={clear}
-              canUndo={strokes.length > 0}
-              canRedo={false}
+              canUndo={canUndo}
+              canRedo={canRedo}
             />
 
             <div className="h-[350px]">
@@ -305,7 +312,11 @@ const FontCompiler = () => {
                 onEndStroke={handleEndStroke}
                 onReplaceLastStroke={replaceLastStroke}
                 onEraseAtPoint={eraseAtPoint}
+                onStartErase={startErase}
+                onEndErase={endErase}
                 onAddStamp={addStamp}
+                onMoveStrokes={moveStrokes}
+                onScaleStrokes={scaleStrokes}
                 onOutOfBounds={handleOutOfBounds}
                 onCanvasSizeChange={setCanvasHeight}
               />
