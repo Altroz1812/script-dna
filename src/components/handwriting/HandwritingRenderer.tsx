@@ -111,35 +111,48 @@ export function HandwritingRenderer({
         }
 
         // Render the handwritten character from normalized bezier data
+        // First, compute bounding box of normalized points to fit character into cell
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const stroke of charData.normalized_bezier) {
+          if (!stroke.points) continue;
+          for (const p of stroke.points) {
+            if (p.x < minX) minX = p.x;
+            if (p.y < minY) minY = p.y;
+            if (p.x > maxX) maxX = p.x;
+            if (p.y > maxY) maxY = p.y;
+          }
+        }
+        const bw = maxX - minX || 0.01;
+        const bh = maxY - minY || 0.01;
+        // Fit into character cell with some padding
+        const pad = 0.1;
+        const availW = charWidth * (1 - pad * 2);
+        const availH = charHeight * (1 - pad * 2);
+        const fitScale = Math.min(availW / bw, availH / bh);
+        const offX = (charWidth - bw * fitScale) / 2;
+        const offY = (charHeight - bh * fitScale) / 2;
+
         return (
           <g key={`${lineIndex}-${charIndex}`} transform={`translate(${xOffset}, ${yOffset})`}>
             {charData.normalized_bezier.map((stroke, strokeIndex) => {
               if (!stroke.points || stroke.points.length < 2) return null;
 
-              // Build SVG path from normalized points
-              // The normalized points are in 0-1 range based on 500x300 canvas
-              // We scale them to our current character size
-              const scaleX = charWidth;
-              const scaleY = charHeight;
-
               let pathD = '';
               stroke.points.forEach((point, i) => {
-                const x = point.x * scaleX;
-                const y = point.y * scaleY;
+                const x = (point.x - minX) * fitScale + offX;
+                const y = (point.y - minY) * fitScale + offY;
                 if (i === 0) {
                   pathD += `M ${x} ${y}`;
                 } else {
-                  // Use quadratic curves for smoother rendering
                   const prevPoint = stroke.points[i - 1];
-                  const prevX = prevPoint.x * scaleX;
-                  const prevY = prevPoint.y * scaleY;
+                  const prevX = (prevPoint.x - minX) * fitScale + offX;
+                  const prevY = (prevPoint.y - minY) * fitScale + offY;
                   const midX = (prevX + x) / 2;
                   const midY = (prevY + y) / 2;
                   pathD += ` Q ${prevX} ${prevY} ${midX} ${midY}`;
                 }
               });
 
-              // Calculate stroke width based on font size
               const strokeWidth = Math.max(1, (stroke.width || 4) * (fontSize / 32));
 
               return (
