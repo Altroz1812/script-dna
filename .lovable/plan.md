@@ -1,84 +1,115 @@
 
 
-## Auto-Correction Shape Suggestion System
+# TTF Font Upload with Cursive Tracing, Animation Recording, and Audio
 
-When you finish drawing a stroke, the system will automatically detect if it resembles a known geometric shape (circle, semi-circle, straight line, slant line, arc, etc.). If a match is found, a corrected version is shown as a glowing overlay on top of your original stroke. You can then **Accept** to replace your stroke with the perfected version, or **Reject** to keep your original.
-
----
-
-### How It Works
-
-1. **Draw a stroke** on the canvas as usual
-2. When you lift your pen, the system analyzes the stroke in real-time
-3. If a shape is detected (e.g., a wobbly circle), a **green ghost overlay** of the perfected shape appears on top
-4. A small floating toolbar appears with **Accept** and **Reject** buttons
-5. **Accept** replaces your stroke with the mathematically perfect version
-6. **Reject** keeps your original handwriting
-
-### Supported Shape Detections
-
-- **Circle** -- closed loop with roughly equal radius
-- **Ellipse** -- closed loop with varying radii
-- **Semi-circle / Arc** -- open curved segment
-- **Straight line** -- low curvature stroke (horizontal, vertical, or diagonal)
-- **Slant line** -- angled straight line with angle snapping
-
-### Detection Logic
-
-Each shape detector works by measuring geometric properties of the completed stroke:
-
-- **Circularity**: ratio of start-end distance to stroke length, plus radius variance from centroid
-- **Linearity**: maximum perpendicular deviation from the start-to-end line
-- **Arc detection**: consistent curvature without closure
+## Overview
+Add a new mode to the Font Compiler page where users can upload a `.ttf` font file, name it, and render its glyphs as translucent guide overlays on the canvas. The user then traces/overwrites the characters on the canvas, and the system records both the stroke animation and audio narration. This operates as a separate workflow from the existing manual font-building tools.
 
 ---
 
-### Technical Details
+## Feature Breakdown
 
-#### 1. New file: `src/hooks/useShapeDetector.ts`
+### 1. TTF Font Upload and Management
+- Add an **"Import Font"** panel (collapsible card) in the Font Compiler page's left column, below or above the existing CharacterGrid.
+- The panel includes:
+  - A file input accepting `.ttf` files (stored in Lovable Cloud file storage, NOT the database).
+  - A text input for the font name.
+  - A dropdown to select from previously uploaded fonts.
+- When a font is uploaded, store the file in a **storage bucket** (`uploaded-fonts`) and save a reference row in a new `uploaded_fonts` table (id, font_name, file_url, created_at).
+- Load the TTF into the browser using `@font-face` injection (same pattern as `LiveTypeTester`).
 
-A hook that takes a completed stroke and returns a shape suggestion (if any). Core logic:
+### 2. Cursive Guide Overlay on Canvas
+- When an uploaded font is active and a character (or word/sentence) is selected, render the target text using the uploaded font as a **semi-transparent overlay** behind the drawing layer on `FourLineCanvas`.
+- For cursive/connected writing, add a **"Word Mode"** toggle that lets users type a full word or sentence instead of selecting single characters. The overlay renders the entire word in the uploaded cursive font, maintaining natural ligatures and connections.
+- The overlay is drawn on a separate canvas layer (or as an underlay image) so it doesn't interfere with stroke capture.
 
-- `detectShape(points)` runs all detectors in priority order
-- Returns a `ShapeSuggestion` with the detected type, confidence score, and corrected points
-- Shape generation functions: `generateCirclePoints()`, `generateLinePoints()`, `generateArcPoints()`, `generateEllipsePoints()`
-- Minimum confidence threshold (0.7) to avoid false positives
-- Minimum point count (8) to avoid triggering on dots/taps
+### 3. Overwrite and Save
+- Users draw on top of the overlay, tracing or correcting the cursive shapes.
+- Saving works the same as the existing flow: strokes are normalized and stored in `font_library`.
+- In word mode, individual characters can be segmented or the entire word saved as a ligature entry.
 
-#### 2. New file: `src/components/handwriting/ShapeCorrectionOverlay.tsx`
+### 4. Animation Recording
+- Integrate the existing `StrokeReplayCanvas` component to replay the user's tracing session.
+- Add a **"Record Session"** button that captures all strokes drawn during a tracing session with timing data (already captured in stroke points' timestamps).
+- Save recordings to the existing `stroke_recordings` table, linked to the font_library entry.
 
-A visual overlay component that:
+### 5. Audio Narration
+- Integrate the existing `VoiceNarrationControls` and `useAudioRecorder` hook into the tracing workflow.
+- Audio is recorded during replay (existing pattern) or optionally during live drawing.
+- Audio files stored in a **storage bucket** (`narration-audio`), with the URL saved in `stroke_recordings` or a new column.
 
-- Renders the suggested corrected shape as a green dashed SVG path on the canvas
-- Shows the original stroke slightly dimmed for comparison
-- Displays a floating "Accept / Reject" button pair near the shape
-- Animates in smoothly when a suggestion appears
+---
 
-#### 3. Edit: `src/hooks/useStrokeCapture.ts`
+## Technical Details
 
-- Add a `replaceLastStroke(newPoints)` function that swaps the most recently added stroke's points with the corrected shape points
-- This is called when the user clicks "Accept"
+### Database Changes
 
-#### 4. Edit: `src/components/handwriting/FourLineCanvas.tsx`
+**New table: `uploaded_fonts`**
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid | PK, default gen_random_uuid() |
+| font_name | varchar | NOT NULL |
+| file_url | text | NOT NULL, storage path |
+| created_at | timestamptz | default now() |
 
-- After `onEndStroke` fires, run the shape detector on the just-completed stroke
-- If a suggestion is returned, show the `ShapeCorrectionOverlay`
-- Wire Accept to call `replaceLastStroke` and Reject to dismiss the overlay
+**New storage bucket: `uploaded-fonts`** (public read)
 
-#### 5. Edit: `src/pages/FontCompiler.tsx`
+**New storage bucket: `narration-audio`** (public read)
 
-- Pass the new `replaceLastStroke` callback down to `FourLineCanvas`
-- No other changes needed since the overlay is self-contained inside the canvas
+**New column on `stroke_recordings`:**
+- `narration_url` (text, nullable) -- URL to audio file in storage
 
-#### 6. New types in `src/types/handwriting.ts`
+### New Components
 
-```typescript
-export interface ShapeSuggestion {
-  type: 'circle' | 'ellipse' | 'semi_circle' | 'arc' | 'straight_line' | 'slant_line';
-  confidence: number;         // 0-1
-  correctedPoints: StrokePoint[];
-  originalStrokeId: string;
-  label: string;              // e.g. "Circle detected (92%)"
-}
+1. **`FontUploadPanel.tsx`** -- File upload UI, font name input, font selector dropdown. Handles uploading to storage, injecting `@font-face`, and managing uploaded font state.
+
+2. **`CursiveOverlay.tsx`** -- Renders the uploaded font text as a canvas underlay. Uses an offscreen canvas or SVG text element with the uploaded font family, drawn semi-transparently beneath the main drawing surface.
+
+3. **`TracingSessionRecorder.tsx`** -- Wraps StrokeReplayCanvas + VoiceNarrationControls + session save logic. Appears after a tracing is completed, allowing replay, narration recording, and saving the full session.
+
+### Modified Components
+
+- **`FourLineCanvas.tsx`** -- Add an optional `overlayImage` or `overlayText` prop to render a font guide layer beneath strokes. Add a "word mode" text input for cursive sentences.
+
+- **`FontCompiler.tsx`** -- Add the FontUploadPanel to the layout. Wire up overlay rendering and session recording. Add a toggle between "Build Font" mode (existing) and "Trace Font" mode (new).
+
+- **`CanvasToolbar.tsx`** -- Add a mode toggle button (Build vs Trace).
+
+### File Storage Pattern
+```text
+Upload TTF --> Storage bucket "uploaded-fonts"
+                  |
+                  v
+            uploaded_fonts table (font_name, file_url)
+                  |
+                  v
+            @font-face injection in browser
+                  |
+                  v
+            Render as overlay on canvas
 ```
+
+### Cursive Word Rendering Flow
+```text
+User types word --> Render with uploaded @font-face
+                        |
+                        v
+                  Canvas underlay (low opacity)
+                        |
+                        v
+                  User traces over it
+                        |
+                        v
+                  Save strokes + timing data
+                        |
+                        v
+                  Replay + Audio recording
+```
+
+### Key Implementation Notes
+
+- The uploaded font and the hand-built font are kept completely separate. The uploaded font is only used as a visual reference/guide overlay.
+- Cursive connectivity is handled by the uploaded TTF itself (its ligature tables and glyph design). We simply render text with it -- no custom cursive logic needed.
+- The existing stroke capture, replay, and audio systems are reused with minimal changes.
+- Word mode saves the entire traced word as a single entry (useful for ligature training), while individual character mode works as before.
 
