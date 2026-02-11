@@ -248,6 +248,26 @@ export function useStrokeCapture() {
     applyStrokes(updated);
   }, [strokes, applyStrokes]);
 
+  // Select tool: resize strokes within a bounding box transformation
+  const resizeStrokes = useCallback((strokeIds: string[], oldBounds: { minX: number; minY: number; maxX: number; maxY: number }, newBounds: { minX: number; minY: number; maxX: number; maxY: number }) => {
+    const ow = oldBounds.maxX - oldBounds.minX || 1;
+    const oh = oldBounds.maxY - oldBounds.minY || 1;
+    const nw = newBounds.maxX - newBounds.minX || 1;
+    const nh = newBounds.maxY - newBounds.minY || 1;
+    const updated = strokes.map(s => {
+      if (!strokeIds.includes(s.id)) return s;
+      return {
+        ...s,
+        points: s.points.map(p => ({
+          ...p,
+          x: newBounds.minX + ((p.x - oldBounds.minX) / ow) * nw,
+          y: newBounds.minY + ((p.y - oldBounds.minY) / oh) * nh,
+        })),
+      };
+    });
+    applyStrokes(updated);
+  }, [strokes, applyStrokes]);
+
   return {
     strokes,
     currentStroke,
@@ -269,5 +289,6 @@ export function useStrokeCapture() {
     moveStrokes,
     scaleStrokes,
     changeStrokeWidth,
+    resizeStrokes,
   };
 }
