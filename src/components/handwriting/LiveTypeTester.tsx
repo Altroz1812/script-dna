@@ -58,22 +58,24 @@ export function LiveTypeTester({ metadata, onExportFont, isExporting }: LiveType
   const generateAndLoadFont = useCallback(async () => {
     setIsLoadingFont(true);
     try {
-      const { data, error } = await supabase.functions.invoke('compile-font', {
-        body: { metadata },
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const response = await fetch(`${supabaseUrl}/functions/v1/compile-font`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseKey}`,
+          'apikey': supabaseKey,
+        },
+        body: JSON.stringify({ metadata }),
       });
 
-      if (error) throw error;
-
-      let blob: Blob;
-      if (data instanceof Blob) {
-        blob = data;
-      } else if (data instanceof ArrayBuffer) {
-        blob = new Blob([data], { type: 'font/ttf' });
-      } else {
-        const parsed = typeof data === 'string' ? JSON.parse(data) : data;
-        if (parsed?.error) throw new Error(parsed.message || parsed.error);
-        throw new Error('Unexpected response format');
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errBody.message || errBody.error || `HTTP ${response.status}`);
       }
+
+      const blob = await response.blob();
 
       // Save for later download
       setLastTtfBlob(blob);
