@@ -185,37 +185,43 @@ const FontCompiler = () => {
   const handleExportFont = async () => {
     setIsExporting(true);
     try {
-      // Call the font compiler edge function
       const { data, error } = await supabase.functions.invoke('compile-font', {
-        body: {
-          metadata: fontMetadata,
-        },
+        body: { metadata: fontMetadata },
       });
 
       if (error) throw error;
 
-      if (data?.fontUrl) {
-        // Download the font
-        const link = document.createElement('a');
-        link.href = data.fontUrl;
-        link.download = `${fontMetadata.fontName.replace(/\s+/g, '-')}.otf`;
-        link.click();
-
-        toast({
-          title: "Font Exported",
-          description: "Your handwriting font has been generated and downloaded.",
-        });
+      // The response is the raw TTF binary
+      let blob: Blob;
+      if (data instanceof Blob) {
+        blob = data;
+      } else if (data instanceof ArrayBuffer) {
+        blob = new Blob([data], { type: 'font/ttf' });
       } else {
-        toast({
-          title: "Font Preview",
-          description: "Font compilation is ready. The Python backend will generate the OTF file.",
-        });
+        // If it returned JSON with an error message
+        const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+        if (parsed?.error) throw new Error(parsed.message || parsed.error);
+        throw new Error('Unexpected response format');
       }
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${fontMetadata.fontName.replace(/\s+/g, '-')}.ttf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "Font Exported",
+        description: `Your handwriting font "${fontMetadata.fontName}" has been downloaded as a TTF file.`,
+      });
     } catch (error) {
       console.error('Error exporting font:', error);
       toast({
         title: "Export Failed",
-        description: "Could not compile font. Please try again later.",
+        description: error instanceof Error ? error.message : "Could not compile font. Please try again later.",
         variant: "destructive",
       });
     } finally {
