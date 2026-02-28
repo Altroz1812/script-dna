@@ -1,4 +1,4 @@
-export type AppRole = 'superadmin' | 'admin' | 'teacher' | 'student' | 'parent';
+export type AppRole = 'superadmin' | 'admin' | 'support' | 'teacher' | 'student' | 'parent';
 
 export interface UserProfile {
   id: string;
@@ -6,11 +6,13 @@ export interface UserProfile {
   displayName: string;
   avatarUrl?: string;
   role: AppRole;
+  organizationId?: string;
 }
 
 export const ROLE_LABELS: Record<AppRole, string> = {
   superadmin: 'Super Admin',
   admin: 'Admin',
+  support: 'Support',
   teacher: 'Teacher',
   student: 'Student',
   parent: 'Parent',
@@ -19,6 +21,7 @@ export const ROLE_LABELS: Record<AppRole, string> = {
 export const ROLE_HIERARCHY: AppRole[] = [
   'superadmin',
   'admin',
+  'support',
   'teacher',
   'student',
   'parent',
