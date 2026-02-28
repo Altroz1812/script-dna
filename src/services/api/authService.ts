@@ -1,18 +1,39 @@
 import { supabase } from '@/integrations/supabase/client';
 
+// Retry helper for transient network failures in preview environments
+async function withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 1000): Promise<T> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      const isNetworkError = err?.message === 'Failed to fetch' || err?.name === 'TypeError';
+      if (isNetworkError && attempt < retries) {
+        await new Promise((r) => setTimeout(r, delayMs * (attempt + 1)));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error('Unreachable');
+}
+
 export const authService = {
   async signIn(email: string, password: string) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await withRetry(() =>
+      supabase.auth.signInWithPassword({ email, password })
+    );
     if (error) throw error;
     return data;
   },
 
   async signUp(email: string, password: string) {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: window.location.origin },
-    });
+    const { data, error } = await withRetry(() =>
+      supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: window.location.origin },
+      })
+    );
     if (error) throw error;
     return data;
   },
