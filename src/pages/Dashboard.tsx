@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { adminQuery } from '@/services/api/adminService';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, BookOpen, Layers, Building2, UserPlus, CreditCard, GraduationCap, UserCheck } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { DashboardCardsSkeleton } from '@/components/ui/loading-skeletons';
 import { Button } from '@/components/ui/button';
 
@@ -16,45 +16,15 @@ interface Stats {
   roleCounts: Record<string, number>;
 }
 
-const STATS_CACHE_KEY = 'admin_stats';
-
 export default function Dashboard() {
-  const [stats, setStats] = useState<Stats | null>(() => {
-    try {
-      const cached = localStorage.getItem(STATS_CACHE_KEY);
-      return cached ? JSON.parse(cached) : null;
-    } catch {
-      return null;
-    }
-  });
-  const [loading, setLoading] = useState(!stats);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    let mounted = true;
-
-    const loadStats = async () => {
-      try {
-        const data = await adminQuery('get_stats') as Stats;
-        if (mounted) {
-          setStats(data);
-          localStorage.setItem(STATS_CACHE_KEY, JSON.stringify(data));
-        }
-      } catch (error) {
-        console.error('Failed to load stats:', error);
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    loadStats();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  const { data: stats, isLoading } = useQuery<Stats>({
+    queryKey: ['admin_stats'],
+    queryFn: () => adminQuery('get_stats') as Promise<Stats>,
+    staleTime: 1000 * 60 * 5,
+    retry: 2,
+  });
 
   const cards = stats ? [
     { label: 'Total Users', value: stats.totalUsers, icon: Users, color: 'text-blue-500' },
@@ -81,7 +51,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {loading ? (
+      {isLoading ? (
         <DashboardCardsSkeleton count={8} />
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
