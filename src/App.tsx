@@ -16,6 +16,8 @@ import PlaceholderPage from "@/pages/PlaceholderPage";
 import Index from "@/pages/Index";
 import FontCompiler from "@/pages/FontCompiler";
 import NotFound from "@/pages/NotFound";
+import CoursesPage from "@/pages/CoursesPage";
+import BatchesPage from "@/pages/BatchesPage";
 
 const queryClient = new QueryClient();
 
@@ -43,7 +45,8 @@ const App = () => (
               }
             >
               <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['superadmin', 'admin', 'teacher', 'student', 'parent']}><Dashboard /></ProtectedRoute>} />
-              <Route path="/courses" element={<ProtectedRoute allowedRoles={['superadmin', 'admin', 'teacher', 'student']}><PlaceholderPage /></ProtectedRoute>} />
+              <Route path="/courses" element={<ProtectedRoute allowedRoles={['superadmin', 'admin', 'teacher', 'student']}><CoursesPage /></ProtectedRoute>} />
+              <Route path="/batches" element={<ProtectedRoute allowedRoles={['superadmin', 'admin', 'teacher', 'student']}><BatchesPage /></ProtectedRoute>} />
               <Route path="/schedule" element={<ProtectedRoute allowedRoles={['superadmin', 'admin', 'teacher', 'student', 'parent']}><PlaceholderPage /></ProtectedRoute>} />
               <Route path="/attendance" element={<ProtectedRoute allowedRoles={['superadmin', 'admin', 'teacher']}><PlaceholderPage /></ProtectedRoute>} />
               <Route path="/users" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']}><PlaceholderPage /></ProtectedRoute>} />

@@ -48,6 +48,12 @@ export const navigationConfig: NavGroup[] = [
         roles: ['superadmin', 'admin', 'teacher', 'student'],
       },
       {
+        title: 'Batches',
+        url: '/batches',
+        icon: Users,
+        roles: ['superadmin', 'admin', 'teacher', 'student'],
+      },
+      {
         title: 'Schedule',
         url: '/schedule',
         icon: CalendarDays,
