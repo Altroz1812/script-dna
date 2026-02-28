@@ -1,57 +1,41 @@
 import { supabase } from '@/integrations/supabase/client';
 
-const FETCH_TIMEOUT_MS = 10000; // 10 second timeout per attempt
+// Use the server-side auth proxy to bypass preview iframe fetch interception
+async function authProxy(action: string, payload: Record<string, string>) {
+  const { data, error } = await supabase.functions.invoke('auth-proxy', {
+    body: { action, ...payload },
+  });
 
-// Wrapper that adds a timeout to fetch to prevent indefinite hangs
-function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
-  return fetch(input, {
-    ...init,
-    signal: controller.signal,
-  }).finally(() => clearTimeout(timeoutId));
-}
-
-// Retry helper for transient network failures
-async function withRetry<T>(fn: () => Promise<T>, retries = 3, delayMs = 800): Promise<T> {
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      return await fn();
-    } catch (err: any) {
-      const isNetworkError =
-        err?.message === 'Failed to fetch' ||
-        err?.name === 'TypeError' ||
-        err?.name === 'AbortError';
-      if (isNetworkError && attempt < retries) {
-        console.warn(`[Auth] Attempt ${attempt + 1} failed, retrying in ${delayMs * (attempt + 1)}ms...`);
-        await new Promise((r) => setTimeout(r, delayMs * (attempt + 1)));
-        continue;
-      }
-      throw err;
-    }
-  }
-  throw new Error('Unreachable');
+  if (error) throw new Error(error.message || 'Auth request failed');
+  if (data?.error) throw new Error(data.error);
+  return data;
 }
 
 export const authService = {
   async signIn(email: string, password: string) {
-    const { data, error } = await withRetry(() =>
-      supabase.auth.signInWithPassword({ email, password })
-    );
-    if (error) throw error;
+    const data = await authProxy('signInWithPassword', { email, password });
+    // After proxy login, set the session client-side so onAuthStateChange fires
+    if (data?.session) {
+      await supabase.auth.setSession({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+      });
+    }
     return data;
   },
 
   async signUp(email: string, password: string) {
-    const { data, error } = await withRetry(() =>
-      supabase.auth.signUp({
-        email,
-        password,
-        options: { emailRedirectTo: window.location.origin },
-      })
-    );
-    if (error) throw error;
+    const data = await authProxy('signUp', {
+      email,
+      password,
+      redirectTo: window.location.origin,
+    });
+    if (data?.session) {
+      await supabase.auth.setSession({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+      });
+    }
     return data;
   },
 
@@ -67,10 +51,10 @@ export const authService = {
   },
 
   async resetPassword(email: string) {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    await authProxy('resetPassword', {
+      email,
       redirectTo: `${window.location.origin}/reset-password`,
     });
-    if (error) throw error;
   },
 
   async updatePassword(password: string) {

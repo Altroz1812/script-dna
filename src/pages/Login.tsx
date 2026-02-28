@@ -29,12 +29,9 @@ export default function Login() {
     try {
       await signIn(email, password);
     } catch (err: any) {
-      const isNetwork = err?.message === 'Failed to fetch' || err?.name === 'AbortError';
       toast({
-        title: isNetwork ? 'Connection timeout' : 'Sign in failed',
-        description: isNetwork
-          ? 'The server took too long to respond. This can happen in the preview environment — please try again.'
-          : (err.message ?? 'Invalid credentials'),
+        title: 'Sign in failed',
+        description: err.message ?? 'Invalid credentials',
         variant: 'destructive',
       });
       setLoading(false);
