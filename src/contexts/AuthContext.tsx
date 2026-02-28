@@ -1,10 +1,8 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { authService } from '@/services/api/authService';
+import { supabase } from '@/integrations/supabase/client';
 import type { UserProfile } from '@/types/roles';
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 interface DashboardContext {
   stats: Record<string, number>;
@@ -29,20 +27,16 @@ export function useAuth() {
   return ctx;
 }
 
-// Direct fetch to fast-login-profile — bypasses lovable.js proxy
 async function fetchLoginProfile(accessToken: string): Promise<{ profile: UserProfile; dashboard: DashboardContext } | null> {
   try {
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/fast-login-profile`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({}),
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const { data, error } = await supabase.functions.invoke('fast-login-profile', {
+      body: {},
     });
-    if (!res.ok) return null;
-    return await res.json();
+    clearTimeout(timeout);
+    if (error) throw error;
+    return data;
   } catch (err) {
     console.error('fast-login-profile failed:', err);
     return null;
