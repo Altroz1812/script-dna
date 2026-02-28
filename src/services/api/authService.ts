@@ -1,13 +1,30 @@
 import { supabase } from '@/integrations/supabase/client';
 
-// Retry helper for transient network failures in preview environments
-async function withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 1000): Promise<T> {
+const FETCH_TIMEOUT_MS = 10000; // 10 second timeout per attempt
+
+// Wrapper that adds a timeout to fetch to prevent indefinite hangs
+function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+  return fetch(input, {
+    ...init,
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timeoutId));
+}
+
+// Retry helper for transient network failures
+async function withRetry<T>(fn: () => Promise<T>, retries = 3, delayMs = 800): Promise<T> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       return await fn();
     } catch (err: any) {
-      const isNetworkError = err?.message === 'Failed to fetch' || err?.name === 'TypeError';
+      const isNetworkError =
+        err?.message === 'Failed to fetch' ||
+        err?.name === 'TypeError' ||
+        err?.name === 'AbortError';
       if (isNetworkError && attempt < retries) {
+        console.warn(`[Auth] Attempt ${attempt + 1} failed, retrying in ${delayMs * (attempt + 1)}ms...`);
         await new Promise((r) => setTimeout(r, delayMs * (attempt + 1)));
         continue;
       }
