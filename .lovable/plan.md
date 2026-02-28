@@ -1,37 +1,40 @@
 
 
-# Fix: AuthProvider Ref Warning and Aborted Signal Error
+# Fix: Login "Failed to fetch" and Slow Auth
 
-## Problems Identified
+## Root Cause
 
-1. **"Function components cannot be given refs"** -- The Lovable preview framework is passing a ref to `AuthProvider`. The fix is to wrap the component export with `React.forwardRef` so it can gracefully accept (and ignore) the ref.
+The login is failing because it routes through the `auth-proxy` edge function, which adds an unnecessary network hop. The edge function cold-starts, sometimes times out, and the Lovable preview proxy can interfere with the direct fetch call. This is the source of the "Failed to fetch" errors.
 
-2. **"signal is aborted without reason"** -- The `AbortController` timeout in `authService.ts` is firing before the request completes, or the component unmounts mid-request. The fetch calls need better abort handling.
+## Solution: Use Supabase Client Directly
+
+Instead of calling an edge function that just forwards to Supabase Auth, use the Supabase JS client's built-in `signInWithPassword` directly. This eliminates the extra hop, removes cold-start delays, and uses the SDK's built-in retry/error handling.
 
 ## Changes
 
-### 1. `src/contexts/AuthContext.tsx`
-- Wrap `AuthProvider` with `React.forwardRef` so the preview framework's ref passes through without warnings
-- The ref won't be used internally -- it just prevents the console error
+### 1. Simplify `src/services/api/authService.ts`
 
-```typescript
-// Before
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+Replace the `authProxy` fetch calls with direct Supabase client calls:
 
-// After  
-export const AuthProvider = React.forwardRef<HTMLDivElement, { children: React.ReactNode }>(
-  function AuthProvider({ children }, _ref) {
-    // ... all existing logic stays the same
-  }
-);
-```
+- `signIn` -- use `supabase.auth.signInWithPassword()` directly
+- `signUp` -- use `supabase.auth.signUp()` directly  
+- `resetPassword` -- use `supabase.auth.resetPasswordForEmail()` directly
+- Remove the `authProxy` function entirely
 
-### 2. `src/services/api/authService.ts`
-- Remove or increase the `AbortController` timeout to prevent premature request cancellation
-- Add proper error handling for aborted signals so they don't surface as unhandled errors
+This eliminates the edge function dependency for auth, removing the "Failed to fetch" errors.
 
-## Impact
-- Eliminates both console warnings/errors
-- No functional changes to auth flow
-- Login behavior remains the same
+### 2. Simplify `src/contexts/AuthContext.tsx`
+
+The `fast-login-profile` edge function call is fine (it adds real value by consolidating profile + dashboard data). But the `fetchLoginProfile` function should add a timeout and error resilience so a slow profile fetch doesn't block the UI. If it fails, the user still logs in and the profile loads on retry.
+
+### 3. Console ref warnings (cosmetic only)
+
+The "Function components cannot be given refs" warnings for `Login` and `ProtectedRoute` are harmless -- caused by the Lovable preview framework. No action needed; they don't affect functionality.
+
+## Result
+
+- Login calls go directly to the authentication system (no edge function cold-start)
+- "Failed to fetch" errors eliminated
+- Login becomes near-instant
+- Profile/dashboard context still loads via the fast-login-profile function in parallel
 
