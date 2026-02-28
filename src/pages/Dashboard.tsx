@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, forwardRef } from 'react';
 import { adminQuery } from '@/services/api/adminService';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, BookOpen, Layers, Building2, UserPlus, CreditCard, GraduationCap, UserCheck } from 'lucide-react';
@@ -16,7 +16,7 @@ interface Stats {
   roleCounts: Record<string, number>;
 }
 
-export default function Dashboard() {
+const Dashboard = forwardRef<HTMLDivElement>(function Dashboard(_, ref) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -69,4 +69,8 @@ export default function Dashboard() {
       )}
     </div>
   );
-}
+});
+
+Dashboard.displayName = "Dashboard";
+
+export default Dashboard;
