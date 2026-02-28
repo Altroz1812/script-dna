@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -12,23 +12,29 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signIn } = useAuth();
+  const { signIn, session, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Redirect when session is established
+  useEffect(() => {
+    if (!authLoading && session) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [session, authLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
       await signIn(email, password);
-      navigate('/dashboard');
+      // Navigation handled by useEffect above when session updates
     } catch (err: any) {
       toast({
         title: 'Sign in failed',
         description: err.message ?? 'Invalid credentials',
         variant: 'destructive',
       });
-    } finally {
       setLoading(false);
     }
   };
