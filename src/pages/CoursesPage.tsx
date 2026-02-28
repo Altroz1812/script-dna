@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRBAC } from '@/hooks/useRBAC';
 import { courseService, type Course } from '@/services/api/courseService';
@@ -15,52 +16,45 @@ import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
 export default function CoursesPage() {
   const { profile } = useAuth();
   const { isAdmin } = useRBAC();
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [submitting, setSubmitting] = useState(false);
 
-  const load = async () => {
-    try {
-      setCourses(await courseService.listCourses());
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: courses = [], isLoading } = useQuery<Course[]>({
+    queryKey: ['courses'],
+    queryFn: () => courseService.listCourses(),
+    staleTime: 1000 * 60 * 5,
+  });
 
-  useEffect(() => { load(); }, []);
-
-  const handleCreate = async () => {
-    if (!name.trim()) { toast.error('Course name is required'); return; }
-    if (name.trim().length > 200) { toast.error('Name must be under 200 characters'); return; }
-    setSubmitting(true);
-    try {
-      await courseService.createCourse(name.trim(), description.trim() || null, profile!.id);
+  const createMutation = useMutation({
+    mutationFn: () => courseService.createCourse(name.trim(), description.trim() || null, profile!.id),
+    onSuccess: () => {
       toast.success('Course created');
       setName(''); setDescription(''); setOpen(false);
-      await load();
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setSubmitting(false);
-    }
-  };
+      queryClient.invalidateQueries({ queryKey: ['courses'] });
+      queryClient.invalidateQueries({ queryKey: ['admin_stats'] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
 
-  const handleDelete = async (id: string) => {
-    try {
-      await courseService.deleteCourse(id);
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => courseService.deleteCourse(id),
+    onSuccess: () => {
       toast.success('Course deleted');
-      await load();
-    } catch (e: any) {
-      toast.error(e.message);
-    }
+      queryClient.invalidateQueries({ queryKey: ['courses'] });
+      queryClient.invalidateQueries({ queryKey: ['admin_stats'] });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const handleCreate = () => {
+    if (!name.trim()) { toast.error('Course name is required'); return; }
+    if (name.trim().length > 200) { toast.error('Name must be under 200 characters'); return; }
+    createMutation.mutate();
   };
 
-  if (loading) return (
+  if (isLoading) return (
     <div className="p-6 space-y-6">
       <div><h1 className="text-2xl font-bold text-foreground">Courses</h1><p className="text-muted-foreground text-sm">Loading...</p></div>
       <CardGridSkeleton count={6} />
@@ -94,8 +88,8 @@ export default function CoursesPage() {
                   <Label>Description</Label>
                   <Textarea value={description} onChange={e => setDescription(e.target.value)} maxLength={1000} placeholder="Optional description" />
                 </div>
-                <Button onClick={handleCreate} disabled={submitting} className="w-full">
-                  {submitting ? 'Creating...' : 'Create Course'}
+                <Button onClick={handleCreate} disabled={createMutation.isPending} className="w-full">
+                  {createMutation.isPending ? 'Creating...' : 'Create Course'}
                 </Button>
               </div>
             </DialogContent>
@@ -121,7 +115,7 @@ export default function CoursesPage() {
                     {c.description && <CardDescription className="mt-1">{c.description}</CardDescription>}
                   </div>
                   {isAdmin && (
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(c.id)}>
+                    <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(c.id)}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   )}

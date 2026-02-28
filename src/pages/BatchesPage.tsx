@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRBAC } from '@/hooks/useRBAC';
 import { courseService, batchService, type Course, type Batch } from '@/services/api/courseService';
@@ -15,17 +16,14 @@ import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
 
 export default function BatchesPage() {
   const { profile } = useAuth();
-  const { isAdmin, hasRole } = useRBAC();
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [batches, setBatches] = useState<Batch[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { isAdmin } = useRBAC();
+  const queryClient = useQueryClient();
 
   // create batch form
   const [open, setOpen] = useState(false);
   const [batchName, setBatchName] = useState('');
   const [selectedCourse, setSelectedCourse] = useState('');
   const [maxStudents, setMaxStudents] = useState(25);
-  const [submitting, setSubmitting] = useState(false);
 
   // assign teacher dialog
   const [teacherDialogBatch, setTeacherDialogBatch] = useState<string | null>(null);
@@ -39,35 +37,54 @@ export default function BatchesPage() {
   const [selectedStudent, setSelectedStudent] = useState('');
   const [studentCount, setStudentCount] = useState(0);
 
-  const loadAll = useCallback(async () => {
-    try {
-      const [c, b] = await Promise.all([courseService.listCourses(), batchService.listBatches()]);
-      setCourses(c);
-      setBatches(b);
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const { data: courses = [] } = useQuery<Course[]>({
+    queryKey: ['courses'],
+    queryFn: () => courseService.listCourses(),
+    staleTime: 1000 * 60 * 5,
+  });
 
-  useEffect(() => { loadAll(); }, [loadAll]);
+  const { data: batches = [], isLoading } = useQuery<Batch[]>({
+    queryKey: ['batches'],
+    queryFn: () => batchService.listBatches(),
+    staleTime: 1000 * 60 * 5,
+  });
 
-  const handleCreateBatch = async () => {
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['batches'] });
+    queryClient.invalidateQueries({ queryKey: ['admin_stats'] });
+  };
+
+  const createMutation = useMutation({
+    mutationFn: () => batchService.createBatch(selectedCourse, batchName.trim(), maxStudents),
+    onSuccess: () => {
+      toast.success('Batch created');
+      setBatchName(''); setSelectedCourse(''); setMaxStudents(25); setOpen(false);
+      invalidate();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => batchService.deleteBatch(id),
+    onSuccess: () => { toast.success('Batch deleted'); invalidate(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const assignTeacherMutation = useMutation({
+    mutationFn: () => batchService.assignTeacher(teacherDialogBatch!, selectedTeacher === '__none__' ? null : selectedTeacher),
+    onSuccess: () => {
+      toast.success('Teacher assigned');
+      setTeacherDialogBatch(null); setSelectedTeacher('');
+      invalidate();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const handleCreateBatch = () => {
     if (!batchName.trim()) { toast.error('Batch name is required'); return; }
     if (!selectedCourse) { toast.error('Select a course'); return; }
     if (maxStudents < 1 || maxStudents > 100) { toast.error('Max students must be 1-100'); return; }
-    setSubmitting(true);
-    try {
-      await batchService.createBatch(selectedCourse, batchName.trim(), maxStudents);
-      toast.success('Batch created');
-      setBatchName(''); setSelectedCourse(''); setMaxStudents(25); setOpen(false);
-      await loadAll();
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setSubmitting(false);
-    }
+    createMutation.mutate();
   };
 
   const openTeacherDialog = async (batchId: string) => {
@@ -79,19 +96,7 @@ export default function BatchesPage() {
     }
   };
 
-  const handleAssignTeacher = async () => {
-    if (!teacherDialogBatch || !selectedTeacher) return;
-    try {
-      await batchService.assignTeacher(teacherDialogBatch, selectedTeacher === '__none__' ? null : selectedTeacher);
-      toast.success('Teacher assigned');
-      setTeacherDialogBatch(null); setSelectedTeacher('');
-      await loadAll();
-    } catch (e: any) {
-      toast.error(e.message);
-    }
-  };
-
-  const openStudentDialog = async (batch: Batch) => {
+  const openStudentDialog = useCallback(async (batch: Batch) => {
     setStudentDialogBatch(batch);
     try {
       const [studs, enrolled, count] = await Promise.all([
@@ -110,7 +115,7 @@ export default function BatchesPage() {
     } catch (e: any) {
       toast.error(e.message);
     }
-  };
+  }, []);
 
   const handleAddStudent = async () => {
     if (!studentDialogBatch || !selectedStudent) return;
@@ -139,17 +144,7 @@ export default function BatchesPage() {
     }
   };
 
-  const handleDeleteBatch = async (id: string) => {
-    try {
-      await batchService.deleteBatch(id);
-      toast.success('Batch deleted');
-      await loadAll();
-    } catch (e: any) {
-      toast.error(e.message);
-    }
-  };
-
-  if (loading) return (
+  if (isLoading) return (
     <div className="p-6 space-y-6">
       <div><h1 className="text-2xl font-bold text-foreground">Batches</h1><p className="text-muted-foreground text-sm">Loading...</p></div>
       <CardGridSkeleton count={6} />
@@ -195,8 +190,8 @@ export default function BatchesPage() {
                   <Label>Max Students (1-100)</Label>
                   <Input type="number" min={1} max={100} value={maxStudents} onChange={e => setMaxStudents(Number(e.target.value))} />
                 </div>
-                <Button onClick={handleCreateBatch} disabled={submitting} className="w-full">
-                  {submitting ? 'Creating...' : 'Create Batch'}
+                <Button onClick={handleCreateBatch} disabled={createMutation.isPending} className="w-full">
+                  {createMutation.isPending ? 'Creating...' : 'Create Batch'}
                 </Button>
               </div>
             </DialogContent>
@@ -222,7 +217,7 @@ export default function BatchesPage() {
                     <CardDescription>{(b as any).courses?.name ?? 'Unknown course'}</CardDescription>
                   </div>
                   {isAdmin && (
-                    <Button variant="ghost" size="icon" onClick={() => handleDeleteBatch(b.id)}>
+                    <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(b.id)}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   )}
@@ -267,7 +262,9 @@ export default function BatchesPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Button onClick={handleAssignTeacher} className="w-full">Save</Button>
+            <Button onClick={() => assignTeacherMutation.mutate()} disabled={assignTeacherMutation.isPending} className="w-full">
+              {assignTeacherMutation.isPending ? 'Saving...' : 'Save'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -282,7 +279,6 @@ export default function BatchesPage() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            {/* Add student */}
             <div className="flex gap-2">
               <Select value={selectedStudent} onValueChange={setSelectedStudent}>
                 <SelectTrigger className="flex-1"><SelectValue placeholder="Select student to add" /></SelectTrigger>
@@ -299,7 +295,6 @@ export default function BatchesPage() {
               </Button>
             </div>
 
-            {/* Enrolled list */}
             <div className="space-y-2 max-h-60 overflow-y-auto">
               {enrolledStudents.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-4">No students enrolled</p>
