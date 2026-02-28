@@ -5,29 +5,21 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 // Direct fetch to edge function — bypasses lovable.js proxy interception
 async function authProxy(action: string, payload: Record<string, string>) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/auth-proxy`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    },
+    body: JSON.stringify({ action, ...payload }),
+  });
 
-  try {
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/auth-proxy`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({ action, ...payload }),
-      signal: controller.signal,
-    });
-
-    const data = await res.json();
-    if (!res.ok || data?.error) {
-      throw new Error(data?.error || `Auth request failed (${res.status})`);
-    }
-    return data;
-  } finally {
-    clearTimeout(timeoutId);
+  const data = await res.json();
+  if (!res.ok || data?.error) {
+    throw new Error(data?.error || `Auth request failed (${res.status})`);
   }
+  return data;
 }
 
 export const authService = {
