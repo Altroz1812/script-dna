@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
 import { Plus, Trash2, FileText } from 'lucide-react';
+import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { courseService } from '@/services/api/courseService';
 
 export default function MaterialsPage() {
@@ -63,7 +64,7 @@ export default function MaterialsPage() {
           </Dialog>
         </div>
       </div>
-      {loading ? <p className="text-muted-foreground">Loading...</p> : (
+      {loading ? <TableSkeleton columns={5} rows={5} /> : (
         <Card><CardContent className="p-0">
           <Table>
             <TableHeader><TableRow><TableHead>Title</TableHead><TableHead>Course</TableHead><TableHead>Type</TableHead><TableHead>Link</TableHead><TableHead className="w-16"></TableHead></TableRow></TableHeader>

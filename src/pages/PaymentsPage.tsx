@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Plus, CreditCard } from 'lucide-react';
+import { TableSkeleton } from '@/components/ui/loading-skeletons';
 
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<any[]>([]);
@@ -56,7 +57,7 @@ export default function PaymentsPage() {
           </DialogContent>
         </Dialog>
       </div>
-      {loading ? <p className="text-muted-foreground">Loading...</p> : (
+      {loading ? <TableSkeleton columns={5} rows={5} /> : (
         <Card><CardContent className="p-0">
           <Table>
             <TableHeader><TableRow><TableHead>Student</TableHead><TableHead>Amount</TableHead><TableHead>Date</TableHead><TableHead>Description</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>

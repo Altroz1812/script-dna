@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { ROLE_LABELS } from '@/types/roles';
 import { Shield } from 'lucide-react';
+import { TableSkeleton } from '@/components/ui/loading-skeletons';
 
 export default function RolesPage() {
   const [users, setUsers] = useState<any[]>([]);
@@ -40,7 +41,7 @@ export default function RolesPage() {
           </Card>
         ))}
       </div>
-      {loading ? <p className="text-muted-foreground">Loading...</p> : (
+      {loading ? <TableSkeleton columns={3} rows={5} /> : (
         <Card>
           <CardContent className="p-0">
             <Table>

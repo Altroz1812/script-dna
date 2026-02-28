@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Plus, Trash2, Users, UserPlus, UserMinus, Layers } from 'lucide-react';
+import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
 
 export default function BatchesPage() {
   const { profile } = useAuth();
@@ -148,7 +149,12 @@ export default function BatchesPage() {
     }
   };
 
-  if (loading) return <div className="p-6 text-muted-foreground">Loading batches...</div>;
+  if (loading) return (
+    <div className="p-6 space-y-6">
+      <div><h1 className="text-2xl font-bold text-foreground">Batches</h1><p className="text-muted-foreground text-sm">Loading...</p></div>
+      <CardGridSkeleton count={6} />
+    </div>
+  );
 
   const enrolledIds = new Set(enrolledStudents.map(e => e.student_id));
   const availableStudents = students.filter(s => !enrolledIds.has(s.user_id));

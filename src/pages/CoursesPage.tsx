@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Plus, Trash2, BookOpen } from 'lucide-react';
+import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
 
 export default function CoursesPage() {
   const { profile } = useAuth();
@@ -59,7 +60,12 @@ export default function CoursesPage() {
     }
   };
 
-  if (loading) return <div className="p-6 text-muted-foreground">Loading courses...</div>;
+  if (loading) return (
+    <div className="p-6 space-y-6">
+      <div><h1 className="text-2xl font-bold text-foreground">Courses</h1><p className="text-muted-foreground text-sm">Loading...</p></div>
+      <CardGridSkeleton count={6} />
+    </div>
+  );
 
   return (
     <div className="p-6 space-y-6">
