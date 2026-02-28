@@ -5,8 +5,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { GraduationCap } from 'lucide-react';
+import { GraduationCap, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+
+function getErrorMessage(err: any): string {
+  const msg = err?.message ?? '';
+  if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Load failed')) {
+    return 'Network error — please check your connection and try again.';
+  }
+  if (msg.includes('already registered')) return 'This email is already registered. Try signing in instead.';
+  return msg || 'Sign up failed. Please try again.';
+}
 
 export default function Signup() {
   const [email, setEmail] = useState('');
@@ -17,12 +26,13 @@ export default function Signup() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
     try {
       await signUp(email, password);
       toast({ title: 'Check your email', description: 'We sent you a verification link.' });
     } catch (err: any) {
-      toast({ title: 'Sign up failed', description: err.message, variant: 'destructive' });
+      toast({ title: 'Sign up failed', description: getErrorMessage(err), variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -42,16 +52,23 @@ export default function Signup() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
+              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} autoComplete="new-password" />
             </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-3">
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Creating account…' : 'Sign Up'}
+              {loading ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Creating account…
+                </span>
+              ) : (
+                'Sign Up'
+              )}
             </Button>
             <Link to="/login" className="text-sm text-muted-foreground hover:text-primary">
               Already have an account? Sign in
