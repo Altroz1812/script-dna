@@ -16,13 +16,44 @@ interface Stats {
   roleCounts: Record<string, number>;
 }
 
+const STATS_CACHE_KEY = 'admin_stats';
+
 export default function Dashboard() {
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<Stats | null>(() => {
+    try {
+      const cached = localStorage.getItem(STATS_CACHE_KEY);
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [loading, setLoading] = useState(!stats);
   const navigate = useNavigate();
 
   useEffect(() => {
-    adminQuery('get_stats').then(setStats).catch(console.error).finally(() => setLoading(false));
+    let mounted = true;
+
+    const loadStats = async () => {
+      try {
+        const data = await adminQuery('get_stats') as Stats;
+        if (mounted) {
+          setStats(data);
+          localStorage.setItem(STATS_CACHE_KEY, JSON.stringify(data));
+        }
+      } catch (error) {
+        console.error('Failed to load stats:', error);
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadStats();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const cards = stats ? [
