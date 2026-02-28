@@ -5,3 +5,9 @@ verify_jwt = false
 
 [functions.seed-demo-users]
 verify_jwt = false
+
+[functions.fast-login-profile]
+verify_jwt = false
+
+[functions.auth-proxy]
+verify_jwt = false
