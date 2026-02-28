@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Pencil, Trash2, Search, Users } from 'lucide-react';
 import { ROLE_LABELS, type AppRole } from '@/types/roles';
+import { TableSkeleton } from '@/components/ui/loading-skeletons';
 
 interface UserRow {
   user_id: string;
@@ -92,7 +93,7 @@ export default function UsersPage() {
         </Select>
       </div>
 
-      {loading ? <p className="text-muted-foreground">Loading...</p> : (
+      {loading ? <TableSkeleton columns={4} rows={6} /> : (
         <Card>
           <CardContent className="p-0">
             <Table>

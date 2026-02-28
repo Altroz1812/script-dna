@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { GraduationCap } from 'lucide-react';
+import { TableSkeleton } from '@/components/ui/loading-skeletons';
 
 export default function StudentsPage() {
   const [students, setStudents] = useState<any[]>([]);
@@ -18,7 +19,7 @@ export default function StudentsPage() {
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold text-foreground">Students</h1>
       <p className="text-muted-foreground text-sm">All enrolled students with batch info</p>
-      {loading ? <p className="text-muted-foreground">Loading...</p> : (
+      {loading ? <TableSkeleton columns={3} rows={5} /> : (
         <Card>
           <CardContent className="p-0">
             <Table>

@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { batchService } from '@/services/api/courseService';
 import { ClipboardCheck } from 'lucide-react';
+import { TableSkeleton } from '@/components/ui/loading-skeletons';
 
 export default function AttendancePage() {
   const [batches, setBatches] = useState<any[]>([]);
@@ -59,7 +60,7 @@ export default function AttendancePage() {
         <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-44" />
         {selectedBatch && <Button onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Attendance'}</Button>}
       </div>
-      {!selectedBatch ? <p className="text-muted-foreground">Select a batch to mark attendance</p> : loading ? <p className="text-muted-foreground">Loading...</p> : (
+      {!selectedBatch ? <p className="text-muted-foreground">Select a batch to mark attendance</p> : loading ? <TableSkeleton columns={2} rows={5} /> : (
         <Card><CardContent className="p-0">
           <Table>
             <TableHeader><TableRow><TableHead>Student</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>

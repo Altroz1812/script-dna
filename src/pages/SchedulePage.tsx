@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
 import { Plus, Trash2, CalendarDays } from 'lucide-react';
+import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { batchService } from '@/services/api/courseService';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -73,7 +74,7 @@ export default function SchedulePage() {
           </Dialog>
         </div>
       </div>
-      {loading ? <p className="text-muted-foreground">Loading...</p> : (
+      {loading ? <TableSkeleton columns={6} rows={5} /> : (
         <Card><CardContent className="p-0">
           <Table>
             <TableHeader><TableRow><TableHead>Day</TableHead><TableHead>Time</TableHead><TableHead>Title</TableHead><TableHead>Batch</TableHead><TableHead>Room</TableHead><TableHead className="w-16"></TableHead></TableRow></TableHeader>

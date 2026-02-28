@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Plus, Bell, Check, Trash2 } from 'lucide-react';
+import { NotificationsSkeleton } from '@/components/ui/loading-skeletons';
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -48,7 +49,7 @@ export default function NotificationsPage() {
           </DialogContent>
         </Dialog>
       </div>
-      {loading ? <p className="text-muted-foreground">Loading...</p> : notifications.length === 0 ? (
+      {loading ? <NotificationsSkeleton count={4} /> : notifications.length === 0 ? (
         <Card><CardContent className="p-12 text-center text-muted-foreground"><Bell className="mx-auto h-12 w-12 mb-4 opacity-50" /><p>No notifications</p></CardContent></Card>
       ) : (
         <div className="space-y-3">

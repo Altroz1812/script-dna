@@ -3,6 +3,7 @@ import { adminQuery } from '@/services/api/adminService';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, BookOpen, Layers, Building2, UserPlus, CreditCard, GraduationCap, UserCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { DashboardCardsSkeleton } from '@/components/ui/loading-skeletons';
 import { Button } from '@/components/ui/button';
 
 interface Stats {
@@ -50,7 +51,7 @@ export default function Dashboard() {
       </div>
 
       {loading ? (
-        <p className="text-muted-foreground">Loading stats...</p>
+        <DashboardCardsSkeleton count={8} />
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {cards.map(c => (

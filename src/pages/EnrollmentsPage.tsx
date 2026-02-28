@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
 import { GraduationCap } from 'lucide-react';
+import { TableSkeleton } from '@/components/ui/loading-skeletons';
 
 export default function EnrollmentsPage() {
   const [enrollments, setEnrollments] = useState<any[]>([]);
@@ -17,7 +18,7 @@ export default function EnrollmentsPage() {
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold text-foreground">Enrollments</h1>
       <p className="text-muted-foreground text-sm">All student batch enrollments</p>
-      {loading ? <p className="text-muted-foreground">Loading...</p> : (
+      {loading ? <TableSkeleton columns={4} rows={5} /> : (
         <Card><CardContent className="p-0">
           <Table>
             <TableHeader><TableRow><TableHead>Student</TableHead><TableHead>Batch</TableHead><TableHead>Course</TableHead><TableHead>Enrolled</TableHead></TableRow></TableHeader>

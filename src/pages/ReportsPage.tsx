@@ -3,6 +3,7 @@ import { adminQuery } from '@/services/api/adminService';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { Users, CreditCard, ClipboardCheck, GraduationCap } from 'lucide-react';
+import { StatCardsSkeleton } from '@/components/ui/loading-skeletons';
 
 export default function ReportsPage() {
   const [stats, setStats] = useState<any>(null);
@@ -16,7 +17,7 @@ export default function ReportsPage() {
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold text-foreground">Reports</h1>
       <p className="text-muted-foreground text-sm">Aggregated overview of platform metrics</p>
-      {loading ? <p className="text-muted-foreground">Loading...</p> : stats && (
+      {loading ? <StatCardsSkeleton count={4} /> : stats && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2"><CardTitle className="text-sm text-muted-foreground">Total Users</CardTitle><Users className="h-4 w-4 text-blue-500" /></CardHeader>

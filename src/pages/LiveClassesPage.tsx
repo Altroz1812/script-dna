@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Plus, Trash2, Video } from 'lucide-react';
+import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { batchService } from '@/services/api/courseService';
 
 const STATUS_COLORS: Record<string, string> = { scheduled: 'bg-blue-100 text-blue-800', live: 'bg-green-100 text-green-800', completed: 'bg-gray-100 text-gray-800', cancelled: 'bg-red-100 text-red-800' };
@@ -59,7 +60,7 @@ export default function LiveClassesPage() {
           </DialogContent>
         </Dialog>
       </div>
-      {loading ? <p className="text-muted-foreground">Loading...</p> : (
+      {loading ? <TableSkeleton columns={6} rows={5} /> : (
         <Card><CardContent className="p-0">
           <Table>
             <TableHeader><TableRow><TableHead>Title</TableHead><TableHead>Batch</TableHead><TableHead>Time</TableHead><TableHead>Duration</TableHead><TableHead>Status</TableHead><TableHead className="w-16"></TableHead></TableRow></TableHeader>
