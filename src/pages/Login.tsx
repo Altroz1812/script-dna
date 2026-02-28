@@ -29,11 +29,11 @@ export default function Login() {
     try {
       await signIn(email, password);
     } catch (err: any) {
-      const isNetwork = err?.message === 'Failed to fetch';
+      const isNetwork = err?.message === 'Failed to fetch' || err?.name === 'AbortError';
       toast({
-        title: isNetwork ? 'Connection error' : 'Sign in failed',
+        title: isNetwork ? 'Connection timeout' : 'Sign in failed',
         description: isNetwork
-          ? 'Could not reach the server. Please check your connection and try again.'
+          ? 'The server took too long to respond. This can happen in the preview environment — please try again.'
           : (err.message ?? 'Invalid credentials'),
         variant: 'destructive',
       });
@@ -67,7 +67,7 @@ export default function Login() {
               {loading ? (
                 <span className="flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Signing in…
+                  Connecting…
                 </span>
               ) : (
                 'Sign In'
