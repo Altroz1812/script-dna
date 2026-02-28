@@ -90,27 +90,24 @@ export async function adminQuery(action: string, params: any = {}): Promise<any>
   }
 }
 
-// ===== STATS =====
+// ===== STATS (reads precomputed dashboard_stats table) =====
 async function getStats() {
-  const [profiles, courses, batches, orgs, leads, payments] = await Promise.all([
-    (supabase.from('profiles' as any).select('id', { count: 'exact', head: true }) as any),
-    (supabase.from('courses' as any).select('id', { count: 'exact', head: true }) as any),
-    (supabase.from('batches' as any).select('id', { count: 'exact', head: true }) as any),
-    (supabase.from('organizations' as any).select('id', { count: 'exact', head: true }) as any),
-    (supabase.from('leads' as any).select('id', { count: 'exact', head: true }) as any),
-    (supabase.from('payments' as any).select('id', { count: 'exact', head: true }) as any),
-  ]);
-  const { data: roles } = await (supabase.from('user_roles' as any).select('role') as any);
-  const roleCounts: Record<string, number> = {};
-  for (const r of roles ?? []) roleCounts[r.role] = (roleCounts[r.role] || 0) + 1;
+  const { data, error } = await (supabase
+    .from('dashboard_stats' as any)
+    .select('*')
+    .eq('id', 1)
+    .single() as any);
+
+  if (error) throw error;
+
   return {
-    totalUsers: profiles.count ?? 0,
-    totalCourses: courses.count ?? 0,
-    totalBatches: batches.count ?? 0,
-    totalOrgs: orgs.count ?? 0,
-    totalLeads: leads.count ?? 0,
-    totalPayments: payments.count ?? 0,
-    roleCounts,
+    totalUsers: data.total_users ?? 0,
+    totalCourses: data.total_courses ?? 0,
+    totalBatches: data.total_batches ?? 0,
+    totalOrgs: data.total_orgs ?? 0,
+    totalLeads: data.total_leads ?? 0,
+    totalPayments: data.total_payments ?? 0,
+    roleCounts: data.role_counts ?? {},
   };
 }
 

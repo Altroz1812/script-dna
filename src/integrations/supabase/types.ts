@@ -174,6 +174,42 @@ export type Database = {
           },
         ]
       }
+      dashboard_stats: {
+        Row: {
+          id: number
+          role_counts: Json
+          total_batches: number
+          total_courses: number
+          total_leads: number
+          total_orgs: number
+          total_payments: number
+          total_users: number
+          updated_at: string
+        }
+        Insert: {
+          id?: number
+          role_counts?: Json
+          total_batches?: number
+          total_courses?: number
+          total_leads?: number
+          total_orgs?: number
+          total_payments?: number
+          total_users?: number
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          role_counts?: Json
+          total_batches?: number
+          total_courses?: number
+          total_leads?: number
+          total_orgs?: number
+          total_payments?: number
+          total_users?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       discovered_rules: {
         Row: {
           created_at: string | null
@@ -717,6 +753,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      recompute_dashboard_stats: { Args: never; Returns: undefined }
       user_in_org: {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
