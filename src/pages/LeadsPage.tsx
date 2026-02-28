@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminQuery } from '@/services/api/adminService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,34 +9,60 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Trash2, UserPlus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { TableSkeleton } from '@/components/ui/loading-skeletons';
 
 const STATUSES = ['new', 'contacted', 'qualified', 'converted', 'lost'] as const;
-const STATUS_COLORS: Record<string, string> = { new: 'bg-blue-100 text-blue-800', contacted: 'bg-yellow-100 text-yellow-800', qualified: 'bg-purple-100 text-purple-800', converted: 'bg-green-100 text-green-800', lost: 'bg-red-100 text-red-800' };
 
 export default function LeadsPage() {
-  const [leads, setLeads] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', phone: '', source: '', notes: '' });
 
-  const load = () => { setLoading(true); adminQuery('list_leads').then(setLeads).catch(e => toast.error(e.message)).finally(() => setLoading(false)); };
-  useEffect(() => { load(); }, []);
+  const { data: leads = [], isLoading } = useQuery<any[]>({
+    queryKey: ['leads'],
+    queryFn: () => adminQuery('list_leads'),
+    staleTime: 1000 * 60 * 5,
+  });
 
-  const handleCreate = async () => {
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['leads'] });
+    queryClient.invalidateQueries({ queryKey: ['admin_stats'] });
+  };
+
+  const createMutation = useMutation({
+    mutationFn: () => adminQuery('create_lead', {
+      name: form.name.trim(),
+      email: form.email || null,
+      phone: form.phone || null,
+      source: form.source || null,
+      notes: form.notes || null,
+    }),
+    onSuccess: () => {
+      toast.success('Lead created');
+      setOpen(false);
+      setForm({ name: '', email: '', phone: '', source: '', notes: '' });
+      invalidate();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) => adminQuery('update_lead', { id, status }),
+    onSuccess: () => { toast.success('Status updated'); invalidate(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => adminQuery('delete_lead', { id }),
+    onSuccess: () => { toast.success('Deleted'); invalidate(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const handleCreate = () => {
     if (!form.name.trim()) { toast.error('Name required'); return; }
-    try { await adminQuery('create_lead', { name: form.name.trim(), email: form.email || null, phone: form.phone || null, source: form.source || null, notes: form.notes || null }); toast.success('Lead created'); setOpen(false); setForm({ name: '', email: '', phone: '', source: '', notes: '' }); load(); } catch (e: any) { toast.error(e.message); }
-  };
-
-  const updateStatus = async (id: string, status: string) => {
-    try { await adminQuery('update_lead', { id, status }); toast.success('Status updated'); load(); } catch (e: any) { toast.error(e.message); }
-  };
-
-  const handleDelete = async (id: string) => {
-    try { await adminQuery('delete_lead', { id }); toast.success('Deleted'); load(); } catch (e: any) { toast.error(e.message); }
+    createMutation.mutate();
   };
 
   return (
@@ -52,12 +79,14 @@ export default function LeadsPage() {
               <div><Label>Phone</Label><Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} /></div>
               <div><Label>Source</Label><Input value={form.source} onChange={e => setForm(f => ({ ...f, source: e.target.value }))} placeholder="e.g. Website, Referral" /></div>
               <div><Label>Notes</Label><Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
-              <Button onClick={handleCreate} className="w-full">Create Lead</Button>
+              <Button onClick={handleCreate} disabled={createMutation.isPending} className="w-full">
+                {createMutation.isPending ? 'Creating...' : 'Create Lead'}
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
-      {loading ? <TableSkeleton columns={6} rows={5} /> : (
+      {isLoading ? <TableSkeleton columns={6} rows={5} /> : (
         <Card><CardContent className="p-0">
           <Table>
             <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Phone</TableHead><TableHead>Source</TableHead><TableHead>Status</TableHead><TableHead className="w-16"></TableHead></TableRow></TableHeader>
@@ -70,12 +99,12 @@ export default function LeadsPage() {
                     <TableCell>{l.phone || '—'}</TableCell>
                     <TableCell>{l.source || '—'}</TableCell>
                     <TableCell>
-                      <Select value={l.status} onValueChange={v => updateStatus(l.id, v)}>
+                      <Select value={l.status} onValueChange={v => updateStatusMutation.mutate({ id: l.id, status: v })}>
                         <SelectTrigger className="w-32 h-8"><SelectValue /></SelectTrigger>
                         <SelectContent>{STATUSES.map(s => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}</SelectContent>
                       </Select>
                     </TableCell>
-                    <TableCell><Button variant="ghost" size="icon" onClick={() => handleDelete(l.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>
+                    <TableCell><Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(l.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>
                   </TableRow>
                 ))}
             </TableBody>
