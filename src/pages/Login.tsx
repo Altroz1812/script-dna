@@ -8,6 +8,15 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { GraduationCap, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
+function getErrorMessage(err: any): string {
+  const msg = err?.message ?? '';
+  if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Load failed')) {
+    return 'Network error — please check your connection and try again.';
+  }
+  if (msg.includes('Invalid login')) return 'Invalid email or password.';
+  return msg || 'Sign in failed. Please try again.';
+}
+
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -31,9 +40,10 @@ export default function Login() {
     } catch (err: any) {
       toast({
         title: 'Sign in failed',
-        description: err.message ?? 'Invalid credentials',
+        description: getErrorMessage(err),
         variant: 'destructive',
       });
+    } finally {
       setLoading(false);
     }
   };
@@ -64,7 +74,7 @@ export default function Login() {
               {loading ? (
                 <span className="flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Connecting…
+                  Signing in…
                 </span>
               ) : (
                 'Sign In'

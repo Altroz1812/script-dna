@@ -29,16 +29,15 @@ export function useAuth() {
 
 async function fetchLoginProfile(accessToken: string): Promise<{ profile: UserProfile; dashboard: DashboardContext } | null> {
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    const { data, error } = await supabase.functions.invoke('fast-login-profile', {
-      body: {},
-    });
-    clearTimeout(timeout);
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Profile fetch timeout')), 8000)
+    );
+    const fetchPromise = supabase.functions.invoke('fast-login-profile', { body: {} });
+    const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
     if (error) throw error;
     return data;
   } catch (err) {
-    console.error('fast-login-profile failed:', err);
+    console.warn('fast-login-profile failed (non-blocking):', err);
     return null;
   }
 }
@@ -49,23 +48,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [dashboardContext, setDashboardContext] = useState<DashboardContext | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const loadProfileFast = useCallback(async (accessToken: string) => {
-    const result = await fetchLoginProfile(accessToken);
-    if (result) {
-      setProfile(result.profile);
-      setDashboardContext(result.dashboard);
-    } else {
-      setProfile(null);
-      setDashboardContext(null);
-    }
+  const loadProfileFast = useCallback((accessToken: string) => {
+    // Fire-and-forget: never blocks auth flow
+    fetchLoginProfile(accessToken).then(result => {
+      if (result) {
+        setProfile(result.profile);
+        setDashboardContext(result.dashboard);
+      }
+    });
   }, []);
 
   useEffect(() => {
+    // 1. Set up listener FIRST (prevents race condition)
     const { data: { subscription } } = authService.onAuthStateChange(
-      async (_event, newSession) => {
+      (_event, newSession) => {
         setSession(newSession);
         if (newSession?.access_token) {
-          await loadProfileFast(newSession.access_token);
+          loadProfileFast(newSession.access_token);
         } else {
           setProfile(null);
           setDashboardContext(null);
@@ -74,6 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
+    // 2. THEN check existing session
     authService.getSession().then((s) => {
       setSession(s);
       if (s?.access_token) {
@@ -100,7 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const refreshProfile = async () => {
-    if (session?.access_token) await loadProfileFast(session.access_token);
+    if (session?.access_token) loadProfileFast(session.access_token);
   };
 
   return (

@@ -1,20 +1,37 @@
 import { supabase } from '@/integrations/supabase/client';
 
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      const isNetworkError = err?.message?.includes('Failed to fetch') || err?.message?.includes('NetworkError') || err?.message?.includes('Load failed');
+      if (i === maxRetries - 1 || !isNetworkError) throw err;
+      await new Promise(r => setTimeout(r, 500 * Math.pow(2, i)));
+    }
+  }
+  throw new Error('Unexpected retry exit');
+}
+
 export const authService = {
   async signIn(email: string, password: string) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    return data;
+    return withRetry(async () => {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      return data;
+    });
   },
 
   async signUp(email: string, password: string) {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: window.location.origin },
+    return withRetry(async () => {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: window.location.origin },
+      });
+      if (error) throw error;
+      return data;
     });
-    if (error) throw error;
-    return data;
   },
 
   async signOut() {
@@ -29,10 +46,12 @@ export const authService = {
   },
 
   async resetPassword(email: string) {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+    return withRetry(async () => {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
     });
-    if (error) throw error;
   },
 
   async updatePassword(password: string) {
