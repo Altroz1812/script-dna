@@ -2,3 +2,6 @@ project_id = "cslpnhccmcoxzmxwlaqy"
 
 [functions.compile-font]
 verify_jwt = false
+
+[functions.seed-demo-users]
+verify_jwt = false
