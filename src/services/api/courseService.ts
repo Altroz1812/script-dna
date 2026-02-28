@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { adminQuery } from './adminService';
 
 export interface Course {
   id: string;
@@ -31,141 +31,56 @@ export interface BatchStudent {
 
 export const courseService = {
   async listCourses(): Promise<Course[]> {
-    const { data, error } = await (supabase
-      .from('courses' as any)
-      .select('*')
-      .order('created_at', { ascending: false }) as any);
-    if (error) throw error;
-    return data ?? [];
+    return await adminQuery('list_courses');
   },
 
   async createCourse(name: string, description: string | null, createdBy: string): Promise<Course> {
-    const { data, error } = await (supabase
-      .from('courses' as any)
-      .insert({ name, description, created_by: createdBy })
-      .select()
-      .single() as any);
-    if (error) throw error;
-    return data;
+    return await adminQuery('create_course', { name, description, created_by: createdBy });
   },
 
   async deleteCourse(id: string): Promise<void> {
-    const { error } = await (supabase
-      .from('courses' as any)
-      .delete()
-      .eq('id', id) as any);
-    if (error) throw error;
+    await adminQuery('delete_course', { id });
   },
 };
 
 export const batchService = {
   async listBatches(courseId?: string): Promise<Batch[]> {
-    let query = (supabase
-      .from('batches' as any)
-      .select('*, courses(name)') as any);
-    if (courseId) query = query.eq('course_id', courseId);
-    const { data, error } = await query.order('created_at', { ascending: false });
-    if (error) throw error;
-    return data ?? [];
+    return await adminQuery('list_batches', courseId ? { course_id: courseId } : {});
   },
 
   async createBatch(courseId: string, name: string, maxStudents: number = 25): Promise<Batch> {
-    const { data, error } = await (supabase
-      .from('batches' as any)
-      .insert({ course_id: courseId, name, max_students: maxStudents })
-      .select()
-      .single() as any);
-    if (error) throw error;
-    return data;
+    return await adminQuery('create_batch', { course_id: courseId, name, max_students: maxStudents });
   },
 
   async assignTeacher(batchId: string, teacherId: string | null): Promise<void> {
-    const { error } = await (supabase
-      .from('batches' as any)
-      .update({ teacher_id: teacherId })
-      .eq('id', batchId) as any);
-    if (error) throw error;
+    await adminQuery('update_batch', { id: batchId, teacher_id: teacherId });
   },
 
   async deleteBatch(id: string): Promise<void> {
-    const { error } = await (supabase
-      .from('batches' as any)
-      .delete()
-      .eq('id', id) as any);
-    if (error) throw error;
+    await adminQuery('delete_batch', { id });
   },
 
   async getStudents(batchId: string): Promise<BatchStudent[]> {
-    const { data, error } = await (supabase
-      .from('batch_students' as any)
-      .select('*, profiles!batch_students_student_id_fkey(display_name, email)')
-      .eq('batch_id', batchId) as any);
-    if (error) {
-      // fallback without join
-      const { data: d2, error: e2 } = await (supabase
-        .from('batch_students' as any)
-        .select('*')
-        .eq('batch_id', batchId) as any);
-      if (e2) throw e2;
-      return d2 ?? [];
-    }
-    return data ?? [];
+    return await adminQuery('list_batch_students', { batch_id: batchId });
   },
 
   async getStudentCount(batchId: string): Promise<number> {
-    const { count, error } = await (supabase
-      .from('batch_students' as any)
-      .select('id', { count: 'exact', head: true })
-      .eq('batch_id', batchId) as any);
-    if (error) throw error;
-    return count ?? 0;
+    return await adminQuery('batch_student_count', { batch_id: batchId });
   },
 
   async addStudent(batchId: string, studentId: string): Promise<void> {
-    const { error } = await (supabase
-      .from('batch_students' as any)
-      .insert({ batch_id: batchId, student_id: studentId }) as any);
-    if (error) throw error;
+    await adminQuery('add_batch_student', { batch_id: batchId, student_id: studentId });
   },
 
   async removeStudent(batchId: string, studentId: string): Promise<void> {
-    const { error } = await (supabase
-      .from('batch_students' as any)
-      .delete()
-      .eq('batch_id', batchId)
-      .eq('student_id', studentId) as any);
-    if (error) throw error;
+    await adminQuery('remove_batch_student', { batch_id: batchId, student_id: studentId });
   },
 
   async listTeachers(): Promise<{ user_id: string; display_name: string | null; email: string | null }[]> {
-    const { data, error } = await (supabase
-      .from('user_roles' as any)
-      .select('user_id')
-      .eq('role', 'teacher') as any);
-    if (error) throw error;
-    if (!data?.length) return [];
-    const ids = data.map((r: any) => r.user_id);
-    const { data: profiles, error: pErr } = await (supabase
-      .from('profiles' as any)
-      .select('user_id, display_name, email')
-      .in('user_id', ids) as any);
-    if (pErr) throw pErr;
-    return profiles ?? [];
+    return await adminQuery('list_teachers');
   },
 
   async listStudents(): Promise<{ user_id: string; display_name: string | null; email: string | null }[]> {
-    const { data, error } = await (supabase
-      .from('user_roles' as any)
-      .select('user_id')
-      .eq('role', 'student') as any);
-    if (error) throw error;
-    if (!data?.length) return [];
-    const ids = data.map((r: any) => r.user_id);
-    const { data: profiles, error: pErr } = await (supabase
-      .from('profiles' as any)
-      .select('user_id, display_name, email')
-      .in('user_id', ids) as any);
-    if (pErr) throw pErr;
-    return profiles ?? [];
+    return await adminQuery('list_all_students');
   },
 };

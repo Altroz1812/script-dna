@@ -393,6 +393,103 @@ Deno.serve(async (req) => {
         break
       }
 
+      // ===== COURSES =====
+      case 'list_courses': {
+        const { data } = await supabase.from('courses').select('*').order('created_at', { ascending: false })
+        result = data ?? []
+        break
+      }
+      case 'create_course': {
+        const { name, description, created_by } = params
+        const { data, error } = await supabase.from('courses').insert({ name, description, created_by }).select().single()
+        if (error) throw error
+        result = data
+        break
+      }
+      case 'delete_course': {
+        const { error } = await supabase.from('courses').delete().eq('id', params.id)
+        if (error) throw error
+        result = { success: true }
+        break
+      }
+
+      // ===== BATCHES =====
+      case 'list_batches': {
+        let query = supabase.from('batches').select('*, courses(name)')
+        if (params?.course_id) query = query.eq('course_id', params.course_id)
+        const { data } = await query.order('created_at', { ascending: false })
+        result = data ?? []
+        break
+      }
+      case 'create_batch': {
+        const { course_id, name, max_students } = params
+        const { data, error } = await supabase.from('batches').insert({ course_id, name, max_students: max_students ?? 25 }).select().single()
+        if (error) throw error
+        result = data
+        break
+      }
+      case 'update_batch': {
+        const { id, ...updates } = params
+        const { error } = await supabase.from('batches').update(updates).eq('id', id)
+        if (error) throw error
+        result = { success: true }
+        break
+      }
+      case 'delete_batch': {
+        await supabase.from('batch_students').delete().eq('batch_id', params.id)
+        const { error } = await supabase.from('batches').delete().eq('id', params.id)
+        if (error) throw error
+        result = { success: true }
+        break
+      }
+      case 'list_batch_students': {
+        const { data } = await supabase.from('batch_students').select('*').eq('batch_id', params.batch_id)
+        const sIds = (data ?? []).map((d: any) => d.student_id)
+        let profs: any[] = []
+        if (sIds.length) {
+          const { data: p } = await supabase.from('profiles').select('user_id, display_name, email').in('user_id', sIds)
+          profs = p ?? []
+        }
+        const pm: Record<string, any> = {}
+        for (const p of profs) pm[p.user_id] = p
+        result = (data ?? []).map((d: any) => ({ ...d, profile: pm[d.student_id] || null }))
+        break
+      }
+      case 'add_batch_student': {
+        const { error } = await supabase.from('batch_students').insert({ batch_id: params.batch_id, student_id: params.student_id })
+        if (error) throw error
+        result = { success: true }
+        break
+      }
+      case 'remove_batch_student': {
+        const { error } = await supabase.from('batch_students').delete().eq('batch_id', params.batch_id).eq('student_id', params.student_id)
+        if (error) throw error
+        result = { success: true }
+        break
+      }
+      case 'batch_student_count': {
+        const { count, error } = await supabase.from('batch_students').select('id', { count: 'exact', head: true }).eq('batch_id', params.batch_id)
+        if (error) throw error
+        result = count ?? 0
+        break
+      }
+      case 'list_teachers': {
+        const { data: roles } = await supabase.from('user_roles').select('user_id').eq('role', 'teacher')
+        if (!roles?.length) { result = []; break }
+        const ids = roles.map((r: any) => r.user_id)
+        const { data: profiles } = await supabase.from('profiles').select('user_id, display_name, email').in('user_id', ids)
+        result = profiles ?? []
+        break
+      }
+      case 'list_all_students': {
+        const { data: roles } = await supabase.from('user_roles').select('user_id').eq('role', 'student')
+        if (!roles?.length) { result = []; break }
+        const ids = roles.map((r: any) => r.user_id)
+        const { data: profiles } = await supabase.from('profiles').select('user_id, display_name, email').in('user_id', ids)
+        result = profiles ?? []
+        break
+      }
+
       default:
         return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
           status: 400,
