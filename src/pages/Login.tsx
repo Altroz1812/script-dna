@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { GraduationCap } from 'lucide-react';
+import { GraduationCap, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function Login() {
@@ -16,7 +16,6 @@ export default function Login() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Redirect when session is established
   useEffect(() => {
     if (!authLoading && session) {
       navigate('/dashboard', { replace: true });
@@ -25,14 +24,17 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
     try {
       await signIn(email, password);
-      // Navigation handled by useEffect above when session updates
     } catch (err: any) {
+      const isNetwork = err?.message === 'Failed to fetch';
       toast({
-        title: 'Sign in failed',
-        description: err.message ?? 'Invalid credentials',
+        title: isNetwork ? 'Connection error' : 'Sign in failed',
+        description: isNetwork
+          ? 'Could not reach the server. Please check your connection and try again.'
+          : (err.message ?? 'Invalid credentials'),
         variant: 'destructive',
       });
       setLoading(false);
@@ -53,16 +55,23 @@ export default function Login() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
             </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-3">
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Signing in…' : 'Sign In'}
+              {loading ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Signing in…
+                </span>
+              ) : (
+                'Sign In'
+              )}
             </Button>
             <div className="flex justify-between w-full text-sm">
               <Link to="/forgot-password" className="text-muted-foreground hover:text-primary">
