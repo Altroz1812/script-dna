@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { adminQuery } from '@/services/api/adminService';
@@ -26,16 +27,19 @@ export default function Dashboard() {
     retry: 2,
   });
 
-  const cards = stats ? [
-    { label: 'Total Users', value: stats.totalUsers, icon: Users, color: 'text-blue-500' },
-    { label: 'Students', value: stats.roleCounts?.student ?? 0, icon: GraduationCap, color: 'text-green-500' },
-    { label: 'Teachers', value: stats.roleCounts?.teacher ?? 0, icon: UserCheck, color: 'text-purple-500' },
-    { label: 'Courses', value: stats.totalCourses, icon: BookOpen, color: 'text-orange-500' },
-    { label: 'Batches', value: stats.totalBatches, icon: Layers, color: 'text-cyan-500' },
-    { label: 'Organizations', value: stats.totalOrgs, icon: Building2, color: 'text-pink-500' },
-    { label: 'Leads', value: stats.totalLeads, icon: UserPlus, color: 'text-yellow-500' },
-    { label: 'Payments', value: stats.totalPayments, icon: CreditCard, color: 'text-emerald-500' },
-  ] : [];
+  const cards = useMemo(() => {
+    if (!stats) return [];
+    return [
+      { label: 'Total Users', value: stats.totalUsers, icon: Users, color: 'text-blue-500' },
+      { label: 'Students', value: stats.roleCounts?.student ?? 0, icon: GraduationCap, color: 'text-green-500' },
+      { label: 'Teachers', value: stats.roleCounts?.teacher ?? 0, icon: UserCheck, color: 'text-purple-500' },
+      { label: 'Courses', value: stats.totalCourses, icon: BookOpen, color: 'text-orange-500' },
+      { label: 'Batches', value: stats.totalBatches, icon: Layers, color: 'text-cyan-500' },
+      { label: 'Organizations', value: stats.totalOrgs, icon: Building2, color: 'text-pink-500' },
+      { label: 'Leads', value: stats.totalLeads, icon: UserPlus, color: 'text-yellow-500' },
+      { label: 'Payments', value: stats.totalPayments, icon: CreditCard, color: 'text-emerald-500' },
+    ];
+  }, [stats]);
 
   return (
     <div className="p-6 space-y-6">
