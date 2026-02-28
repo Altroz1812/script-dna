@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      attendance: {
+        Row: {
+          batch_id: string
+          created_at: string
+          date: string
+          id: string
+          schedule_id: string | null
+          status: Database["public"]["Enums"]["attendance_status"]
+          student_id: string
+        }
+        Insert: {
+          batch_id: string
+          created_at?: string
+          date: string
+          id?: string
+          schedule_id?: string | null
+          status?: Database["public"]["Enums"]["attendance_status"]
+          student_id: string
+        }
+        Update: {
+          batch_id?: string
+          created_at?: string
+          date?: string
+          id?: string
+          schedule_id?: string | null
+          status?: Database["public"]["Enums"]["attendance_status"]
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "schedules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       batch_students: {
         Row: {
           batch_id: string
@@ -213,6 +258,157 @@ export type Database = {
         }
         Relationships: []
       }
+      leads: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          source: string | null
+          status: Database["public"]["Enums"]["lead_status"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          source?: string | null
+          status?: Database["public"]["Enums"]["lead_status"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          source?: string | null
+          status?: Database["public"]["Enums"]["lead_status"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      live_classes: {
+        Row: {
+          batch_id: string
+          created_at: string
+          duration_minutes: number
+          id: string
+          meeting_url: string | null
+          scheduled_at: string
+          status: Database["public"]["Enums"]["live_class_status"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          batch_id: string
+          created_at?: string
+          duration_minutes?: number
+          id?: string
+          meeting_url?: string | null
+          scheduled_at: string
+          status?: Database["public"]["Enums"]["live_class_status"]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          batch_id?: string
+          created_at?: string
+          duration_minutes?: number
+          id?: string
+          meeting_url?: string | null
+          scheduled_at?: string
+          status?: Database["public"]["Enums"]["live_class_status"]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_classes_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      materials: {
+        Row: {
+          course_id: string
+          created_at: string
+          description: string | null
+          file_url: string | null
+          id: string
+          material_type: string | null
+          title: string
+          updated_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          course_id: string
+          created_at?: string
+          description?: string | null
+          file_url?: string | null
+          id?: string
+          material_type?: string | null
+          title: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          course_id?: string
+          created_at?: string
+          description?: string | null
+          file_url?: string | null
+          id?: string
+          material_type?: string | null
+          title?: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "materials_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          read: boolean
+          title: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          read?: boolean
+          title: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          read?: boolean
+          title?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       organization_members: {
         Row: {
           id: string
@@ -269,6 +465,78 @@ export type Database = {
         }
         Relationships: []
       }
+      payments: {
+        Row: {
+          amount: number
+          created_at: string
+          currency: string
+          description: string | null
+          id: string
+          payment_date: string
+          status: Database["public"]["Enums"]["payment_status"]
+          student_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          currency?: string
+          description?: string | null
+          id?: string
+          payment_date?: string
+          status?: Database["public"]["Enums"]["payment_status"]
+          student_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          currency?: string
+          description?: string | null
+          id?: string
+          payment_date?: string
+          status?: Database["public"]["Enums"]["payment_status"]
+          student_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      payroll: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          month: number
+          paid_at: string | null
+          status: Database["public"]["Enums"]["payroll_status"]
+          teacher_id: string
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          month: number
+          paid_at?: string | null
+          status?: Database["public"]["Enums"]["payroll_status"]
+          teacher_id: string
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          month?: number
+          paid_at?: string | null
+          status?: Database["public"]["Enums"]["payroll_status"]
+          teacher_id?: string
+          updated_at?: string
+          year?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -306,6 +574,50 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedules: {
+        Row: {
+          batch_id: string
+          created_at: string
+          day_of_week: number
+          end_time: string
+          id: string
+          room: string | null
+          start_time: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          batch_id: string
+          created_at?: string
+          day_of_week: number
+          end_time: string
+          id?: string
+          room?: string | null
+          start_time: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          batch_id?: string
+          created_at?: string
+          day_of_week?: number
+          end_time?: string
+          id?: string
+          room?: string | null
+          start_time?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedules_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "batches"
             referencedColumns: ["id"]
           },
         ]
@@ -418,6 +730,11 @@ export type Database = {
         | "student"
         | "parent"
         | "support"
+      attendance_status: "present" | "absent" | "late"
+      lead_status: "new" | "contacted" | "qualified" | "converted" | "lost"
+      live_class_status: "scheduled" | "live" | "completed" | "cancelled"
+      payment_status: "pending" | "completed" | "failed" | "refunded"
+      payroll_status: "pending" | "paid"
       rule_status: "pending" | "approved" | "rejected"
     }
     CompositeTypes: {
@@ -554,6 +871,11 @@ export const Constants = {
         "parent",
         "support",
       ],
+      attendance_status: ["present", "absent", "late"],
+      lead_status: ["new", "contacted", "qualified", "converted", "lost"],
+      live_class_status: ["scheduled", "live", "completed", "cancelled"],
+      payment_status: ["pending", "completed", "failed", "refunded"],
+      payroll_status: ["pending", "paid"],
       rule_status: ["pending", "approved", "rejected"],
     },
   },
