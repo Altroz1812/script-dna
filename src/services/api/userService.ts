@@ -19,6 +19,7 @@ export const userService = {
       email: data.email ?? '',
       displayName: data.display_name ?? '',
       avatarUrl: data.avatar_url ?? undefined,
+      organizationId: data.organization_id ?? undefined,
       role,
     };
   },

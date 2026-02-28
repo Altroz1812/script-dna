@@ -44,20 +44,27 @@ const App = () => (
                 </ProtectedRoute>
               }
             >
-              <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['superadmin', 'admin', 'teacher', 'student', 'parent']}><Dashboard /></ProtectedRoute>} />
-              <Route path="/courses" element={<ProtectedRoute allowedRoles={['superadmin', 'admin', 'teacher', 'student']}><CoursesPage /></ProtectedRoute>} />
-              <Route path="/batches" element={<ProtectedRoute allowedRoles={['superadmin', 'admin', 'teacher', 'student']}><BatchesPage /></ProtectedRoute>} />
-              <Route path="/schedule" element={<ProtectedRoute allowedRoles={['superadmin', 'admin', 'teacher', 'student', 'parent']}><PlaceholderPage /></ProtectedRoute>} />
+              <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['superadmin', 'admin', 'support', 'teacher', 'student', 'parent']}><Dashboard /></ProtectedRoute>} />
+              <Route path="/courses" element={<ProtectedRoute allowedRoles={['superadmin', 'admin', 'support', 'teacher', 'student']}><CoursesPage /></ProtectedRoute>} />
+              <Route path="/batches" element={<ProtectedRoute allowedRoles={['superadmin', 'admin', 'support', 'teacher', 'student']}><BatchesPage /></ProtectedRoute>} />
+              <Route path="/schedule" element={<ProtectedRoute allowedRoles={['superadmin', 'admin', 'support', 'teacher', 'student', 'parent']}><PlaceholderPage /></ProtectedRoute>} />
               <Route path="/attendance" element={<ProtectedRoute allowedRoles={['superadmin', 'admin', 'teacher']}><PlaceholderPage /></ProtectedRoute>} />
+              <Route path="/live-classes" element={<ProtectedRoute allowedRoles={['superadmin', 'admin', 'teacher', 'student']}><PlaceholderPage /></ProtectedRoute>} />
+              <Route path="/materials" element={<ProtectedRoute allowedRoles={['superadmin', 'admin', 'teacher', 'student']}><PlaceholderPage /></ProtectedRoute>} />
+              <Route path="/leads" element={<ProtectedRoute allowedRoles={['superadmin', 'admin', 'support']}><PlaceholderPage /></ProtectedRoute>} />
+              <Route path="/enrollments" element={<ProtectedRoute allowedRoles={['superadmin', 'admin', 'support']}><PlaceholderPage /></ProtectedRoute>} />
               <Route path="/users" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']}><PlaceholderPage /></ProtectedRoute>} />
-              <Route path="/students" element={<ProtectedRoute allowedRoles={['superadmin', 'admin', 'teacher', 'parent']}><PlaceholderPage /></ProtectedRoute>} />
-              <Route path="/payments" element={<ProtectedRoute allowedRoles={['superadmin', 'admin', 'parent']}><PlaceholderPage /></ProtectedRoute>} />
+              <Route path="/students" element={<ProtectedRoute allowedRoles={['superadmin', 'admin', 'support', 'teacher', 'parent']}><PlaceholderPage /></ProtectedRoute>} />
+              <Route path="/payments" element={<ProtectedRoute allowedRoles={['superadmin', 'admin', 'support', 'parent']}><PlaceholderPage /></ProtectedRoute>} />
+              <Route path="/payroll" element={<ProtectedRoute allowedRoles={['superadmin']}><PlaceholderPage /></ProtectedRoute>} />
               <Route path="/font-architect" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']}><Index /></ProtectedRoute>} />
               <Route path="/font-compiler" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']}><FontCompiler /></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']}><PlaceholderPage /></ProtectedRoute>} />
+              <Route path="/notifications" element={<ProtectedRoute allowedRoles={['superadmin', 'admin', 'support']}><PlaceholderPage /></ProtectedRoute>} />
+              <Route path="/organizations" element={<ProtectedRoute allowedRoles={['superadmin']}><PlaceholderPage /></ProtectedRoute>} />
               <Route path="/roles" element={<ProtectedRoute allowedRoles={['superadmin']}><PlaceholderPage /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute allowedRoles={['superadmin', 'admin']}><PlaceholderPage /></ProtectedRoute>} />
-              <Route path="/profile" element={<ProtectedRoute allowedRoles={['superadmin', 'admin', 'teacher', 'student', 'parent']}><PlaceholderPage /></ProtectedRoute>} />
+              <Route path="/profile" element={<ProtectedRoute allowedRoles={['superadmin', 'admin', 'support', 'teacher', 'student', 'parent']}><PlaceholderPage /></ProtectedRoute>} />
             </Route>
 
             {/* Redirect root to dashboard */}
