@@ -49,7 +49,8 @@ async function fetchLoginProfile(accessToken: string): Promise<{ profile: UserPr
   }
 }
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export const AuthProvider = React.forwardRef<HTMLDivElement, { children: React.ReactNode }>(
+  function AuthProvider({ children }, _ref) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [dashboardContext, setDashboardContext] = useState<DashboardContext | null>(null);
@@ -114,4 +115,4 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
-}
+});
