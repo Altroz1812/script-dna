@@ -1,63 +1,82 @@
 
 
-# Fix: Edge Function Failures and Slow Loading
+# Fix: Eliminate Fetch Bottleneck in Preview Proxy
 
 ## Root Cause
 
-Two issues are causing the "Failed to fetch" errors across all pages:
+The edge function itself is fast (responds in <1s when called directly). The problem is in `adminService.ts`:
 
-1. **Incomplete CORS headers** in the `admin-query` edge function. The current headers are missing several headers that the Supabase JS client sends (`x-supabase-client-platform`, `x-supabase-client-platform-version`, etc.). When the browser sends a preflight OPTIONS request, these missing headers cause the CORS check to fail, blocking the actual request.
-
-2. **Too many simultaneous requests** from pages that fire multiple `adminQuery` calls in parallel on mount (e.g., Dashboard fires `get_stats`, BatchesPage fires both `list_courses` + `list_batches`). Combined with cold-start delays on the edge function, this creates a cascading failure pattern.
+1. **Dynamic import overhead**: `getAccessToken()` does `await import('@/integrations/supabase/client')` on EVERY request, which initializes the Supabase JS client and triggers its own background auth/session requests through the same proxy
+2. **Competing requests**: Multiple pages fire simultaneous `adminQuery` calls (BatchesPage fires 2, student dialogs fire 3), all competing for the preview proxy's limited bandwidth
+3. **10-second timeout too short**: The preview proxy adds latency; combined with cold starts and competing requests, 10s isn't enough
 
 ## Changes
 
-### 1. Fix CORS headers in edge function
+### 1. Simplify `src/services/api/adminService.ts`
 
-**File:** `supabase/functions/admin-query/index.ts`
-
-Update the CORS headers to include all headers the Supabase JS client sends:
-
-```text
-Before:
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
-
-After:
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version'
-```
-
-### 2. Add retry logic to the admin service
-
-**File:** `src/services/api/adminService.ts`
-
-Wrap the `adminQuery` function with automatic retry (up to 2 retries with a short delay) so transient network failures from the preview proxy don't break the UI:
+- Remove `getAccessToken()` entirely -- auth is mocked, the anon key is all that's needed
+- Use the anon key directly as the bearer token (the edge function uses the service role key internally, so the bearer token is only for gateway auth)
+- Increase timeout from 10s to 30s
+- Add a simple sequential request queue so requests don't flood the proxy simultaneously
 
 ```typescript
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+let pending: Promise<any> = Promise.resolve();
+
 export async function adminQuery(action: string, params: any = {}) {
+  // Queue requests sequentially to avoid flooding the proxy
+  const result = pending.then(() => doFetch(action, params));
+  pending = result.catch(() => {});
+  return result;
+}
+
+async function doFetch(action: string, params: any) {
   let lastError: any;
   for (let attempt = 0; attempt < 3; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
     try {
-      const { data, error } = await supabase.functions.invoke('admin-query', {
-        body: { action, params },
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-query`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'apikey': SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ action, params }),
+        signal: controller.signal,
       });
-      if (error) throw error;
-      return data;
-    } catch (err) {
-      lastError = err;
-      if (attempt < 2) await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+      clearTimeout(timeoutId);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      return await res.json();
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      lastError = err.name === 'AbortError' ? new Error('Request timed out') : err;
+      if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
     }
   }
   throw lastError;
 }
 ```
 
-### 3. Deploy edge function
+Key improvements:
+- No more dynamic imports (eliminates Supabase client initialization overhead)
+- Sequential queue prevents proxy flooding
+- 30s timeout handles slow proxy gracefully
+- Longer retry delays (1s, 2s) give the proxy time to recover
 
-Redeploy the `admin-query` edge function after CORS fix.
+### 2. No edge function changes needed
+
+The edge function is already correct and fast. CORS headers are properly configured. No redeployment needed.
 
 ## Expected Result
 
-- CORS preflight requests will succeed, allowing actual data requests to go through
-- Transient preview proxy failures will be automatically retried instead of showing errors
-- Pages will load data reliably without "Failed to fetch" errors
+- Pages load reliably without "Failed to fetch" errors
+- No more competing requests overwhelming the preview proxy
+- Eliminates the Supabase client initialization overhead on every API call
 
