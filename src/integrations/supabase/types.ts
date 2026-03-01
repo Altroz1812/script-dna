@@ -361,6 +361,7 @@ export type Database = {
           duration_minutes: number
           id: string
           meeting_url: string | null
+          schedule_id: string | null
           scheduled_at: string
           status: Database["public"]["Enums"]["live_class_status"]
           title: string
@@ -372,6 +373,7 @@ export type Database = {
           duration_minutes?: number
           id?: string
           meeting_url?: string | null
+          schedule_id?: string | null
           scheduled_at: string
           status?: Database["public"]["Enums"]["live_class_status"]
           title: string
@@ -383,6 +385,7 @@ export type Database = {
           duration_minutes?: number
           id?: string
           meeting_url?: string | null
+          schedule_id?: string | null
           scheduled_at?: string
           status?: Database["public"]["Enums"]["live_class_status"]
           title?: string
@@ -394,6 +397,13 @@ export type Database = {
             columns: ["batch_id"]
             isOneToOne: false
             referencedRelation: "batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "live_classes_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "schedules"
             referencedColumns: ["id"]
           },
         ]
