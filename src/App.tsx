@@ -30,6 +30,7 @@ import PayrollPage from "@/pages/PayrollPage";
 import ReportsPage from "@/pages/ReportsPage";
 import NotificationsPage from "@/pages/NotificationsPage";
 import SettingsPage from "@/pages/SettingsPage";
+import CheckoutPage from "@/pages/CheckoutPage";
 
 const queryClient = new QueryClient();
 
@@ -46,6 +47,7 @@ const App = () => (
               <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
+              <Route path="/checkout" element={<CheckoutPage />} />
 
               {/* App routes (behind sidebar layout) */}
               <Route element={<AppLayout />}>
