@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { motion, useInView } from 'framer-motion';
+import { useRef } from 'react';
 import {
   PenTool, Play, ShoppingCart, Star, Users, BookOpen, BarChart3,
   Video, Globe, Award, ChevronRight, Check, ArrowRight, Menu, X,
@@ -42,6 +44,43 @@ const TESTIMONIALS = [
   { name: 'Anita K.', role: 'Teacher', text: 'The best platform for teaching handwriting. The analytics help me understand each student.', rating: 5 },
 ];
 
+const smoothScroll = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
+  e.preventDefault();
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+const sectionVariants = {
+  hidden: { opacity: 0, y: 40 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: 'easeOut' as const } },
+};
+
+const staggerContainer = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.1 } },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } },
+};
+
+function AnimatedSection({ children, className, id }: { children: React.ReactNode; className?: string; id?: string }) {
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true, margin: '-80px' });
+  return (
+    <motion.section
+      ref={ref}
+      id={id}
+      className={className}
+      variants={sectionVariants}
+      initial="hidden"
+      animate={inView ? 'visible' : 'hidden'}
+    >
+      {children}
+    </motion.section>
+  );
+}
+
 export default function LandingPage() {
   const { addItem, removeItem, isInCart, count, total, items } = useCart();
   const [mobileMenu, setMobileMenu] = useState(false);
@@ -73,10 +112,10 @@ export default function LandingPage() {
           </Link>
 
           <div className="hidden md:flex items-center gap-8 text-sm">
-            <a href="#features" className="text-muted-foreground hover:text-foreground transition-colors">Features</a>
-            <a href="#courses" className="text-muted-foreground hover:text-foreground transition-colors">Courses</a>
-            <a href="#testimonials" className="text-muted-foreground hover:text-foreground transition-colors">Reviews</a>
-            <a href="#pricing" className="text-muted-foreground hover:text-foreground transition-colors">Pricing</a>
+            <a href="#features" onClick={e => smoothScroll(e, 'features')} className="text-muted-foreground hover:text-foreground transition-colors">Features</a>
+            <a href="#courses" onClick={e => smoothScroll(e, 'courses')} className="text-muted-foreground hover:text-foreground transition-colors">Courses</a>
+            <a href="#testimonials" onClick={e => smoothScroll(e, 'testimonials')} className="text-muted-foreground hover:text-foreground transition-colors">Reviews</a>
+            <a href="#pricing" onClick={e => smoothScroll(e, 'pricing')} className="text-muted-foreground hover:text-foreground transition-colors">Pricing</a>
           </div>
 
           <div className="flex items-center gap-3">
@@ -105,9 +144,9 @@ export default function LandingPage() {
         {/* Mobile Menu */}
         {mobileMenu && (
           <div className="md:hidden bg-card/95 backdrop-blur-xl border-b border-border/50 px-4 py-4 space-y-3 animate-fade-in">
-            <a href="#features" className="block py-2 text-muted-foreground" onClick={() => setMobileMenu(false)}>Features</a>
-            <a href="#courses" className="block py-2 text-muted-foreground" onClick={() => setMobileMenu(false)}>Courses</a>
-            <a href="#testimonials" className="block py-2 text-muted-foreground" onClick={() => setMobileMenu(false)}>Reviews</a>
+            <a href="#features" onClick={e => { smoothScroll(e, 'features'); setMobileMenu(false); }} className="block py-2 text-muted-foreground">Features</a>
+            <a href="#courses" onClick={e => { smoothScroll(e, 'courses'); setMobileMenu(false); }} className="block py-2 text-muted-foreground">Courses</a>
+            <a href="#testimonials" onClick={e => { smoothScroll(e, 'testimonials'); setMobileMenu(false); }} className="block py-2 text-muted-foreground">Reviews</a>
           </div>
         )}
       </nav>
@@ -154,7 +193,6 @@ export default function LandingPage() {
 
       {/* HERO SECTION */}
       <section className="relative min-h-screen flex items-center overflow-hidden">
-        {/* Video Background */}
         <div className="absolute inset-0">
           <video autoPlay muted loop playsInline className="w-full h-full object-cover opacity-30">
             <source src={heroVideo} type="video/mp4" />
@@ -164,7 +202,12 @@ export default function LandingPage() {
         </div>
 
         <div className="relative container mx-auto px-4 pt-24 pb-16">
-          <div className="max-w-3xl mx-auto text-center space-y-8">
+          <motion.div
+            className="max-w-3xl mx-auto text-center space-y-8"
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, ease: 'easeOut' as const }}
+          >
             <Badge variant="outline" className="border-primary/40 text-primary px-4 py-1.5 text-sm">
               <Sparkles className="w-3.5 h-3.5 mr-1.5" /> AI-Powered Handwriting Education
             </Badge>
@@ -186,61 +229,63 @@ export default function LandingPage() {
                   Start Free Trial <ArrowRight className="w-5 h-5 ml-2" />
                 </Button>
               </Link>
-              <a href="#courses">
+              <a href="#courses" onClick={e => smoothScroll(e, 'courses')}>
                 <Button variant="outline" size="lg" className="border-border/50 text-lg px-8 h-14">
                   <Play className="w-5 h-5 mr-2" /> Explore Courses
                 </Button>
               </a>
             </div>
 
-            {/* Stats Bar */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 pt-12 mt-8 border-t border-border/30">
+            <motion.div
+              className="grid grid-cols-2 sm:grid-cols-4 gap-6 pt-12 mt-8 border-t border-border/30"
+              variants={staggerContainer}
+              initial="hidden"
+              animate="visible"
+            >
               {STATS.map(s => (
-                <div key={s.label} className="text-center">
+                <motion.div key={s.label} className="text-center" variants={itemVariants}>
                   <p className="text-2xl md:text-3xl font-bold text-gradient">{s.value}</p>
                   <p className="text-sm text-muted-foreground mt-1">{s.label}</p>
-                </div>
+                </motion.div>
               ))}
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
         </div>
       </section>
 
-      {/* FEATURES */}
-      <section id="features" className="py-24 bg-card/30">
+      <AnimatedSection id="features" className="py-24 bg-card/30">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <Badge variant="outline" className="border-accent/40 text-accent mb-4">Features</Badge>
             <h2 className="text-3xl md:text-5xl font-bold">Everything You Need to <span className="text-gradient">Write Better</span></h2>
             <p className="text-muted-foreground mt-4 max-w-2xl mx-auto">Combining cutting-edge AI with proven teaching methods.</p>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <motion.div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6" variants={staggerContainer} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }}>
             {FEATURES.map(f => (
-              <div key={f.title} className="group p-6 rounded-xl bg-card/60 border border-border/40 hover:border-primary/40 transition-all duration-300 hover:shadow-lg hover:shadow-primary/5">
+              <motion.div key={f.title} variants={itemVariants} className="group p-6 rounded-xl bg-card/60 border border-border/40 hover:border-primary/40 transition-all duration-300 hover:shadow-lg hover:shadow-primary/5">
                 <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4 group-hover:bg-primary/20 transition-colors">
                   <f.icon className="w-6 h-6 text-primary" />
                 </div>
                 <h3 className="font-semibold text-lg mb-2">{f.title}</h3>
                 <p className="text-muted-foreground text-sm leading-relaxed">{f.desc}</p>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
-      </section>
+      </AnimatedSection>
 
-      {/* COURSES / PRICING */}
-      <section id="courses" className="py-24">
+      <AnimatedSection id="courses" className="py-24">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <Badge variant="outline" className="border-primary/40 text-primary mb-4" id="pricing">Courses & Pricing</Badge>
             <h2 className="text-3xl md:text-5xl font-bold">Choose Your <span className="text-gradient">Learning Path</span></h2>
             <p className="text-muted-foreground mt-4 max-w-2xl mx-auto">From beginner to calligrapher — find the perfect course.</p>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <motion.div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6" variants={staggerContainer} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }}>
             {COURSES.map(c => {
               const inCart = isInCart(c.id);
               return (
-                <div key={c.id} className={`relative rounded-xl border overflow-hidden transition-all duration-300 ${inCart ? 'border-accent/60 bg-accent/5 shadow-lg shadow-accent/10' : 'border-border/40 bg-card/60 hover:border-primary/40'}`}>
+                <motion.div key={c.id} variants={itemVariants} className={`relative rounded-xl border overflow-hidden transition-all duration-300 ${inCart ? 'border-accent/60 bg-accent/5 shadow-lg shadow-accent/10' : 'border-border/40 bg-card/60 hover:border-primary/40'}`}>
                   <div className="p-6 space-y-4">
                     <div className="flex items-start justify-between">
                       <Badge variant="secondary" className="text-xs">{c.language} · {c.writing_style}</Badge>
@@ -267,23 +312,22 @@ export default function LandingPage() {
                       </Button>
                     </div>
                   </div>
-                </div>
+                </motion.div>
               );
             })}
-          </div>
+          </motion.div>
         </div>
-      </section>
+      </AnimatedSection>
 
-      {/* TESTIMONIALS */}
-      <section id="testimonials" className="py-24 bg-card/30">
+      <AnimatedSection id="testimonials" className="py-24 bg-card/30">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <Badge variant="outline" className="border-warning/40 text-warning mb-4">Testimonials</Badge>
             <h2 className="text-3xl md:text-5xl font-bold">Loved by <span className="text-gradient">Students & Parents</span></h2>
           </div>
-          <div className="grid sm:grid-cols-3 gap-6 max-w-4xl mx-auto">
+          <motion.div className="grid sm:grid-cols-3 gap-6 max-w-4xl mx-auto" variants={staggerContainer} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }}>
             {TESTIMONIALS.map(t => (
-              <div key={t.name} className="p-6 rounded-xl bg-card/60 border border-border/40">
+              <motion.div key={t.name} variants={itemVariants} className="p-6 rounded-xl bg-card/60 border border-border/40">
                 <div className="flex gap-0.5 mb-4">
                   {Array.from({ length: t.rating }).map((_, i) => (
                     <Star key={i} className="w-4 h-4 fill-warning text-warning" />
@@ -294,14 +338,14 @@ export default function LandingPage() {
                   <p className="font-semibold text-sm">{t.name}</p>
                   <p className="text-xs text-muted-foreground">{t.role}</p>
                 </div>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
-      </section>
+      </AnimatedSection>
 
       {/* CTA */}
-      <section className="py-24">
+      <AnimatedSection className="py-24">
         <div className="container mx-auto px-4">
           <div className="max-w-3xl mx-auto text-center p-12 rounded-2xl border border-border/40 bg-gradient-to-br from-primary/10 via-card to-accent/10">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">Ready to Transform Your Handwriting?</h2>
@@ -320,7 +364,7 @@ export default function LandingPage() {
             </div>
           </div>
         </div>
-      </section>
+      </AnimatedSection>
 
       {/* FOOTER */}
       <footer className="border-t border-border/40 py-12 bg-card/30">
@@ -338,9 +382,9 @@ export default function LandingPage() {
             <div>
               <h4 className="font-semibold text-sm mb-3">Product</h4>
               <div className="space-y-2 text-sm text-muted-foreground">
-                <a href="#features" className="block hover:text-foreground transition-colors">Features</a>
-                <a href="#courses" className="block hover:text-foreground transition-colors">Courses</a>
-                <a href="#pricing" className="block hover:text-foreground transition-colors">Pricing</a>
+                <a href="#features" onClick={e => smoothScroll(e, 'features')} className="block hover:text-foreground transition-colors">Features</a>
+                <a href="#courses" onClick={e => smoothScroll(e, 'courses')} className="block hover:text-foreground transition-colors">Courses</a>
+                <a href="#pricing" onClick={e => smoothScroll(e, 'pricing')} className="block hover:text-foreground transition-colors">Pricing</a>
               </div>
             </div>
             <div>
