@@ -17,7 +17,12 @@ interface AuthContextValue {
   refreshProfile: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextValue | null>(null);
+// Use a global singleton to survive HMR module duplication
+const AUTH_CTX_KEY = '__auth_context__';
+if (!(window as any)[AUTH_CTX_KEY]) {
+  (window as any)[AUTH_CTX_KEY] = createContext<AuthContextValue | null>(null);
+}
+const AuthContext = (window as any)[AUTH_CTX_KEY] as React.Context<AuthContextValue | null>;
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
