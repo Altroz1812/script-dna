@@ -182,7 +182,7 @@ export default function LandingPage() {
                   <span>Total</span>
                   <span>₹{total.toLocaleString()}</span>
                 </div>
-                <Button className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90" onClick={() => { setCartOpen(false); navigate('/signup'); }}>
+                <Button className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90" onClick={() => { setCartOpen(false); navigate('/checkout'); }}>
                   Checkout <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </div>
