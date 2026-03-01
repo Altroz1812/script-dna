@@ -27,16 +27,16 @@ export function useAuth() {
 
 // Mock profile that grants superadmin access to all modules
 const mockProfile: UserProfile = {
-  id: 'dev-bypass',
-  email: 'dev@local',
-  displayName: 'Dev User',
+  id: 'f07853ff-3fdc-401c-9424-3a6814a89ea4',
+  email: 'superadmin@demo.com',
+  displayName: 'Super Admin',
   avatarUrl: null,
   organizationId: null,
   role: 'superadmin',
 };
 
 // Fake session object so ProtectedRoute sees a truthy session
-const mockSession = { access_token: 'dev-bypass', refresh_token: '', user: { id: 'dev-bypass', email: 'dev@local' } } as unknown as Session;
+const mockSession = { access_token: 'dev-bypass', refresh_token: '', user: { id: 'f07853ff-3fdc-401c-9424-3a6814a89ea4', email: 'superadmin@demo.com' } } as unknown as Session;
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session] = useState<Session | null>(mockSession);
