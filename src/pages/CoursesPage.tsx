@@ -123,7 +123,8 @@ export default function CoursesPage() {
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Cursive">Cursive</SelectItem>
-                        <SelectItem value="Print">Print</SelectItem>
+                        <SelectItem value="Split">Split</SelectItem>
+                        <SelectItem value="Speedwriting">Speedwriting</SelectItem>
                         <SelectItem value="Hindi">Hindi</SelectItem>
                         <SelectItem value="Kannada">Kannada</SelectItem>
                         <SelectItem value="Calligraphy">Calligraphy</SelectItem>
