@@ -400,8 +400,17 @@ Deno.serve(async (req) => {
         break
       }
       case 'create_course': {
-        const { name, description, created_by } = params
-        const { data, error } = await supabase.from('courses').insert({ name, description, created_by }).select().single()
+        const { name, description, created_by, grade_level, duration_days, total_hours, daily_hours, language, writing_style, includes_speed } = params
+        const { data, error } = await supabase.from('courses').insert({
+          name, description, created_by,
+          grade_level: grade_level || null,
+          duration_days: duration_days || null,
+          total_hours: total_hours || null,
+          daily_hours: daily_hours || null,
+          language: language || null,
+          writing_style: writing_style || null,
+          includes_speed: includes_speed || false,
+        }).select().single()
         if (error) throw error
         result = data
         break
@@ -415,7 +424,7 @@ Deno.serve(async (req) => {
 
       // ===== BATCHES =====
       case 'list_batches': {
-        let query = supabase.from('batches').select('*, courses(name)')
+        let query = supabase.from('batches').select('*, courses(name, duration_days, daily_hours, total_hours)')
         if (params?.course_id) query = query.eq('course_id', params.course_id)
         const { data } = await query.order('created_at', { ascending: false })
         result = data ?? []
@@ -487,6 +496,16 @@ Deno.serve(async (req) => {
         const ids = roles.map((r: any) => r.user_id)
         const { data: profiles } = await supabase.from('profiles').select('user_id, display_name, email').in('user_id', ids)
         result = profiles ?? []
+        break
+      }
+
+      // ===== BULK SCHEDULES =====
+      case 'bulk_create_schedules': {
+        const { entries } = params
+        if (!entries?.length) throw new Error('No schedule entries provided')
+        const { error } = await supabase.from('schedules').insert(entries)
+        if (error) throw error
+        result = { success: true, count: entries.length }
         break
       }
 

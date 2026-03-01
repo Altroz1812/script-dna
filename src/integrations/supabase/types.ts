@@ -140,29 +140,50 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string
+          daily_hours: number | null
           description: string | null
+          duration_days: number | null
+          grade_level: string | null
           id: string
+          includes_speed: boolean | null
+          language: string | null
           name: string
           organization_id: string | null
+          total_hours: number | null
           updated_at: string
+          writing_style: string | null
         }
         Insert: {
           created_at?: string
           created_by: string
+          daily_hours?: number | null
           description?: string | null
+          duration_days?: number | null
+          grade_level?: string | null
           id?: string
+          includes_speed?: boolean | null
+          language?: string | null
           name: string
           organization_id?: string | null
+          total_hours?: number | null
           updated_at?: string
+          writing_style?: string | null
         }
         Update: {
           created_at?: string
           created_by?: string
+          daily_hours?: number | null
           description?: string | null
+          duration_days?: number | null
+          grade_level?: string | null
           id?: string
+          includes_speed?: boolean | null
+          language?: string | null
           name?: string
           organization_id?: string | null
+          total_hours?: number | null
           updated_at?: string
+          writing_style?: string | null
         }
         Relationships: [
           {
@@ -618,6 +639,7 @@ export type Database = {
         Row: {
           batch_id: string
           created_at: string
+          date: string | null
           day_of_week: number
           end_time: string
           id: string
@@ -629,6 +651,7 @@ export type Database = {
         Insert: {
           batch_id: string
           created_at?: string
+          date?: string | null
           day_of_week: number
           end_time: string
           id?: string
@@ -640,6 +663,7 @@ export type Database = {
         Update: {
           batch_id?: string
           created_at?: string
+          date?: string | null
           day_of_week?: number
           end_time?: string
           id?: string
