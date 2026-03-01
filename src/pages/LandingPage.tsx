@@ -10,17 +10,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useCart, CartItem } from '@/contexts/CartContext';
+import { supabase } from '@/integrations/supabase/client';
 import heroVideo from '@/assets/hero-video.mp4';
 
-// Static course catalog matching the DB catalog
-const COURSES: (CartItem & { language: string; writing_style: string; total_hours: number })[] = [
-  { id: 'c1', name: 'English Cursive Writing – Joined', description: 'Master beautiful joined cursive handwriting for daily use.', fee: 2500, grade_level: 'UKG–2nd', duration_days: 30, language: 'English', writing_style: 'Cursive (Joined)', total_hours: 20 },
-  { id: 'c2', name: 'English Cursive Writing – Split', description: 'Learn clean, readable print-style handwriting.', fee: 2500, grade_level: 'UKG–2nd', duration_days: 30, language: 'English', writing_style: 'Print (Split)', total_hours: 20 },
-  { id: 'c3', name: 'Advanced English Cursive', description: 'Elevate your cursive with speed, flow, and consistency.', fee: 3500, grade_level: '3rd+', duration_days: 60, language: 'English', writing_style: 'Cursive (Joined)', total_hours: 45 },
-  { id: 'c4', name: 'Hindi Handwriting Mastery', description: 'Perfect Devanagari script with proper stroke order and spacing.', fee: 3000, grade_level: '3rd+', duration_days: 45, language: 'Hindi', writing_style: 'Devanagari', total_hours: 30 },
-  { id: 'c5', name: 'Kannada Handwriting', description: 'Learn beautiful Kannada script writing with precision.', fee: 3000, grade_level: '3rd+', duration_days: 45, language: 'Kannada', writing_style: 'Kannada', total_hours: 30 },
-  { id: 'c6', name: 'Calligraphy Foundations', description: 'Explore artistic calligraphy with digital and analog techniques.', fee: 4000, grade_level: '4th+', duration_days: 60, language: 'English', writing_style: 'Calligraphy', total_hours: 40 },
-];
+type CourseDisplay = CartItem & { language: string | null; writing_style: string | null; total_hours: number | null };
 
 const FEATURES = [
   { icon: PenTool, title: 'AI Stroke Analysis', desc: 'Real-time pressure, slant, and rhythm analysis powered by machine learning.' },
@@ -87,6 +80,7 @@ export default function LandingPage() {
   const [cartOpen, setCartOpen] = useState(false);
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
+  const [courses, setCourses] = useState<CourseDisplay[]>([]);
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 20);
@@ -94,7 +88,13 @@ export default function LandingPage() {
     return () => window.removeEventListener('scroll', handler);
   }, []);
 
-  const toggleCart = (course: typeof COURSES[0]) => {
+  useEffect(() => {
+    supabase.functions.invoke('public-courses').then(({ data, error }) => {
+      if (!error && Array.isArray(data)) setCourses(data);
+    });
+  }, []);
+
+  const toggleCart = (course: CourseDisplay) => {
     if (isInCart(course.id)) removeItem(course.id);
     else addItem(course);
   };
@@ -282,7 +282,7 @@ export default function LandingPage() {
             <p className="text-muted-foreground mt-4 max-w-2xl mx-auto">From beginner to calligrapher — find the perfect course.</p>
           </div>
           <motion.div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6" variants={staggerContainer} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }}>
-            {COURSES.map(c => {
+            {courses.map(c => {
               const inCart = isInCart(c.id);
               return (
                 <motion.div key={c.id} variants={itemVariants} className={`relative rounded-xl border overflow-hidden transition-all duration-300 ${inCart ? 'border-accent/60 bg-accent/5 shadow-lg shadow-accent/10' : 'border-border/40 bg-card/60 hover:border-primary/40'}`}>

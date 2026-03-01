@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.admin-query]
 verify_jwt = false
+
+[functions.public-courses]
+verify_jwt = false
