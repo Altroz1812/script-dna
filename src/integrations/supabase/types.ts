@@ -143,6 +143,7 @@ export type Database = {
           daily_hours: number | null
           description: string | null
           duration_days: number | null
+          fee: number | null
           grade_level: string | null
           id: string
           includes_speed: boolean | null
@@ -159,6 +160,7 @@ export type Database = {
           daily_hours?: number | null
           description?: string | null
           duration_days?: number | null
+          fee?: number | null
           grade_level?: string | null
           id?: string
           includes_speed?: boolean | null
@@ -175,6 +177,7 @@ export type Database = {
           daily_hours?: number | null
           description?: string | null
           duration_days?: number | null
+          fee?: number | null
           grade_level?: string | null
           id?: string
           includes_speed?: boolean | null
