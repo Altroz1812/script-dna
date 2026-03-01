@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { Plus, Trash2, BookOpen, Clock, Calendar, GraduationCap } from 'lucide-react';
+import { Plus, Trash2, BookOpen, Clock, Calendar, GraduationCap, IndianRupee } from 'lucide-react';
 import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
 
 export default function CoursesPage() {
@@ -23,7 +23,7 @@ export default function CoursesPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<Partial<CreateCourseParams>>({
     name: '', description: '', grade_level: '', duration_days: 30, total_hours: 25,
-    daily_hours: 1.0, language: 'English', writing_style: 'Cursive', includes_speed: false,
+    daily_hours: 1.0, language: 'English', writing_style: 'Cursive', includes_speed: false, fee: 0,
   });
 
   const { data: courses = [], isLoading } = useQuery<Course[]>({
@@ -44,10 +44,11 @@ export default function CoursesPage() {
       language: form.language || undefined,
       writing_style: form.writing_style || undefined,
       includes_speed: form.includes_speed || false,
+      fee: form.fee || 0,
     }),
     onSuccess: () => {
       toast.success('Course created');
-      setForm({ name: '', description: '', grade_level: '', duration_days: 30, total_hours: 25, daily_hours: 1.0, language: 'English', writing_style: 'Cursive', includes_speed: false });
+      setForm({ name: '', description: '', grade_level: '', duration_days: 30, total_hours: 25, daily_hours: 1.0, language: 'English', writing_style: 'Cursive', includes_speed: false, fee: 0 });
       setOpen(false);
       queryClient.invalidateQueries({ queryKey: ['courses'] });
       queryClient.invalidateQueries({ queryKey: ['admin_stats'] });
@@ -148,6 +149,10 @@ export default function CoursesPage() {
                     <Input type="number" step="0.5" value={form.daily_hours} onChange={e => setForm(f => ({ ...f, daily_hours: parseFloat(e.target.value) || 1 }))} />
                   </div>
                 </div>
+                <div>
+                  <Label>Course Fee (₹)</Label>
+                  <Input type="number" min="0" value={form.fee} onChange={e => setForm(f => ({ ...f, fee: parseFloat(e.target.value) || 0 }))} placeholder="e.g. 5000" />
+                </div>
                 <div className="flex items-center gap-2">
                   <Switch checked={form.includes_speed} onCheckedChange={v => setForm(f => ({ ...f, includes_speed: v }))} />
                   <Label>Includes Speedwriting</Label>
@@ -203,6 +208,9 @@ export default function CoursesPage() {
                   )}
                   {c.daily_hours && (
                     <div className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{c.daily_hours} hr/day</div>
+                  )}
+                  {(c.fee != null && c.fee > 0) && (
+                    <div className="flex items-center gap-1 font-medium text-foreground"><IndianRupee className="h-3.5 w-3.5" />₹{c.fee.toLocaleString('en-IN')}</div>
                   )}
                 </div>
               </CardContent>

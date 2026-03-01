@@ -14,6 +14,7 @@ export interface Course {
   language: string | null;
   writing_style: string | null;
   includes_speed: boolean;
+  fee: number | null;
 }
 
 export interface Batch {
@@ -47,6 +48,7 @@ export interface CreateCourseParams {
   language?: string;
   writing_style?: string;
   includes_speed?: boolean;
+  fee?: number;
 }
 
 export const courseService = {
