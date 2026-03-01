@@ -7,6 +7,13 @@ export interface Course {
   created_by: string;
   created_at: string;
   updated_at: string;
+  grade_level: string | null;
+  duration_days: number | null;
+  total_hours: number | null;
+  daily_hours: number | null;
+  language: string | null;
+  writing_style: string | null;
+  includes_speed: boolean;
 }
 
 export interface Batch {
@@ -17,7 +24,7 @@ export interface Batch {
   teacher_id: string | null;
   created_at: string;
   updated_at: string;
-  courses?: { name: string };
+  courses?: { name: string; duration_days?: number; daily_hours?: number; total_hours?: number };
   teacher_profile?: { display_name: string | null; email: string | null } | null;
 }
 
@@ -29,13 +36,26 @@ export interface BatchStudent {
   profile?: { display_name: string | null; email: string | null };
 }
 
+export interface CreateCourseParams {
+  name: string;
+  description: string | null;
+  created_by: string;
+  grade_level?: string;
+  duration_days?: number;
+  total_hours?: number;
+  daily_hours?: number;
+  language?: string;
+  writing_style?: string;
+  includes_speed?: boolean;
+}
+
 export const courseService = {
   async listCourses(): Promise<Course[]> {
     return await adminQuery('list_courses');
   },
 
-  async createCourse(name: string, description: string | null, createdBy: string): Promise<Course> {
-    return await adminQuery('create_course', { name, description, created_by: createdBy });
+  async createCourse(params: CreateCourseParams): Promise<Course> {
+    return await adminQuery('create_course', params);
   },
 
   async deleteCourse(id: string): Promise<void> {
@@ -82,5 +102,19 @@ export const batchService = {
 
   async listStudents(): Promise<{ user_id: string; display_name: string | null; email: string | null }[]> {
     return await adminQuery('list_all_students');
+  },
+};
+
+export const scheduleService = {
+  async bulkCreateSchedules(entries: Array<{
+    batch_id: string;
+    title: string;
+    day_of_week: number;
+    start_time: string;
+    end_time: string;
+    room: string | null;
+    date: string;
+  }>): Promise<void> {
+    await adminQuery('bulk_create_schedules', { entries });
   },
 };
