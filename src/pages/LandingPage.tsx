@@ -91,6 +91,7 @@ export default function LandingPage() {
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
   const [courses, setCourses] = useState<CourseDisplay[]>([]);
+  const [carouselPaused, setCarouselPaused] = useState(false);
 
   // Parallax scroll
   const heroRef = useRef<HTMLElement>(null);
@@ -406,11 +407,20 @@ export default function LandingPage() {
           </div>
           <motion.div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6" variants={staggerContainer} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }}>
             {FEATURES.map(f => (
-              <motion.div key={f.title} variants={itemVariants} className="group p-6 rounded-xl bg-card/60 border border-border/40 hover:border-primary/40 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 gradient-border relative">
-                <div className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center mb-4 group-hover:bg-primary/25 transition-colors shadow-sm shadow-primary/10">
+              <motion.div
+                key={f.title}
+                variants={itemVariants}
+                whileHover={{ scale: 1.04, y: -6, boxShadow: '0 20px 50px -12px hsl(265 90% 65% / 0.2)' }}
+                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                className="group p-6 rounded-2xl bg-card/60 border border-border/40 hover:border-primary/40 gradient-border relative cursor-default"
+              >
+                <motion.div
+                  className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center mb-4 shadow-sm shadow-primary/10"
+                  whileHover={{ rotate: 8, scale: 1.1 }}
+                >
                   <f.icon className={`w-6 h-6 ${f.color}`} />
-                </div>
-                <h3 className="font-semibold text-lg mb-2">{f.title}</h3>
+                </motion.div>
+                <h3 className="font-semibold text-lg mb-2 group-hover:text-primary transition-colors">{f.title}</h3>
                 <p className="text-muted-foreground text-sm leading-relaxed">{f.desc}</p>
               </motion.div>
             ))}
@@ -418,21 +428,33 @@ export default function LandingPage() {
 
           {/* Capability Pillars */}
           <motion.div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-16" variants={staggerContainer} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }}>
-            {CAPABILITY_PILLARS.map(p => (
-              <motion.div key={p.label} variants={itemVariants} className="p-6 rounded-xl bg-gradient-to-br from-primary/10 via-card to-accent/5 border border-border/40 text-center">
-                <div className="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-4">
-                  <p.icon className="w-7 h-7 text-primary" />
-                </div>
-                <h4 className="font-bold mb-3">{p.label}</h4>
-                <ul className="space-y-1.5 text-sm text-muted-foreground">
-                  {p.items.map(item => (
-                    <li key={item} className="flex items-center justify-center gap-1.5">
-                      <Check className="w-3.5 h-3.5 text-primary/70" /> {item}
-                    </li>
-                  ))}
-                </ul>
-              </motion.div>
-            ))}
+            {CAPABILITY_PILLARS.map((p, i) => {
+              const glows = ['shadow-purple-500/15', 'shadow-emerald-500/15', 'shadow-amber-500/15', 'shadow-blue-500/15'];
+              return (
+                <motion.div
+                  key={p.label}
+                  variants={itemVariants}
+                  whileHover={{ scale: 1.05, y: -8 }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                  className={`p-6 rounded-2xl bg-gradient-to-br from-primary/10 via-card to-accent/5 border border-border/40 text-center hover:border-primary/30 hover:shadow-xl ${glows[i]} cursor-default`}
+                >
+                  <motion.div
+                    className="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-4"
+                    whileHover={{ rotate: -10, scale: 1.15 }}
+                  >
+                    <p.icon className="w-7 h-7 text-primary" />
+                  </motion.div>
+                  <h4 className="font-bold mb-3">{p.label}</h4>
+                  <ul className="space-y-1.5 text-sm text-muted-foreground">
+                    {p.items.map(item => (
+                      <li key={item} className="flex items-center justify-center gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-primary/70" /> {item}
+                      </li>
+                    ))}
+                  </ul>
+                </motion.div>
+              );
+            })}
           </motion.div>
         </div>
       </AnimatedSection>
@@ -455,9 +477,10 @@ export default function LandingPage() {
 
             <motion.div
               className="flex gap-6 px-8"
-              animate={{ x: ['0%', `-${(courses.length / 2) * 100 / courses.length}%`] }}
+              animate={carouselPaused ? {} : { x: ['0%', `-${(courses.length / 2) * 100 / courses.length}%`] }}
               transition={{ x: { duration: courses.length * 4, repeat: Infinity, ease: 'linear' } }}
-              whileHover={{ animationPlayState: 'paused' }}
+              onHoverStart={() => setCarouselPaused(true)}
+              onHoverEnd={() => setCarouselPaused(false)}
               style={{ width: `${courses.length * 2 * 340 + (courses.length * 2 - 1) * 24}px` }}
             >
               {/* Duplicate for seamless loop */}
@@ -531,14 +554,21 @@ export default function LandingPage() {
           <motion.div className="grid sm:grid-cols-3 gap-6 max-w-4xl mx-auto" variants={staggerContainer} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }}>
             {TESTIMONIALS.map((t, i) => {
               const borderColors = ['border-l-primary', 'border-l-accent', 'border-l-coral'];
+              const glows = ['hover:shadow-purple-500/10', 'hover:shadow-emerald-500/10', 'hover:shadow-orange-500/10'];
               return (
-                <motion.div key={t.name} variants={itemVariants} className={`p-6 rounded-xl bg-card/60 border border-border/40 border-l-[3px] ${borderColors[i]}`}>
+                <motion.div
+                  key={t.name}
+                  variants={itemVariants}
+                  whileHover={{ scale: 1.04, y: -6 }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                  className={`p-6 rounded-2xl bg-card/60 border border-border/40 border-l-[3px] ${borderColors[i]} hover:border-primary/30 hover:shadow-xl ${glows[i]} cursor-default`}
+                >
                   <div className="flex gap-0.5 mb-4">
-                    {Array.from({ length: t.rating }).map((_, i) => (
-                      <Star key={i} className="w-4 h-4 fill-warning text-warning" />
+                    {Array.from({ length: t.rating }).map((_, j) => (
+                      <Star key={j} className="w-4 h-4 fill-warning text-warning" />
                     ))}
                   </div>
-                  <p className="text-sm text-muted-foreground leading-relaxed mb-4">"{t.text}"</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed mb-4 italic">"{t.text}"</p>
                   <div>
                     <p className="font-semibold text-sm">{t.name}</p>
                     <p className="text-xs text-muted-foreground">{t.role}</p>
@@ -553,7 +583,11 @@ export default function LandingPage() {
       {/* CTA */}
       <AnimatedSection className="py-24">
         <div className="container mx-auto px-4">
-          <div className="max-w-3xl mx-auto text-center p-12 rounded-2xl border border-border/40 bg-gradient-to-br from-primary/10 via-card to-accent/10">
+          <motion.div
+            className="max-w-3xl mx-auto text-center p-12 rounded-2xl border border-border/40 bg-gradient-to-br from-primary/10 via-card to-accent/10"
+            whileHover={{ boxShadow: '0 25px 60px -15px hsl(265 90% 65% / 0.2), 0 0 80px hsl(165 80% 45% / 0.08)' }}
+            transition={{ duration: 0.5 }}
+          >
             <h2 className="text-3xl md:text-4xl font-bold mb-4">Ready to Transform Your Handwriting?</h2>
             <p className="text-muted-foreground mb-8 max-w-lg mx-auto">Join thousands of students improving their handwriting with AI-powered coaching.</p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -568,7 +602,7 @@ export default function LandingPage() {
                 </Button>
               )}
             </div>
-          </div>
+          </motion.div>
         </div>
       </AnimatedSection>
 
