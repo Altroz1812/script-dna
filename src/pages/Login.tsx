@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +9,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { GraduationCap, Loader2, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ROLE_LABELS, type AppRole } from '@/types/roles';
+import { MorphingBlob } from '@/components/ui/morphing-blob';
 
 const DEMO_ACCOUNTS: { email: string; password: string; role: AppRole; name: string; org?: string }[] = [
   { email: 'superadmin@demo.com', password: 'Demo1234!', role: 'superadmin', name: 'Super Admin', org: 'Platform' },
@@ -68,70 +70,109 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <div className="w-full max-w-md space-y-6">
-        <Card className="border-border/50">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4 relative overflow-hidden">
+      {/* Background effects */}
+      <MorphingBlob className="w-[600px] h-[600px] -top-40 -left-40 opacity-40" color="hsl(265 90% 65% / 0.08)" />
+      <MorphingBlob className="w-[500px] h-[500px] -bottom-32 -right-32 opacity-30" color="hsl(12 90% 65% / 0.06)" />
+      <MorphingBlob className="w-[400px] h-[400px] top-1/3 right-1/4 opacity-20" color="hsl(165 80% 45% / 0.06)" />
+
+      <motion.div
+        initial={{ opacity: 0, y: 20, scale: 0.97 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.6, ease: [0.23, 1, 0.32, 1] as [number, number, number, number] }}
+        className="w-full max-w-md space-y-5 relative z-10"
+      >
+        <Card className="glass-panel border-white/[0.08]">
           <CardHeader className="text-center space-y-3">
-            <div className="mx-auto w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-              <GraduationCap className="w-6 h-6 text-primary-foreground" />
-            </div>
-            <CardTitle className="text-xl">Welcome back</CardTitle>
+            <motion.div
+              className="mx-auto w-14 h-14 rounded-2xl bg-gradient-to-br from-primary via-coral to-accent flex items-center justify-center shadow-lg shadow-primary/25"
+              animate={{ rotate: [0, 3, -3, 0] }}
+              transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <GraduationCap className="w-7 h-7 text-white" />
+            </motion.div>
+            <CardTitle className="text-xl font-display">Welcome back</CardTitle>
             <CardDescription>Sign in to Live Classroom</CardDescription>
           </CardHeader>
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                  className="bg-white/[0.04] border-white/[0.08] focus:border-primary/50 transition-colors"
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                  className="bg-white/[0.04] border-white/[0.08] focus:border-primary/50 transition-colors"
+                />
               </div>
             </CardContent>
             <CardFooter className="flex flex-col gap-3">
-              <Button type="submit" className="w-full" disabled={loading || !!demoLoading}>
+              <Button type="submit" className="w-full bg-gradient-to-r from-primary via-coral to-accent hover:opacity-90 transition-opacity text-white border-0" disabled={loading || !!demoLoading}>
                 {loading ? (
                   <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Signing in…</span>
                 ) : 'Sign In'}
               </Button>
               <div className="flex justify-between w-full text-sm">
-                <Link to="/forgot-password" className="text-muted-foreground hover:text-primary">Forgot password?</Link>
-                <Link to="/signup" className="text-muted-foreground hover:text-primary">Create account</Link>
+                <Link to="/forgot-password" className="text-muted-foreground hover:text-primary transition-colors">Forgot password?</Link>
+                <Link to="/signup" className="text-muted-foreground hover:text-primary transition-colors">Create account</Link>
               </div>
             </CardFooter>
           </form>
         </Card>
 
         {/* Demo Logins */}
-        <Card className="border-border/50">
+        <Card className="glass-panel border-white/[0.08]">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Quick Demo Login</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-primary to-coral animate-pulse-glow" />
+              Quick Demo Login
+            </CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-2">
-            {DEMO_ACCOUNTS.map((account) => (
-              <Button
+            {DEMO_ACCOUNTS.map((account, i) => (
+              <motion.div
                 key={account.email}
-                variant="outline"
-                size="sm"
-                className="justify-start gap-2 h-auto py-2 px-3"
-                disabled={!!demoLoading || loading}
-                onClick={() => handleDemoLogin(account)}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 + i * 0.05, duration: 0.4 }}
               >
-                {demoLoading === account.email ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
-                ) : (
-                  <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                )}
-                <div className="flex flex-col items-start">
-                  <span className="text-xs font-medium">{account.name}</span>
-                  <span className="text-[10px] text-muted-foreground">{ROLE_LABELS[account.role]}{account.org ? ` · ${account.org}` : ''}</span>
-                </div>
-              </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start gap-2 h-auto py-2.5 px-3 bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.06] hover:border-primary/30 transition-all duration-300"
+                  disabled={!!demoLoading || loading}
+                  onClick={() => handleDemoLogin(account)}
+                >
+                  {demoLoading === account.email ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-primary" />
+                  ) : (
+                    <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  )}
+                  <div className="flex flex-col items-start">
+                    <span className="text-xs font-medium">{account.name}</span>
+                    <span className="text-[10px] text-muted-foreground">{ROLE_LABELS[account.role]}{account.org ? ` · ${account.org}` : ''}</span>
+                  </div>
+                </Button>
+              </motion.div>
             ))}
           </CardContent>
         </Card>
-      </div>
+      </motion.div>
     </div>
   );
 }
