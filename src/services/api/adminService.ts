@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 export async function adminQuery(action: string, params: any = {}): Promise<any> {
   switch (action) {
     // ===== STATS =====
-    case 'get_stats': return getStats();
+    case 'get_stats': return getStats(params);
 
     // ===== USERS =====
     case 'list_users': return listUsers();
@@ -90,24 +90,60 @@ export async function adminQuery(action: string, params: any = {}): Promise<any>
   }
 }
 
-// ===== STATS (reads precomputed dashboard_stats table) =====
-async function getStats() {
-  const { data, error } = await (supabase
-    .from('dashboard_stats' as any)
-    .select('*')
-    .eq('id', 1)
-    .single() as any);
+// ===== STATS (live query, org-scoped) =====
+async function getStats(params: { organizationId?: string | null; isSuperadmin?: boolean } = {}) {
+  const { organizationId, isSuperadmin } = params;
+  const scoped = !isSuperadmin && !!organizationId;
 
-  if (error) throw error;
+  // Courses count
+  let coursesQ = supabase.from('courses' as any).select('id', { count: 'exact', head: true }) as any;
+  if (scoped) coursesQ = coursesQ.eq('organization_id', organizationId);
+  const { count: totalCourses } = await coursesQ;
+
+  // Batches count
+  let batchesQ = supabase.from('batches' as any).select('id', { count: 'exact', head: true }) as any;
+  if (scoped) batchesQ = batchesQ.eq('organization_id', organizationId);
+  const { count: totalBatches } = await batchesQ;
+
+  // Org members (users in this org) or total users
+  let totalUsers = 0;
+  if (scoped) {
+    const { count } = await (supabase.from('organization_members' as any).select('id', { count: 'exact', head: true }).eq('organization_id', organizationId) as any);
+    totalUsers = count ?? 0;
+  } else {
+    const { count } = await (supabase.from('profiles' as any).select('id', { count: 'exact', head: true }) as any);
+    totalUsers = count ?? 0;
+  }
+
+  // Orgs count (platform-wide always)
+  const { count: totalOrgs } = await (supabase.from('organizations' as any).select('id', { count: 'exact', head: true }) as any);
+
+  // Leads & payments (not org-scoped currently)
+  const { count: totalLeads } = await (supabase.from('leads' as any).select('id', { count: 'exact', head: true }) as any);
+  const { count: totalPayments } = await (supabase.from('payments' as any).select('id', { count: 'exact', head: true }) as any);
+
+  // Role counts – scoped to org members if not superadmin
+  let roleCounts: Record<string, number> = {};
+  if (scoped) {
+    const { data: members } = await (supabase.from('organization_members' as any).select('user_id').eq('organization_id', organizationId) as any);
+    const memberIds = (members ?? []).map((m: any) => m.user_id);
+    if (memberIds.length > 0) {
+      const { data: roles } = await (supabase.from('user_roles' as any).select('role').in('user_id', memberIds) as any);
+      for (const r of roles ?? []) roleCounts[r.role] = (roleCounts[r.role] || 0) + 1;
+    }
+  } else {
+    const { data: roles } = await (supabase.from('user_roles' as any).select('role') as any);
+    for (const r of roles ?? []) roleCounts[r.role] = (roleCounts[r.role] || 0) + 1;
+  }
 
   return {
-    totalUsers: data.total_users ?? 0,
-    totalCourses: data.total_courses ?? 0,
-    totalBatches: data.total_batches ?? 0,
-    totalOrgs: data.total_orgs ?? 0,
-    totalLeads: data.total_leads ?? 0,
-    totalPayments: data.total_payments ?? 0,
-    roleCounts: data.role_counts ?? {},
+    totalUsers: totalUsers ?? 0,
+    totalCourses: totalCourses ?? 0,
+    totalBatches: totalBatches ?? 0,
+    totalOrgs: totalOrgs ?? 0,
+    totalLeads: totalLeads ?? 0,
+    totalPayments: totalPayments ?? 0,
+    roleCounts,
   };
 }
 
