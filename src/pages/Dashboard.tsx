@@ -26,36 +26,47 @@ interface Stats {
 }
 
 const GLOW_COLORS = [
-  'hsl(265 90% 65%)',   // purple
-  'hsl(165 80% 45%)',   // mint
-  'hsl(12 90% 65%)',    // coral
   'hsl(265 90% 65%)',
-  'hsl(200 80% 55%)',   // sky
-  'hsl(330 80% 60%)',   // pink
-  'hsl(45 95% 55%)',    // amber
+  'hsl(165 80% 45%)',
+  'hsl(12 90% 65%)',
+  'hsl(265 90% 65%)',
+  'hsl(200 80% 55%)',
+  'hsl(330 80% 60%)',
+  'hsl(45 95% 55%)',
   'hsl(165 80% 45%)',
 ];
 
 const GRADIENT_PAIRS = [
-  'from-purple-500/20 to-purple-900/5',
-  'from-emerald-500/20 to-emerald-900/5',
-  'from-orange-500/20 to-orange-900/5',
-  'from-blue-500/20 to-blue-900/5',
-  'from-cyan-500/20 to-cyan-900/5',
-  'from-pink-500/20 to-pink-900/5',
-  'from-amber-500/20 to-amber-900/5',
-  'from-teal-500/20 to-teal-900/5',
+  'from-purple-500/40 via-purple-600/20 to-purple-900/10',
+  'from-emerald-500/40 via-emerald-600/20 to-emerald-900/10',
+  'from-orange-500/40 via-orange-600/20 to-orange-900/10',
+  'from-blue-500/40 via-blue-600/20 to-blue-900/10',
+  'from-cyan-500/40 via-cyan-600/20 to-cyan-900/10',
+  'from-pink-500/40 via-pink-600/20 to-pink-900/10',
+  'from-amber-500/40 via-amber-600/20 to-amber-900/10',
+  'from-teal-500/40 via-teal-600/20 to-teal-900/10',
 ];
 
 const ICON_GRADIENTS = [
-  'from-purple-400 to-purple-600',
-  'from-emerald-400 to-emerald-600',
-  'from-orange-400 to-orange-600',
-  'from-blue-400 to-blue-600',
-  'from-cyan-400 to-cyan-600',
-  'from-pink-400 to-pink-600',
-  'from-amber-400 to-amber-600',
-  'from-teal-400 to-teal-600',
+  'from-purple-300 to-purple-600',
+  'from-emerald-300 to-emerald-600',
+  'from-orange-300 to-orange-600',
+  'from-blue-300 to-blue-600',
+  'from-cyan-300 to-cyan-600',
+  'from-pink-300 to-pink-600',
+  'from-amber-300 to-amber-600',
+  'from-teal-300 to-teal-600',
+];
+
+const ICON_SHADOWS = [
+  'shadow-purple-500/30',
+  'shadow-emerald-500/30',
+  'shadow-orange-500/30',
+  'shadow-blue-500/30',
+  'shadow-cyan-500/30',
+  'shadow-pink-500/30',
+  'shadow-amber-500/30',
+  'shadow-teal-500/30',
 ];
 
 const containerVariants = {
@@ -124,9 +135,9 @@ export default function Dashboard() {
   return (
     <div className="relative min-h-full">
       {/* Background blobs */}
-      <MorphingBlob className="w-[500px] h-[500px] -top-32 -right-32 opacity-30" color="hsl(265 90% 65% / 0.08)" />
-      <MorphingBlob className="w-[400px] h-[400px] top-1/2 -left-20 opacity-20" color="hsl(12 90% 65% / 0.06)" />
-      <MorphingBlob className="w-[300px] h-[300px] bottom-0 right-1/4 opacity-20" color="hsl(165 80% 45% / 0.06)" />
+      <MorphingBlob className="w-[500px] h-[500px] -top-32 -right-32 opacity-40" color="hsl(265 90% 65% / 0.12)" />
+      <MorphingBlob className="w-[400px] h-[400px] top-1/2 -left-20 opacity-30" color="hsl(12 90% 65% / 0.1)" />
+      <MorphingBlob className="w-[300px] h-[300px] bottom-0 right-1/4 opacity-25" color="hsl(165 80% 45% / 0.1)" />
 
       <div className="relative z-10 space-y-8">
         {/* Header */}
@@ -139,7 +150,7 @@ export default function Dashboard() {
           <div>
             <div className="flex items-center gap-3 mb-1">
               <motion.div
-                className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary via-coral to-accent flex items-center justify-center"
+                className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary via-coral to-accent flex items-center justify-center shadow-lg shadow-primary/30"
                 animate={{ rotate: [0, 5, -5, 0] }}
                 transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
               >
@@ -147,7 +158,7 @@ export default function Dashboard() {
               </motion.div>
               <h1 className="text-3xl font-bold font-display text-gradient">Dashboard</h1>
             </div>
-            <p className="text-muted-foreground text-sm pl-[52px]">{subtitle}</p>
+            <p className="text-muted-foreground text-sm pl-[56px]">{subtitle}</p>
           </div>
           <div className="flex gap-3">
             <MagneticButton onClick={() => navigate('/courses')} className="text-xs">
@@ -182,25 +193,29 @@ export default function Dashboard() {
                   className="h-full"
                 >
                   <div className={`relative h-full p-5 bg-gradient-to-br ${GRADIENT_PAIRS[i % GRADIENT_PAIRS.length]} flex flex-col justify-between`}>
+                    {/* Inner glow */}
+                    <div className="absolute inset-0 rounded-2xl opacity-30 pointer-events-none"
+                      style={{ boxShadow: `inset 0 0 40px ${GLOW_COLORS[i % GLOW_COLORS.length].replace(')', ' / 0.15)')}` }}
+                    />
                     {/* Icon */}
-                    <div className="flex items-center justify-between">
-                      <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${ICON_GRADIENTS[i % ICON_GRADIENTS.length]} flex items-center justify-center shadow-lg`}>
+                    <div className="flex items-center justify-between relative z-10">
+                      <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${ICON_GRADIENTS[i % ICON_GRADIENTS.length]} flex items-center justify-center shadow-lg ${ICON_SHADOWS[i % ICON_SHADOWS.length]}`}>
                         <c.icon className="w-5 h-5 text-white" />
                       </div>
                       <ArrowRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-foreground transition-colors" />
                     </div>
 
                     {/* Value + Label */}
-                    <div>
+                    <div className="relative z-10">
                       <AnimatedCounter
                         value={c.value}
-                        className="text-3xl font-bold font-display text-foreground tracking-tight block"
+                        className="text-3xl font-bold font-display text-gradient tracking-tight block"
                       />
                       <span className="text-sm text-muted-foreground mt-0.5 block">{c.label}</span>
                     </div>
 
                     {/* Decorative bar */}
-                    <div className="absolute bottom-0 left-0 right-0 h-[2px]">
+                    <div className="absolute bottom-0 left-0 right-0 h-[3px]">
                       <motion.div
                         className={`h-full bg-gradient-to-r ${ICON_GRADIENTS[i % ICON_GRADIENTS.length]}`}
                         initial={{ scaleX: 0 }}
@@ -226,13 +241,13 @@ export default function Dashboard() {
           className="grid grid-cols-1 md:grid-cols-3 gap-4"
         >
           {[
-            { title: 'Schedule', desc: 'Manage class timetables', path: '/schedule', gradient: 'from-purple-500/10 to-transparent' },
-            { title: 'Attendance', desc: 'Track student presence', path: '/attendance', gradient: 'from-emerald-500/10 to-transparent' },
-            { title: 'Live Classes', desc: 'Join or create sessions', path: '/live-classes', gradient: 'from-coral/10 to-transparent' },
+            { title: 'Schedule', desc: 'Manage class timetables', path: '/schedule', gradient: 'from-purple-500/30 via-purple-600/10 to-transparent', borderColor: 'border-l-purple-500' },
+            { title: 'Attendance', desc: 'Track student presence', path: '/attendance', gradient: 'from-emerald-500/30 via-emerald-600/10 to-transparent', borderColor: 'border-l-emerald-500' },
+            { title: 'Live Classes', desc: 'Join or create sessions', path: '/live-classes', gradient: 'from-orange-500/30 via-orange-600/10 to-transparent', borderColor: 'border-l-orange-500' },
           ].map((item) => (
             <TiltCard key={item.title} className="cursor-pointer group" glowColor="hsl(265 90% 65%)">
               <div
-                className={`p-5 bg-gradient-to-br ${item.gradient} flex items-center justify-between`}
+                className={`p-5 bg-gradient-to-br ${item.gradient} flex items-center justify-between border-l-[3px] ${item.borderColor}`}
                 onClick={() => navigate(item.path)}
               >
                 <div>

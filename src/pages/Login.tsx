@@ -20,6 +20,15 @@ const DEMO_ACCOUNTS: { email: string; password: string; role: AppRole; name: str
   { email: 'parent@demo.com', password: 'Demo1234!', role: 'parent', name: 'Parent', org: 'Sunrise Academy' },
 ];
 
+const ROLE_BORDER_COLORS: Record<AppRole, string> = {
+  superadmin: 'border-l-purple-500',
+  admin: 'border-l-blue-500',
+  teacher: 'border-l-emerald-500',
+  student: 'border-l-orange-500',
+  support: 'border-l-cyan-500',
+  parent: 'border-l-pink-500',
+};
+
 function getErrorMessage(err: any): string {
   const msg = err?.message ?? '';
   if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Load failed')) {
@@ -71,10 +80,18 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 relative overflow-hidden">
+      {/* Animated grid pattern */}
+      <div className="absolute inset-0 opacity-[0.04] pointer-events-none"
+        style={{
+          backgroundImage: 'radial-gradient(circle, hsl(var(--primary)) 1px, transparent 1px)',
+          backgroundSize: '32px 32px',
+        }}
+      />
+
       {/* Background effects */}
-      <MorphingBlob className="w-[600px] h-[600px] -top-40 -left-40 opacity-40" color="hsl(265 90% 65% / 0.08)" />
-      <MorphingBlob className="w-[500px] h-[500px] -bottom-32 -right-32 opacity-30" color="hsl(12 90% 65% / 0.06)" />
-      <MorphingBlob className="w-[400px] h-[400px] top-1/3 right-1/4 opacity-20" color="hsl(165 80% 45% / 0.06)" />
+      <MorphingBlob className="w-[600px] h-[600px] -top-40 -left-40 opacity-50" color="hsl(265 90% 65% / 0.12)" />
+      <MorphingBlob className="w-[500px] h-[500px] -bottom-32 -right-32 opacity-40" color="hsl(12 90% 65% / 0.1)" />
+      <MorphingBlob className="w-[400px] h-[400px] top-1/3 right-1/4 opacity-30" color="hsl(165 80% 45% / 0.1)" />
 
       <motion.div
         initial={{ opacity: 0, y: 20, scale: 0.97 }}
@@ -82,14 +99,16 @@ export default function Login() {
         transition={{ duration: 0.6, ease: [0.23, 1, 0.32, 1] as [number, number, number, number] }}
         className="w-full max-w-md space-y-5 relative z-10"
       >
-        <Card className="glass-panel border-white/[0.08]">
+        <Card className="glass-panel border-white/[0.12]">
           <CardHeader className="text-center space-y-3">
             <motion.div
-              className="mx-auto w-14 h-14 rounded-2xl bg-gradient-to-br from-primary via-coral to-accent flex items-center justify-center shadow-lg shadow-primary/25"
+              className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-primary via-coral to-accent flex items-center justify-center shadow-lg shadow-primary/30 relative"
               animate={{ rotate: [0, 3, -3, 0] }}
               transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
             >
-              <GraduationCap className="w-7 h-7 text-white" />
+              {/* Gradient ring */}
+              <div className="absolute inset-[-3px] rounded-2xl bg-gradient-to-br from-primary via-coral to-accent opacity-40 blur-sm" />
+              <GraduationCap className="w-7 h-7 text-white relative z-10" />
             </motion.div>
             <CardTitle className="text-xl font-display">Welcome back</CardTitle>
             <CardDescription>Sign in to Live Classroom</CardDescription>
@@ -105,7 +124,7 @@ export default function Login() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   autoComplete="email"
-                  className="bg-white/[0.04] border-white/[0.08] focus:border-primary/50 transition-colors"
+                  className="bg-white/[0.04] border-white/[0.1] focus:border-primary/50 transition-colors"
                 />
               </div>
               <div className="space-y-2">
@@ -117,12 +136,12 @@ export default function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   autoComplete="current-password"
-                  className="bg-white/[0.04] border-white/[0.08] focus:border-primary/50 transition-colors"
+                  className="bg-white/[0.04] border-white/[0.1] focus:border-primary/50 transition-colors"
                 />
               </div>
             </CardContent>
             <CardFooter className="flex flex-col gap-3">
-              <Button type="submit" className="w-full bg-gradient-to-r from-primary via-coral to-accent hover:opacity-90 transition-opacity text-white border-0" disabled={loading || !!demoLoading}>
+              <Button type="submit" className="w-full bg-gradient-to-r from-primary via-coral to-accent hover:opacity-90 transition-opacity text-white border-0 shadow-lg shadow-primary/20" disabled={loading || !!demoLoading}>
                 {loading ? (
                   <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Signing in…</span>
                 ) : 'Sign In'}
@@ -136,10 +155,10 @@ export default function Login() {
         </Card>
 
         {/* Demo Logins */}
-        <Card className="glass-panel border-white/[0.08]">
+        <Card className="glass-panel border-white/[0.12]">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-gradient-to-r from-primary to-coral animate-pulse-glow" />
+              <span className="w-2 h-2 rounded-full bg-gradient-to-r from-primary to-coral animate-pulse-glow" />
               Quick Demo Login
             </CardTitle>
           </CardHeader>
@@ -154,7 +173,7 @@ export default function Login() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full justify-start gap-2 h-auto py-2.5 px-3 bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.06] hover:border-primary/30 transition-all duration-300"
+                  className={`w-full justify-start gap-2 h-auto py-2.5 px-3 bg-white/[0.03] border-white/[0.08] border-l-[3px] ${ROLE_BORDER_COLORS[account.role]} hover:bg-white/[0.06] hover:border-primary/30 transition-all duration-300`}
                   disabled={!!demoLoading || loading}
                   onClick={() => handleDemoLogin(account)}
                 >

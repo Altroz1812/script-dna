@@ -40,7 +40,7 @@
     --warning: 38 92% 50%;
     --warning-foreground: 220 14% 6%;
 
-    --border: 240 12% 16%;
+    --border: 240 12% 18%;
     --input: 240 12% 14%;
     --ring: 265 90% 65%;
 
@@ -114,9 +114,9 @@
 @layer components {
   /* Glassmorphism 2.0 */
   .glass-panel {
-    @apply relative rounded-xl border border-white/[0.08] overflow-hidden;
+    @apply relative rounded-xl border border-white/[0.12] overflow-hidden;
     background: var(--gradient-glass);
-    backdrop-filter: blur(24px) saturate(1.4);
+    backdrop-filter: blur(28px) saturate(1.6);
     box-shadow: var(--shadow-panel), var(--shadow-inset);
   }
 

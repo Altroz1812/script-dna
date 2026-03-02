@@ -33,15 +33,18 @@ export function AppHeader() {
   };
 
   return (
-    <header className="h-14 flex items-center justify-between border-b border-white/[0.06] bg-background/60 backdrop-blur-xl px-4 sticky top-0 z-40">
+    <header className="h-14 flex items-center justify-between border-b border-white/[0.06] bg-background/60 backdrop-blur-xl px-4 sticky top-0 z-40 relative">
+      {/* Gradient bottom line */}
+      <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-primary/40 via-coral/30 to-accent/40" />
+
       <div className="flex items-center gap-2">
         <SidebarTrigger />
       </div>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="flex items-center gap-2 h-9 px-2 hover:bg-white/[0.04]">
-            <Avatar className="h-7 w-7 ring-2 ring-primary/20">
+          <Button variant="ghost" className="flex items-center gap-2 h-9 px-2 hover:bg-white/[0.04] group">
+            <Avatar className="h-7 w-7 ring-2 ring-primary/20 group-hover:ring-primary/50 transition-all duration-300">
               <AvatarImage src={profile?.avatarUrl} />
               <AvatarFallback className="text-xs bg-gradient-to-br from-primary/30 to-coral/30 text-primary-foreground font-medium">
                 {initials}

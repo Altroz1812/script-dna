@@ -30,9 +30,9 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="border-b border-white/[0.06] px-3 py-4">
+      <SidebarHeader className="border-b border-white/[0.08] px-3 py-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary via-coral to-accent flex items-center justify-center shrink-0 shadow-lg shadow-primary/20">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary via-coral to-accent flex items-center justify-center shrink-0 shadow-lg shadow-primary/30 ring-2 ring-primary/20">
             <GraduationCap className="w-4.5 h-4.5 text-white" />
           </div>
           {!collapsed && (
@@ -70,16 +70,19 @@ export function AppSidebar() {
                           end
                           className={`relative transition-all duration-200 rounded-lg ${
                             isActive
-                              ? 'bg-primary/10 text-primary font-medium'
-                              : 'text-muted-foreground hover:text-foreground hover:bg-white/[0.04]'
+                              ? 'bg-primary/15 text-primary font-medium shadow-sm shadow-primary/10'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-white/[0.06]'
                           }`}
                           activeClassName=""
                         >
                           {isActive && (
-                            <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-gradient-to-b from-primary to-coral" />
+                            <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-gradient-to-b from-primary to-coral shadow-sm shadow-primary/40" />
                           )}
                           <item.icon className="h-4 w-4 shrink-0" />
                           {!collapsed && <span>{item.title}</span>}
+                          {isActive && !collapsed && (
+                            <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary animate-pulse-glow" />
+                          )}
                         </NavLink>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -91,7 +94,7 @@ export function AppSidebar() {
         ))}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-white/[0.06] p-3">
+      <SidebarFooter className="border-t border-white/[0.08] p-3">
         {!collapsed && (
           <p className="text-[10px] text-muted-foreground/50 text-center">
             © 2026 Live Classroom
