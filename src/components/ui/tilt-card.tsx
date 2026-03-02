@@ -53,17 +53,18 @@ export function TiltCard({ children, className, glowColor = 'hsl(265 90% 65%)', 
         perspective: '1000px',
       }}
       className={cn(
-        'relative rounded-2xl border border-white/[0.08] overflow-hidden',
-        'bg-card transition-shadow duration-500',
+        'relative rounded-2xl border border-white/[0.12] overflow-hidden group',
+        'bg-card transition-all duration-500',
+        isHovered && 'shadow-lg shadow-primary/10 border-white/[0.18]',
         spanClasses[span],
         className,
       )}
     >
       {/* Gradient glow that follows mouse */}
       <motion.div
-        className="absolute inset-0 pointer-events-none opacity-0 transition-opacity duration-500"
+        className="absolute inset-0 pointer-events-none transition-opacity duration-500"
         style={{
-          opacity: isHovered ? 0.12 : 0,
+          opacity: isHovered ? 0.2 : 0,
           background: `radial-gradient(600px circle at ${mouseX.get() * 100}% ${mouseY.get() * 100}%, ${glowColor}, transparent 40%)`,
         }}
       />
@@ -81,13 +82,13 @@ export function TiltCard({ children, className, glowColor = 'hsl(265 90% 65%)', 
         {children}
       </div>
 
-      {/* Subtle border glow on hover */}
+      {/* Animated shimmer border on hover */}
       <motion.div
         className="absolute inset-0 rounded-2xl pointer-events-none"
         style={{
-          border: '1px solid transparent',
+          border: '1.5px solid transparent',
           backgroundImage: isHovered
-            ? 'linear-gradient(135deg, hsl(265 90% 65% / 0.2), hsl(12 90% 65% / 0.1), hsl(165 80% 45% / 0.2))'
+            ? 'linear-gradient(135deg, hsl(265 90% 65% / 0.35), hsl(12 90% 65% / 0.2), hsl(165 80% 45% / 0.35))'
             : 'none',
           backgroundOrigin: 'border-box',
           backgroundClip: 'border-box',

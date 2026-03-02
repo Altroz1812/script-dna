@@ -242,12 +242,15 @@ export default function LandingPage() {
               initial="hidden"
               animate="visible"
             >
-              {STATS.map(s => (
-                <motion.div key={s.label} className="text-center" variants={itemVariants}>
-                  <p className="text-2xl md:text-3xl font-bold text-gradient">{s.value}</p>
-                  <p className="text-sm text-muted-foreground mt-1">{s.label}</p>
-                </motion.div>
-              ))}
+              {STATS.map((s, i) => {
+                const colors = ['text-primary', 'text-accent', 'text-coral', 'text-primary'];
+                return (
+                  <motion.div key={s.label} className="text-center" variants={itemVariants}>
+                    <p className={`text-3xl md:text-4xl font-bold ${colors[i]}`}>{s.value}</p>
+                    <p className="text-sm text-muted-foreground mt-1">{s.label}</p>
+                  </motion.div>
+                );
+              })}
             </motion.div>
           </motion.div>
         </div>
@@ -262,8 +265,8 @@ export default function LandingPage() {
           </div>
           <motion.div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6" variants={staggerContainer} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }}>
             {FEATURES.map(f => (
-              <motion.div key={f.title} variants={itemVariants} className="group p-6 rounded-xl bg-card/60 border border-border/40 hover:border-primary/40 transition-all duration-300 hover:shadow-lg hover:shadow-primary/5">
-                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4 group-hover:bg-primary/20 transition-colors">
+              <motion.div key={f.title} variants={itemVariants} className="group p-6 rounded-xl bg-card/60 border border-border/40 hover:border-primary/40 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 gradient-border relative">
+                <div className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center mb-4 group-hover:bg-primary/25 transition-colors shadow-sm shadow-primary/10">
                   <f.icon className="w-6 h-6 text-primary" />
                 </div>
                 <h3 className="font-semibold text-lg mb-2">{f.title}</h3>
@@ -326,20 +329,23 @@ export default function LandingPage() {
             <h2 className="text-3xl md:text-5xl font-bold">Loved by <span className="text-gradient">Students & Parents</span></h2>
           </div>
           <motion.div className="grid sm:grid-cols-3 gap-6 max-w-4xl mx-auto" variants={staggerContainer} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }}>
-            {TESTIMONIALS.map(t => (
-              <motion.div key={t.name} variants={itemVariants} className="p-6 rounded-xl bg-card/60 border border-border/40">
-                <div className="flex gap-0.5 mb-4">
-                  {Array.from({ length: t.rating }).map((_, i) => (
-                    <Star key={i} className="w-4 h-4 fill-warning text-warning" />
-                  ))}
-                </div>
-                <p className="text-sm text-muted-foreground leading-relaxed mb-4">"{t.text}"</p>
-                <div>
-                  <p className="font-semibold text-sm">{t.name}</p>
-                  <p className="text-xs text-muted-foreground">{t.role}</p>
-                </div>
-              </motion.div>
-            ))}
+            {TESTIMONIALS.map((t, i) => {
+              const borderColors = ['border-l-primary', 'border-l-accent', 'border-l-coral'];
+              return (
+                <motion.div key={t.name} variants={itemVariants} className={`p-6 rounded-xl bg-card/60 border border-border/40 border-l-[3px] ${borderColors[i]}`}>
+                  <div className="flex gap-0.5 mb-4">
+                    {Array.from({ length: t.rating }).map((_, i) => (
+                      <Star key={i} className="w-4 h-4 fill-warning text-warning" />
+                    ))}
+                  </div>
+                  <p className="text-sm text-muted-foreground leading-relaxed mb-4">"{t.text}"</p>
+                  <div>
+                    <p className="font-semibold text-sm">{t.name}</p>
+                    <p className="text-xs text-muted-foreground">{t.role}</p>
+                  </div>
+                </motion.div>
+              );
+            })}
           </motion.div>
         </div>
       </AnimatedSection>
