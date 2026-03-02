@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { adminQuery } from '@/services/api/adminService';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, BookOpen, Layers, Building2, UserPlus, CreditCard, GraduationCap, UserCheck } from 'lucide-react';
 import { DashboardCardsSkeleton } from '@/components/ui/loading-skeletons';
@@ -19,44 +20,71 @@ interface Stats {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { profile } = useAuth();
+
+  const isSuperadmin = profile?.role === 'superadmin';
+  const organizationId = profile?.organizationId ?? null;
+
+  const { data: orgName } = useQuery({
+    queryKey: ['org_name', organizationId],
+    queryFn: async () => {
+      if (!organizationId) return null;
+      const { organizationService } = await import('@/services/api/organizationService');
+      const org = await organizationService.getOrganization(organizationId);
+      return org?.name ?? null;
+    },
+    enabled: !!organizationId,
+  });
 
   const { data: stats, isLoading } = useQuery<Stats>({
-    queryKey: ['admin_stats'],
-    queryFn: () => adminQuery('get_stats') as Promise<Stats>,
+    queryKey: ['admin_stats', organizationId, isSuperadmin],
+    queryFn: () => adminQuery('get_stats', { organizationId, isSuperadmin }) as Promise<Stats>,
     staleTime: 1000 * 60 * 5,
     retry: 2,
+    enabled: !!profile,
   });
+
+  const subtitle = isSuperadmin
+    ? 'Platform Overview (All Organizations)'
+    : orgName
+      ? `${orgName} Overview`
+      : 'Organization Overview';
 
   const cards = useMemo(() => {
     if (!stats) return [];
-    return [
-      { label: 'Total Users', value: stats.totalUsers, icon: Users, color: 'text-blue-500' },
+    const base = [
+      { label: isSuperadmin ? 'Total Users' : 'Org Members', value: stats.totalUsers, icon: Users, color: 'text-blue-500' },
       { label: 'Students', value: stats.roleCounts?.student ?? 0, icon: GraduationCap, color: 'text-green-500' },
       { label: 'Teachers', value: stats.roleCounts?.teacher ?? 0, icon: UserCheck, color: 'text-purple-500' },
       { label: 'Courses', value: stats.totalCourses, icon: BookOpen, color: 'text-orange-500' },
       { label: 'Batches', value: stats.totalBatches, icon: Layers, color: 'text-cyan-500' },
-      { label: 'Organizations', value: stats.totalOrgs, icon: Building2, color: 'text-pink-500' },
-      { label: 'Leads', value: stats.totalLeads, icon: UserPlus, color: 'text-yellow-500' },
-      { label: 'Payments', value: stats.totalPayments, icon: CreditCard, color: 'text-emerald-500' },
     ];
-  }, [stats]);
+    if (isSuperadmin) {
+      base.push(
+        { label: 'Organizations', value: stats.totalOrgs, icon: Building2, color: 'text-pink-500' },
+        { label: 'Leads', value: stats.totalLeads, icon: UserPlus, color: 'text-yellow-500' },
+        { label: 'Payments', value: stats.totalPayments, icon: CreditCard, color: 'text-emerald-500' },
+      );
+    }
+    return base;
+  }, [stats, isSuperadmin]);
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground text-sm">Super Admin Overview</p>
+          <p className="text-muted-foreground text-sm">{subtitle}</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => navigate('/courses')}>+ Course</Button>
           <Button variant="outline" size="sm" onClick={() => navigate('/leads')}>+ Lead</Button>
-          <Button variant="outline" size="sm" onClick={() => navigate('/users')}>+ User</Button>
+          {isSuperadmin && <Button variant="outline" size="sm" onClick={() => navigate('/users')}>+ User</Button>}
         </div>
       </div>
 
       {isLoading ? (
-        <DashboardCardsSkeleton count={8} />
+        <DashboardCardsSkeleton count={isSuperadmin ? 8 : 5} />
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {cards.map(c => (
