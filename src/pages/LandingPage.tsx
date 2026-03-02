@@ -222,32 +222,71 @@ export default function LandingPage() {
 
         {/* Floating letters — medium parallax layer */}
         <motion.div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ y: lettersY }}>
-          {['A', 'B', 'C', 'a', 'b', 'c', 'D', 'e', 'f', 'G', 'H', 'k'].map((letter, i) => (
-            <motion.span
-              key={i}
-              className="absolute text-primary/20 font-display font-bold select-none"
-              style={{
-                left: `${8 + (i * 7.5) % 85}%`,
-                bottom: '-10%',
-                fontSize: `${24 + (i % 4) * 12}px`,
-              }}
-              animate={{
-                y: [0, -800 - Math.random() * 400],
-                opacity: [0, 0.4, 0.2, 0],
-                rotate: [0, (i % 2 === 0 ? 1 : -1) * (10 + Math.random() * 20)],
-                x: [0, (i % 2 === 0 ? 1 : -1) * (20 + Math.random() * 40)],
-              }}
-              transition={{
-                duration: 8 + Math.random() * 6,
-                repeat: Infinity,
-                delay: i * 1.2,
-                ease: 'easeOut',
-              }}
-            >
-              {letter}
-            </motion.span>
-          ))}
+          {['A', 'B', 'C', 'a', 'b', 'c', 'D', 'e', 'f', 'G', 'H', 'k', 'M', 'n', 'P', 'R', 's', 'T', 'W', 'z'].map((letter, i) => {
+            const colors = ['text-primary/40', 'text-accent/35', 'text-coral/30', 'text-purple-400/35', 'text-emerald-400/30', 'text-amber-400/35'];
+            return (
+              <motion.span
+                key={i}
+                className={`absolute ${colors[i % colors.length]} font-display font-bold select-none`}
+                style={{
+                  left: `${5 + (i * 4.8) % 90}%`,
+                  bottom: '-5%',
+                  fontSize: `${32 + (i % 5) * 16}px`,
+                  textShadow: '0 0 20px currentColor',
+                }}
+                animate={{
+                  y: [0, -900 - (i % 4) * 200],
+                  opacity: [0, 0.7, 0.5, 0],
+                  rotate: [0, (i % 2 === 0 ? 1 : -1) * (15 + (i % 3) * 10)],
+                  x: [0, (i % 2 === 0 ? 1 : -1) * (30 + (i % 5) * 15)],
+                  scale: [0.8, 1.1, 0.9],
+                }}
+                transition={{
+                  duration: 6 + (i % 4) * 2,
+                  repeat: Infinity,
+                  delay: i * 0.7,
+                  ease: 'easeOut',
+                }}
+              >
+                {letter}
+              </motion.span>
+            );
+          })}
         </motion.div>
+
+        {/* Orbiting capability icons */}
+        <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+          {[PenTool, Video, GraduationCap, CreditCard, BarChart3, Building2].map((Icon, i) => {
+            const radius = 280 + (i % 2) * 60;
+            const angleOffset = (i * 60);
+            const duration = 20 + i * 4;
+            return (
+              <motion.div
+                key={i}
+                className="absolute w-10 h-10 rounded-full bg-card/40 backdrop-blur-sm border border-border/30 flex items-center justify-center"
+                style={{ boxShadow: '0 0 15px hsl(var(--primary) / 0.15)' }}
+                animate={{
+                  x: [
+                    Math.cos((angleOffset * Math.PI) / 180) * radius,
+                    Math.cos(((angleOffset + 120) * Math.PI) / 180) * radius,
+                    Math.cos(((angleOffset + 240) * Math.PI) / 180) * radius,
+                    Math.cos(((angleOffset + 360) * Math.PI) / 180) * radius,
+                  ],
+                  y: [
+                    Math.sin((angleOffset * Math.PI) / 180) * radius,
+                    Math.sin(((angleOffset + 120) * Math.PI) / 180) * radius,
+                    Math.sin(((angleOffset + 240) * Math.PI) / 180) * radius,
+                    Math.sin(((angleOffset + 360) * Math.PI) / 180) * radius,
+                  ],
+                  opacity: [0.3, 0.7, 0.5, 0.3],
+                }}
+                transition={{ duration, repeat: Infinity, ease: 'linear' }}
+              >
+                <Icon className="w-4 h-4 text-primary/60" />
+              </motion.div>
+            );
+          })}
+        </div>
 
         {/* Content — fastest layer (stays still / minimal shift) */}
         <motion.div className="relative container mx-auto px-4 pt-24 pb-16" style={{ y: contentY }}>
@@ -257,45 +296,98 @@ export default function LandingPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, ease: 'easeOut' as const }}
           >
-            <Badge variant="outline" className="border-primary/40 text-primary px-4 py-1.5 text-sm">
-              <Sparkles className="w-3.5 h-3.5 mr-1.5" /> Complete Handwriting Academy Platform
-            </Badge>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.2, duration: 0.5 }}
+            >
+              <Badge variant="outline" className="border-primary/40 text-primary px-4 py-1.5 text-sm">
+                <Sparkles className="w-3.5 h-3.5 mr-1.5 animate-pulse" /> Complete Handwriting Academy Platform
+              </Badge>
+            </motion.div>
 
             <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tight leading-[1.1]">
-              The All-in-One
-              <span className="block text-gradient">Handwriting SaaS</span>
-              <span className="block text-2xl sm:text-3xl md:text-4xl font-semibold text-muted-foreground mt-3">AI Analysis · Live Classes · Academy Management</span>
+              <motion.span
+                className="inline-block"
+                initial={{ opacity: 0, y: 40 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3, duration: 0.6 }}
+              >
+                The All-in-One
+              </motion.span>
+              <motion.span
+                className="block text-gradient"
+                initial={{ opacity: 0, y: 40, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ delay: 0.5, duration: 0.7, type: 'spring', stiffness: 100 }}
+              >
+                Handwriting SaaS
+              </motion.span>
+              <motion.span
+                className="block text-2xl sm:text-3xl md:text-4xl font-semibold text-muted-foreground mt-3"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.9, duration: 0.6 }}
+              >
+                {['AI Analysis', 'Live Classes', 'Academy Management'].map((text, i) => (
+                  <motion.span
+                    key={text}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 1.0 + i * 0.2, duration: 0.4 }}
+                  >
+                    {i > 0 && <span className="text-primary mx-2">·</span>}
+                    {text}
+                  </motion.span>
+                ))}
+              </motion.span>
             </h1>
 
-            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+            <motion.p
+              className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 1.4, duration: 0.5 }}
+            >
               Run your entire handwriting academy from one platform — AI-powered stroke analysis, 
               course management, live classes, payments, CRM, multi-org support & custom font generation.
-            </p>
+            </motion.p>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <motion.div
+              className="flex flex-col sm:flex-row items-center justify-center gap-4"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 1.6, duration: 0.5 }}
+            >
               <Link to="/signup">
-                <Button size="lg" className="bg-gradient-to-r from-primary to-accent hover:opacity-90 text-lg px-8 h-14">
+                <Button size="lg" className="bg-gradient-to-r from-primary to-accent hover:opacity-90 text-lg px-8 h-14 shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-shadow">
                   Start Free Trial <ArrowRight className="w-5 h-5 ml-2" />
                 </Button>
               </Link>
               <a href="#courses" onClick={e => smoothScroll(e, 'courses')}>
-                <Button variant="outline" size="lg" className="border-border/50 text-lg px-8 h-14">
+                <Button variant="outline" size="lg" className="border-border/50 text-lg px-8 h-14 hover:border-primary/40 transition-colors">
                   <Play className="w-5 h-5 mr-2" /> Explore Courses
                 </Button>
               </a>
-            </div>
+            </motion.div>
 
             <motion.div
               className="grid grid-cols-2 sm:grid-cols-4 gap-6 pt-12 mt-8 border-t border-border/30"
-              variants={staggerContainer}
-              initial="hidden"
-              animate="visible"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1.8, duration: 0.6 }}
             >
               {STATS.map((s, i) => {
                 const colors = ['text-primary', 'text-accent', 'text-coral', 'text-primary'];
                 return (
-                  <motion.div key={s.label} className="text-center" variants={itemVariants}>
-                    <p className={`text-3xl md:text-4xl font-bold ${colors[i]}`}>{s.value}</p>
+                  <motion.div
+                    key={s.label}
+                    className="text-center"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 2.0 + i * 0.15, duration: 0.4 }}
+                  >
+                    <p className={`text-3xl md:text-4xl font-bold ${colors[i]}`} style={{ textShadow: '0 0 30px currentColor' }}>{s.value}</p>
                     <p className="text-sm text-muted-foreground mt-1">{s.label}</p>
                   </motion.div>
                 );
