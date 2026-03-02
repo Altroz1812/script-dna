@@ -444,42 +444,82 @@ export default function LandingPage() {
             <h2 className="text-3xl md:text-5xl font-bold">Choose Your <span className="text-gradient">Learning Path</span></h2>
             <p className="text-muted-foreground mt-4 max-w-2xl mx-auto">From beginner to calligrapher — find the perfect course.</p>
           </div>
-          <motion.div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6" variants={staggerContainer} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }}>
-            {courses.map(c => {
-              const inCart = isInCart(c.id);
-              return (
-                <motion.div key={c.id} variants={itemVariants} className={`relative rounded-xl border overflow-hidden transition-all duration-300 ${inCart ? 'border-accent/60 bg-accent/5 shadow-lg shadow-accent/10' : 'border-border/40 bg-card/60 hover:border-primary/40'}`}>
-                  <div className="p-6 space-y-4">
-                    <div className="flex items-start justify-between">
-                      <Badge variant="secondary" className="text-xs">{c.language} · {c.writing_style}</Badge>
-                      <Badge variant="outline" className="text-xs">{c.grade_level}</Badge>
-                    </div>
-                    <h3 className="font-bold text-lg">{c.name}</h3>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{c.description}</p>
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {c.duration_days} days</span>
-                      <span className="flex items-center gap-1"><BookOpen className="w-3.5 h-3.5" /> {c.total_hours} hrs</span>
-                    </div>
-                    <div className="flex items-end justify-between pt-2 border-t border-border/30">
-                      <div>
-                        <p className="text-2xl font-bold">₹{c.fee.toLocaleString()}</p>
-                        <p className="text-xs text-muted-foreground">one-time</p>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant={inCart ? 'outline' : 'default'}
-                        className={inCart ? 'border-accent text-accent hover:bg-accent/10' : 'bg-gradient-to-r from-primary to-accent hover:opacity-90'}
-                        onClick={() => toggleCart(c)}
-                      >
-                        {inCart ? <><Check className="w-4 h-4 mr-1" /> In Cart</> : <><ShoppingCart className="w-4 h-4 mr-1" /> Add to Cart</>}
-                      </Button>
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </motion.div>
         </div>
+
+        {/* Auto-scrolling course carousel */}
+        {courses.length > 0 ? (
+          <div className="relative overflow-hidden">
+            {/* Fade edges */}
+            <div className="absolute left-0 top-0 bottom-0 w-24 bg-gradient-to-r from-background to-transparent z-10 pointer-events-none" />
+            <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none" />
+
+            <motion.div
+              className="flex gap-6 px-8"
+              animate={{ x: ['0%', `-${(courses.length / 2) * 100 / courses.length}%`] }}
+              transition={{ x: { duration: courses.length * 4, repeat: Infinity, ease: 'linear' } }}
+              whileHover={{ animationPlayState: 'paused' }}
+              style={{ width: `${courses.length * 2 * 340 + (courses.length * 2 - 1) * 24}px` }}
+            >
+              {/* Duplicate for seamless loop */}
+              {[...courses, ...courses].map((c, idx) => {
+                const inCart = isInCart(c.id);
+                const styleColors = [
+                  'from-purple-500/20 to-purple-900/5',
+                  'from-emerald-500/20 to-emerald-900/5',
+                  'from-amber-500/20 to-amber-900/5',
+                  'from-blue-500/20 to-blue-900/5',
+                  'from-pink-500/20 to-pink-900/5',
+                  'from-cyan-500/20 to-cyan-900/5',
+                  'from-orange-500/20 to-orange-900/5',
+                  'from-indigo-500/20 to-indigo-900/5',
+                  'from-rose-500/20 to-rose-900/5',
+                ];
+                return (
+                  <motion.div
+                    key={`${c.id}-${idx}`}
+                    className={`flex-shrink-0 w-[340px] rounded-xl border overflow-hidden transition-all duration-300 bg-gradient-to-br ${styleColors[idx % styleColors.length]} ${inCart ? 'border-accent/60 shadow-lg shadow-accent/10' : 'border-border/40 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10'}`}
+                    whileHover={{ scale: 1.03, y: -8 }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                  >
+                    <div className="p-6 space-y-4">
+                      <div className="flex items-start justify-between">
+                        <Badge variant="secondary" className="text-xs">{c.language} · {c.writing_style}</Badge>
+                        <Badge variant="outline" className="text-xs">{c.grade_level}</Badge>
+                      </div>
+                      <h3 className="font-bold text-lg">{c.name}</h3>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{c.description}</p>
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {c.duration_days} days</span>
+                        <span className="flex items-center gap-1"><BookOpen className="w-3.5 h-3.5" /> {c.total_hours} hrs</span>
+                      </div>
+                      <div className="flex items-end justify-between pt-2 border-t border-border/30">
+                        <div>
+                          <p className="text-2xl font-bold">₹{c.fee.toLocaleString()}</p>
+                          <p className="text-xs text-muted-foreground">one-time</p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant={inCart ? 'outline' : 'default'}
+                          className={inCart ? 'border-accent text-accent hover:bg-accent/10' : 'bg-gradient-to-r from-primary to-accent hover:opacity-90'}
+                          onClick={() => toggleCart(c)}
+                        >
+                          {inCart ? <><Check className="w-4 h-4 mr-1" /> In Cart</> : <><ShoppingCart className="w-4 h-4 mr-1" /> Add to Cart</>}
+                        </Button>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </motion.div>
+          </div>
+        ) : (
+          <div className="container mx-auto px-4">
+            <div className="text-center py-12 text-muted-foreground">
+              <BookOpen className="w-12 h-12 mx-auto mb-4 opacity-30" />
+              <p>Loading courses...</p>
+            </div>
+          </div>
+        )}
       </AnimatedSection>
 
       <AnimatedSection id="testimonials" className="py-24 bg-card/30">
