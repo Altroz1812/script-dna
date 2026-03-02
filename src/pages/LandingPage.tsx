@@ -194,11 +194,40 @@ export default function LandingPage() {
       {/* HERO SECTION */}
       <section className="relative min-h-screen flex items-center overflow-hidden">
         <div className="absolute inset-0">
-          <video autoPlay muted loop playsInline className="w-full h-full object-cover opacity-30">
+          <video autoPlay muted loop playsInline className="w-full h-full object-cover opacity-40">
             <source src={heroVideo} type="video/mp4" />
           </video>
-          <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/70 to-background" />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/30 via-background/60 to-background" />
           <div className="absolute inset-0" style={{ background: 'var(--gradient-glow)' }} />
+        </div>
+
+        {/* Floating letters animation */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          {['A', 'B', 'C', 'a', 'b', 'c', 'D', 'e', 'f', 'G', 'H', 'k'].map((letter, i) => (
+            <motion.span
+              key={i}
+              className="absolute text-primary/20 font-display font-bold select-none"
+              style={{
+                left: `${8 + (i * 7.5) % 85}%`,
+                bottom: '-10%',
+                fontSize: `${24 + (i % 4) * 12}px`,
+              }}
+              animate={{
+                y: [0, -800 - Math.random() * 400],
+                opacity: [0, 0.4, 0.2, 0],
+                rotate: [0, (i % 2 === 0 ? 1 : -1) * (10 + Math.random() * 20)],
+                x: [0, (i % 2 === 0 ? 1 : -1) * (20 + Math.random() * 40)],
+              }}
+              transition={{
+                duration: 8 + Math.random() * 6,
+                repeat: Infinity,
+                delay: i * 1.2,
+                ease: 'easeOut',
+              }}
+            >
+              {letter}
+            </motion.span>
+          ))}
         </div>
 
         <div className="relative container mx-auto px-4 pt-24 pb-16">
