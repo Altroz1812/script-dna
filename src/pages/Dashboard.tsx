@@ -9,6 +9,7 @@ import { MagneticButton } from '@/components/ui/magnetic-button';
 import { AnimatedCounter } from '@/components/ui/animated-counter';
 import { MorphingBlob } from '@/components/ui/morphing-blob';
 import { DashboardCardsSkeleton } from '@/components/ui/loading-skeletons';
+import { EnrollmentTrendsChart } from '@/components/dashboard/EnrollmentTrendsChart';
 import {
   Users, BookOpen, Layers, Building2, UserPlus,
   CreditCard, GraduationCap, UserCheck, ArrowRight, Sparkles,
@@ -215,9 +216,11 @@ export default function Dashboard() {
           </motion.div>
         )}
 
+        {/* Enrollment Trends Chart */}
+        {!isLoading && <EnrollmentTrendsChart />}
+
         {/* Quick Access Cards */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6, duration: 0.5 }}
           className="grid grid-cols-1 md:grid-cols-3 gap-4"
