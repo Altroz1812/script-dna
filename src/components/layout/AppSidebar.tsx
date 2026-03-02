@@ -30,17 +30,17 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="border-b border-sidebar-border px-3 py-4">
+      <SidebarHeader className="border-b border-white/[0.06] px-3 py-4">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center shrink-0">
-            <GraduationCap className="w-4 h-4 text-primary-foreground" />
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary via-coral to-accent flex items-center justify-center shrink-0 shadow-lg shadow-primary/20">
+            <GraduationCap className="w-4.5 h-4.5 text-white" />
           </div>
           {!collapsed && (
             <div className="overflow-hidden">
-              <h2 className="font-semibold text-sm text-sidebar-foreground truncate">
+              <h2 className="font-semibold text-sm text-gradient font-display truncate">
                 Live Classroom
               </h2>
-              <p className="text-xs text-muted-foreground truncate">
+              <p className="text-[11px] text-muted-foreground truncate">
                 {ROLE_LABELS[role]}
               </p>
             </div>
@@ -48,40 +48,52 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
 
-      <SidebarContent>
+      <SidebarContent className="py-2">
         {navGroups.map((group) => (
           <SidebarGroup key={group.label}>
-            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+            <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-medium">
+              {group.label}
+            </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {group.items.map((item) => (
-                  <SidebarMenuItem key={item.url}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={location.pathname === item.url}
-                      tooltip={item.title}
-                    >
-                      <NavLink
-                        to={item.url}
-                        end
-                        className="hover:bg-sidebar-accent/50"
-                        activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                {group.items.map((item) => {
+                  const isActive = location.pathname === item.url;
+                  return (
+                    <SidebarMenuItem key={item.url}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive}
+                        tooltip={item.title}
                       >
-                        <item.icon className="h-4 w-4 shrink-0" />
-                        {!collapsed && <span>{item.title}</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+                        <NavLink
+                          to={item.url}
+                          end
+                          className={`relative transition-all duration-200 rounded-lg ${
+                            isActive
+                              ? 'bg-primary/10 text-primary font-medium'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-white/[0.04]'
+                          }`}
+                          activeClassName=""
+                        >
+                          {isActive && (
+                            <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-gradient-to-b from-primary to-coral" />
+                          )}
+                          <item.icon className="h-4 w-4 shrink-0" />
+                          {!collapsed && <span>{item.title}</span>}
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
         ))}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border p-3">
+      <SidebarFooter className="border-t border-white/[0.06] p-3">
         {!collapsed && (
-          <p className="text-xs text-muted-foreground text-center">
+          <p className="text-[10px] text-muted-foreground/50 text-center">
             © 2026 Live Classroom
           </p>
         )}
