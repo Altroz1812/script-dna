@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Session } from '@supabase/supabase-js';
-import type { UserProfile } from '@/types/roles';
+import { supabase } from '@/integrations/supabase/client';
+import type { UserProfile, AppRole } from '@/types/roles';
 
 interface DashboardContext {
   stats: Record<string, number>;
@@ -17,7 +18,6 @@ interface AuthContextValue {
   refreshProfile: () => Promise<void>;
 }
 
-// Use a global singleton to survive HMR module duplication
 const AUTH_CTX_KEY = '__auth_context__';
 if (!(window as any)[AUTH_CTX_KEY]) {
   (window as any)[AUTH_CTX_KEY] = createContext<AuthContextValue | null>(null);
@@ -30,28 +30,88 @@ export function useAuth() {
   return ctx;
 }
 
-// Mock profile that grants superadmin access to all modules
-const mockProfile: UserProfile = {
-  id: 'f07853ff-3fdc-401c-9424-3a6814a89ea4',
-  email: 'superadmin@demo.com',
-  displayName: 'Super Admin',
-  avatarUrl: null,
-  organizationId: null,
-  role: 'superadmin',
-};
+async function fetchProfile(userId: string): Promise<UserProfile | null> {
+  const [profileRes, roleRes] = await Promise.all([
+    supabase.from('profiles').select('*').eq('user_id', userId).single(),
+    supabase.from('user_roles').select('role').eq('user_id', userId).single(),
+  ]);
 
-// Fake session object so ProtectedRoute sees a truthy session
-const mockSession = { access_token: 'dev-bypass', refresh_token: '', user: { id: 'f07853ff-3fdc-401c-9424-3a6814a89ea4', email: 'superadmin@demo.com' } } as unknown as Session;
+  if (profileRes.error || !profileRes.data) return null;
+
+  const p = profileRes.data;
+  return {
+    id: p.user_id,
+    email: p.email ?? '',
+    displayName: p.display_name ?? p.email ?? '',
+    avatarUrl: p.avatar_url ?? undefined,
+    organizationId: p.organization_id ?? undefined,
+    role: (roleRes.data?.role as AppRole) ?? 'student',
+  };
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [session] = useState<Session | null>(mockSession);
-  const [profile] = useState<UserProfile | null>(mockProfile);
+  const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
   const [dashboardContext] = useState<DashboardContext | null>({ stats: {} });
 
-  const noop = async () => {};
+  const loadProfile = useCallback(async (userId: string) => {
+    const p = await fetchProfile(userId);
+    setProfile(p);
+  }, []);
+
+  useEffect(() => {
+    // Set up listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, sess) => {
+      setSession(sess);
+      if (sess?.user) {
+        // Use setTimeout to avoid Supabase deadlock
+        setTimeout(() => loadProfile(sess.user.id), 0);
+      } else {
+        setProfile(null);
+      }
+      setLoading(false);
+    });
+
+    // Then check existing session
+    supabase.auth.getSession().then(({ data: { session: sess } }) => {
+      setSession(sess);
+      if (sess?.user) {
+        loadProfile(sess.user.id);
+      }
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [loadProfile]);
+
+  const signIn = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+  };
+
+  const signUp = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: window.location.origin },
+    });
+    if (error) throw error;
+  };
+
+  const signOut = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+    setSession(null);
+    setProfile(null);
+  };
+
+  const refreshProfile = async () => {
+    if (session?.user) await loadProfile(session.user.id);
+  };
 
   return (
-    <AuthContext.Provider value={{ session, profile, dashboardContext, loading: false, signIn: noop, signUp: noop, signOut: noop, refreshProfile: noop }}>
+    <AuthContext.Provider value={{ session, profile, dashboardContext, loading, signIn, signUp, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
