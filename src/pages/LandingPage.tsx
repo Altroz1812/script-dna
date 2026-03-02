@@ -477,7 +477,7 @@ export default function LandingPage() {
                 return (
                   <motion.div
                     key={`${c.id}-${idx}`}
-                    className={`flex-shrink-0 w-[340px] rounded-xl border overflow-hidden transition-all duration-300 bg-gradient-to-br ${styleColors[idx % styleColors.length]} ${inCart ? 'border-accent/60 shadow-lg shadow-accent/10' : 'border-border/40 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10'}`}
+                    className={`flex-shrink-0 w-[300px] sm:w-[340px] rounded-xl border overflow-hidden transition-all duration-300 bg-gradient-to-br ${styleColors[idx % styleColors.length]} ${inCart ? 'border-accent/60 shadow-lg shadow-accent/10' : 'border-border/40 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10'}`}
                     whileHover={{ scale: 1.03, y: -8 }}
                     transition={{ type: 'spring', stiffness: 300, damping: 20 }}
                   >
