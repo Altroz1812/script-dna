@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { motion, useInView } from 'framer-motion';
-import { useRef } from 'react';
+import { motion, useScroll, useTransform, useInView } from 'framer-motion';
 import {
   PenTool, Play, ShoppingCart, Star, Users, BookOpen, BarChart3,
   Video, Globe, Award, ChevronRight, Check, ArrowRight, Menu, X,
@@ -81,6 +80,14 @@ export default function LandingPage() {
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
   const [courses, setCourses] = useState<CourseDisplay[]>([]);
+
+  // Parallax scroll
+  const heroRef = useRef<HTMLElement>(null);
+  const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
+  const videoY = useTransform(scrollYProgress, [0, 1], ['0%', '30%']);
+  const videoScale = useTransform(scrollYProgress, [0, 1], [1, 1.15]);
+  const lettersY = useTransform(scrollYProgress, [0, 1], ['0%', '50%']);
+  const contentY = useTransform(scrollYProgress, [0, 1], ['0%', '15%']);
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 20);
@@ -192,17 +199,18 @@ export default function LandingPage() {
       )}
 
       {/* HERO SECTION */}
-      <section className="relative min-h-screen flex items-center overflow-hidden">
-        <div className="absolute inset-0">
+      <section ref={heroRef} className="relative min-h-screen flex items-center overflow-hidden">
+        {/* Video — slowest parallax layer */}
+        <motion.div className="absolute inset-0" style={{ y: videoY, scale: videoScale }}>
           <video autoPlay muted loop playsInline className="w-full h-full object-cover opacity-40">
             <source src={heroVideo} type="video/mp4" />
           </video>
           <div className="absolute inset-0 bg-gradient-to-b from-background/30 via-background/60 to-background" />
           <div className="absolute inset-0" style={{ background: 'var(--gradient-glow)' }} />
-        </div>
+        </motion.div>
 
-        {/* Floating letters animation */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        {/* Floating letters — medium parallax layer */}
+        <motion.div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ y: lettersY }}>
           {['A', 'B', 'C', 'a', 'b', 'c', 'D', 'e', 'f', 'G', 'H', 'k'].map((letter, i) => (
             <motion.span
               key={i}
@@ -228,9 +236,10 @@ export default function LandingPage() {
               {letter}
             </motion.span>
           ))}
-        </div>
+        </motion.div>
 
-        <div className="relative container mx-auto px-4 pt-24 pb-16">
+        {/* Content — fastest layer (stays still / minimal shift) */}
+        <motion.div className="relative container mx-auto px-4 pt-24 pb-16" style={{ y: contentY }}>
           <motion.div
             className="max-w-3xl mx-auto text-center space-y-8"
             initial={{ opacity: 0, y: 30 }}
@@ -282,7 +291,7 @@ export default function LandingPage() {
               })}
             </motion.div>
           </motion.div>
-        </div>
+        </motion.div>
       </section>
 
       <AnimatedSection id="features" className="py-24 bg-card/30">
