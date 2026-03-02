@@ -4,7 +4,8 @@ import { motion, useScroll, useTransform, useInView } from 'framer-motion';
 import {
   PenTool, Play, ShoppingCart, Star, Users, BookOpen, BarChart3,
   Video, Globe, Award, ChevronRight, Check, ArrowRight, Menu, X,
-  Sparkles, Zap, Shield, Clock
+  Sparkles, Zap, Shield, Clock, GraduationCap, CalendarDays,
+  CreditCard, Building2, UserCheck, FileText, BrainCircuit, Layers
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,12 +16,22 @@ import heroVideo from '@/assets/hero-video.mp4';
 type CourseDisplay = CartItem & { language: string | null; writing_style: string | null; total_hours: number | null };
 
 const FEATURES = [
-  { icon: PenTool, title: 'AI Stroke Analysis', desc: 'Real-time pressure, slant, and rhythm analysis powered by machine learning.' },
-  { icon: Video, title: 'Live Online Classes', desc: 'Interactive sessions with expert teachers via integrated video conferencing.' },
-  { icon: Sparkles, title: 'Pattern Discovery', desc: 'AI discovers your unique handwriting patterns and builds custom improvement plans.' },
-  { icon: BarChart3, title: 'Progress Tracking', desc: 'Detailed analytics dashboards showing improvement over time.' },
-  { icon: Globe, title: 'Multi-Language Support', desc: 'Courses in English, Hindi, Kannada, and Calligraphy styles.' },
-  { icon: Shield, title: 'Font Compilation', desc: 'Turn your handwriting into a personal TrueType font file.' },
+  { icon: BrainCircuit, title: 'AI Stroke Analysis', desc: 'Real-time pressure, slant & rhythm analysis that builds personalized improvement plans.', color: 'text-purple-400' },
+  { icon: Video, title: 'Live Online Classes', desc: 'Interactive sessions with expert teachers via integrated video — schedule, record & replay.', color: 'text-blue-400' },
+  { icon: GraduationCap, title: 'Course & Batch Management', desc: 'Create multi-language courses, organize batches, set capacities & assign teachers.', color: 'text-emerald-400' },
+  { icon: CalendarDays, title: 'Schedule & Attendance', desc: 'Weekly timetables, per-class attendance tracking with present/absent/late status.', color: 'text-amber-400' },
+  { icon: CreditCard, title: 'Payments & Payroll', desc: 'Collect fees, track payment status, manage teacher payroll — all in one dashboard.', color: 'text-pink-400' },
+  { icon: Building2, title: 'Multi-Organization', desc: 'Run multiple centers or franchise locations under one account with role-based access.', color: 'text-cyan-400' },
+  { icon: UserCheck, title: 'Lead Management (CRM)', desc: 'Capture leads, track follow-ups, convert to enrolled students with a built-in pipeline.', color: 'text-orange-400' },
+  { icon: PenTool, title: 'Custom Font Generation', desc: 'Turn any student\'s handwriting into a personal TrueType font — train characters & compile.', color: 'text-primary' },
+  { icon: BarChart3, title: 'Reports & Analytics', desc: 'Enrollment trends, revenue reports, attendance analytics & role-based dashboards.', color: 'text-green-400' },
+];
+
+const CAPABILITY_PILLARS = [
+  { icon: Layers, label: 'Academy Management', items: ['Courses & Batches', 'Schedules & Attendance', 'Materials Library', 'Multi-Organization'] },
+  { icon: BrainCircuit, label: 'AI & Technology', items: ['Stroke Analysis', 'Pattern Discovery', 'Font Compilation', 'Writing Assistance'] },
+  { icon: Users, label: 'People & CRM', items: ['Student Profiles', 'Lead Pipeline', 'Role-Based Access', 'Notifications'] },
+  { icon: BarChart3, label: 'Finance & Reports', items: ['Fee Collection', 'Teacher Payroll', 'Revenue Analytics', 'Enrollment Trends'] },
 ];
 
 const STATS = [
@@ -247,18 +258,18 @@ export default function LandingPage() {
             transition={{ duration: 0.7, ease: 'easeOut' as const }}
           >
             <Badge variant="outline" className="border-primary/40 text-primary px-4 py-1.5 text-sm">
-              <Sparkles className="w-3.5 h-3.5 mr-1.5" /> AI-Powered Handwriting Education
+              <Sparkles className="w-3.5 h-3.5 mr-1.5" /> Complete Handwriting Academy Platform
             </Badge>
 
             <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tight leading-[1.1]">
-              Master Beautiful
-              <span className="block text-gradient">Handwriting</span>
-              <span className="block text-2xl sm:text-3xl md:text-4xl font-semibold text-muted-foreground mt-3">with AI & Live Classes</span>
+              The All-in-One
+              <span className="block text-gradient">Handwriting SaaS</span>
+              <span className="block text-2xl sm:text-3xl md:text-4xl font-semibold text-muted-foreground mt-3">AI Analysis · Live Classes · Academy Management</span>
             </h1>
 
             <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              The world's first AI-powered handwriting platform. Real-time stroke analysis, 
-              personalized coaching, live classes, and custom font generation — all in one place.
+              Run your entire handwriting academy from one platform — AI-powered stroke analysis, 
+              course management, live classes, payments, CRM, multi-org support & custom font generation.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -297,18 +308,37 @@ export default function LandingPage() {
       <AnimatedSection id="features" className="py-24 bg-card/30">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
-            <Badge variant="outline" className="border-accent/40 text-accent mb-4">Features</Badge>
-            <h2 className="text-3xl md:text-5xl font-bold">Everything You Need to <span className="text-gradient">Write Better</span></h2>
-            <p className="text-muted-foreground mt-4 max-w-2xl mx-auto">Combining cutting-edge AI with proven teaching methods.</p>
+            <Badge variant="outline" className="border-accent/40 text-accent mb-4">Platform Capabilities</Badge>
+            <h2 className="text-3xl md:text-5xl font-bold">Everything to Run Your <span className="text-gradient">Handwriting Academy</span></h2>
+            <p className="text-muted-foreground mt-4 max-w-2xl mx-auto">From AI stroke analysis to payments & payroll — one platform, zero compromises.</p>
           </div>
           <motion.div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6" variants={staggerContainer} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }}>
             {FEATURES.map(f => (
               <motion.div key={f.title} variants={itemVariants} className="group p-6 rounded-xl bg-card/60 border border-border/40 hover:border-primary/40 transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 gradient-border relative">
                 <div className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center mb-4 group-hover:bg-primary/25 transition-colors shadow-sm shadow-primary/10">
-                  <f.icon className="w-6 h-6 text-primary" />
+                  <f.icon className={`w-6 h-6 ${f.color}`} />
                 </div>
                 <h3 className="font-semibold text-lg mb-2">{f.title}</h3>
                 <p className="text-muted-foreground text-sm leading-relaxed">{f.desc}</p>
+              </motion.div>
+            ))}
+          </motion.div>
+
+          {/* Capability Pillars */}
+          <motion.div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-16" variants={staggerContainer} initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-60px' }}>
+            {CAPABILITY_PILLARS.map(p => (
+              <motion.div key={p.label} variants={itemVariants} className="p-6 rounded-xl bg-gradient-to-br from-primary/10 via-card to-accent/5 border border-border/40 text-center">
+                <div className="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-4">
+                  <p.icon className="w-7 h-7 text-primary" />
+                </div>
+                <h4 className="font-bold mb-3">{p.label}</h4>
+                <ul className="space-y-1.5 text-sm text-muted-foreground">
+                  {p.items.map(item => (
+                    <li key={item} className="flex items-center justify-center gap-1.5">
+                      <Check className="w-3.5 h-3.5 text-primary/70" /> {item}
+                    </li>
+                  ))}
+                </ul>
               </motion.div>
             ))}
           </motion.div>
