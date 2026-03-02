@@ -6,13 +6,21 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+const DEMO_ORGS = [
+  { name: "Sunrise Academy", slug: "sunrise-academy" },
+  { name: "Bright Future Institute", slug: "bright-future" },
+];
+
 const DEMO_USERS = [
-  { email: "superadmin@demo.com", password: "Demo1234!", role: "superadmin", name: "Super Admin" },
-  { email: "admin@demo.com", password: "Demo1234!", role: "admin", name: "Admin User" },
-  { email: "support@demo.com", password: "Demo1234!", role: "support", name: "Support User" },
-  { email: "teacher@demo.com", password: "Demo1234!", role: "teacher", name: "Teacher User" },
-  { email: "student@demo.com", password: "Demo1234!", role: "student", name: "Student User" },
-  { email: "parent@demo.com", password: "Demo1234!", role: "parent", name: "Parent User" },
+  // Superadmin – no org (platform-level)
+  { email: "superadmin@demo.com", password: "Demo1234!", role: "superadmin", name: "Super Admin", org: null },
+  // Sunrise Academy staff & students
+  { email: "admin@demo.com", password: "Demo1234!", role: "admin", name: "Admin User", org: "sunrise-academy" },
+  { email: "teacher@demo.com", password: "Demo1234!", role: "teacher", name: "Teacher User", org: "sunrise-academy" },
+  { email: "student@demo.com", password: "Demo1234!", role: "student", name: "Student User", org: "sunrise-academy" },
+  { email: "parent@demo.com", password: "Demo1234!", role: "parent", name: "Parent User", org: "sunrise-academy" },
+  // Bright Future Institute
+  { email: "support@demo.com", password: "Demo1234!", role: "support", name: "Support User", org: "bright-future" },
 ];
 
 Deno.serve(async (req) => {
@@ -26,10 +34,39 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const results = [];
+    const results: any[] = [];
 
+    // 1. Upsert demo organizations
+    const orgIdMap: Record<string, string> = {};
+    for (const org of DEMO_ORGS) {
+      const { data: existing } = await supabaseAdmin
+        .from("organizations")
+        .select("id")
+        .eq("slug", org.slug)
+        .maybeSingle();
+
+      if (existing) {
+        orgIdMap[org.slug] = existing.id;
+        results.push({ org: org.name, status: "exists" });
+      } else {
+        const { data: created, error } = await supabaseAdmin
+          .from("organizations")
+          .insert({ name: org.name, slug: org.slug })
+          .select("id")
+          .single();
+        if (error) {
+          results.push({ org: org.name, status: "error", error: error.message });
+          continue;
+        }
+        orgIdMap[org.slug] = created.id;
+        results.push({ org: org.name, status: "created" });
+      }
+    }
+
+    // 2. Create users, assign roles & org memberships
     for (const user of DEMO_USERS) {
-      // Create auth user (auto-confirms via admin API)
+      let userId: string | null = null;
+
       const { data: authData, error: authError } =
         await supabaseAdmin.auth.admin.createUser({
           email: user.email,
@@ -39,38 +76,61 @@ Deno.serve(async (req) => {
         });
 
       if (authError) {
-        // User might already exist
         if (authError.message?.includes("already been registered")) {
-          // Get existing user
           const { data: listData } = await supabaseAdmin.auth.admin.listUsers();
           const existing = listData?.users?.find((u: any) => u.email === user.email);
           if (existing) {
-            // Update role
+            userId = existing.id;
             await supabaseAdmin
               .from("user_roles")
               .update({ role: user.role })
-              .eq("user_id", existing.id);
+              .eq("user_id", userId);
             results.push({ email: user.email, status: "exists, role updated" });
           } else {
             results.push({ email: user.email, status: "error", error: authError.message });
+            continue;
           }
+        } else {
+          results.push({ email: user.email, status: "error", error: authError.message });
           continue;
         }
-        results.push({ email: user.email, status: "error", error: authError.message });
-        continue;
+      } else {
+        userId = authData.user.id;
+        if (user.role !== "student") {
+          await supabaseAdmin
+            .from("user_roles")
+            .update({ role: user.role })
+            .eq("user_id", userId);
+        }
+        results.push({ email: user.email, status: "created", role: user.role });
       }
 
-      const userId = authData.user.id;
+      // Assign org membership + update profile.organization_id
+      if (userId && user.org && orgIdMap[user.org]) {
+        const orgId = orgIdMap[user.org];
 
-      // Update role (trigger creates default 'student', we update to correct role)
-      if (user.role !== "student") {
+        // Upsert org membership
+        const { data: memberExists } = await supabaseAdmin
+          .from("organization_members")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("organization_id", orgId)
+          .maybeSingle();
+
+        if (!memberExists) {
+          await supabaseAdmin
+            .from("organization_members")
+            .insert({ user_id: userId, organization_id: orgId });
+        }
+
+        // Update profile with org
         await supabaseAdmin
-          .from("user_roles")
-          .update({ role: user.role })
+          .from("profiles")
+          .update({ organization_id: orgId })
           .eq("user_id", userId);
-      }
 
-      results.push({ email: user.email, status: "created", role: user.role });
+        results.push({ email: user.email, org: user.org, status: "org_assigned" });
+      }
     }
 
     return new Response(JSON.stringify({ success: true, results }), {

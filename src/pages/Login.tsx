@@ -9,13 +9,13 @@ import { GraduationCap, Loader2, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ROLE_LABELS, type AppRole } from '@/types/roles';
 
-const DEMO_ACCOUNTS: { email: string; password: string; role: AppRole; name: string }[] = [
-  { email: 'superadmin@demo.com', password: 'Demo1234!', role: 'superadmin', name: 'Super Admin' },
-  { email: 'admin@demo.com', password: 'Demo1234!', role: 'admin', name: 'Admin' },
-  { email: 'teacher@demo.com', password: 'Demo1234!', role: 'teacher', name: 'Teacher' },
-  { email: 'student@demo.com', password: 'Demo1234!', role: 'student', name: 'Student' },
-  { email: 'support@demo.com', password: 'Demo1234!', role: 'support', name: 'Support' },
-  { email: 'parent@demo.com', password: 'Demo1234!', role: 'parent', name: 'Parent' },
+const DEMO_ACCOUNTS: { email: string; password: string; role: AppRole; name: string; org?: string }[] = [
+  { email: 'superadmin@demo.com', password: 'Demo1234!', role: 'superadmin', name: 'Super Admin', org: 'Platform' },
+  { email: 'admin@demo.com', password: 'Demo1234!', role: 'admin', name: 'Admin', org: 'Sunrise Academy' },
+  { email: 'teacher@demo.com', password: 'Demo1234!', role: 'teacher', name: 'Teacher', org: 'Sunrise Academy' },
+  { email: 'student@demo.com', password: 'Demo1234!', role: 'student', name: 'Student', org: 'Sunrise Academy' },
+  { email: 'support@demo.com', password: 'Demo1234!', role: 'support', name: 'Support', org: 'Bright Future' },
+  { email: 'parent@demo.com', password: 'Demo1234!', role: 'parent', name: 'Parent', org: 'Sunrise Academy' },
 ];
 
 function getErrorMessage(err: any): string {
@@ -125,7 +125,7 @@ export default function Login() {
                 )}
                 <div className="flex flex-col items-start">
                   <span className="text-xs font-medium">{account.name}</span>
-                  <span className="text-[10px] text-muted-foreground">{ROLE_LABELS[account.role]}</span>
+                  <span className="text-[10px] text-muted-foreground">{ROLE_LABELS[account.role]}{account.org ? ` · ${account.org}` : ''}</span>
                 </div>
               </Button>
             ))}
