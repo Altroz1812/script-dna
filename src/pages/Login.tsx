@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { GraduationCap, Loader2, User } from 'lucide-react';
+import { GraduationCap, Loader2, User, ShieldAlert } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ROLE_LABELS, type AppRole } from '@/types/roles';
+import { checkRateLimit, resetRateLimit, formatRetryTime, sanitizeEmail } from '@/lib/security';
 import { MorphingBlob } from '@/components/ui/morphing-blob';
 
 const DEMO_ACCOUNTS: { email: string; password: string; role: AppRole; name: string; org?: string }[] = [
@@ -56,9 +57,27 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
+
+    const cleanEmail = sanitizeEmail(email);
+    if (!cleanEmail) {
+      toast({ title: 'Invalid email', description: 'Please enter a valid email address.', variant: 'destructive' });
+      return;
+    }
+
+    const rateCheck = checkRateLimit(`login:${cleanEmail}`);
+    if (!rateCheck.allowed) {
+      toast({
+        title: 'Too many attempts',
+        description: `Account temporarily locked. Try again in ${formatRetryTime(rateCheck.retryAfterMs)}.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setLoading(true);
     try {
-      await signIn(email, password);
+      await signIn(cleanEmail, password);
+      resetRateLimit(`login:${cleanEmail}`);
     } catch (err: any) {
       toast({ title: 'Sign in failed', description: getErrorMessage(err), variant: 'destructive' });
     } finally {
