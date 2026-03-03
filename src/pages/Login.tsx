@@ -130,7 +130,7 @@ export default function Login() {
               <GraduationCap className="w-7 h-7 text-white relative z-10" />
             </motion.div>
             <CardTitle className="text-xl font-display">Welcome back</CardTitle>
-            <CardDescription>Sign in to Live Classroom</CardDescription>
+            <CardDescription>Sign in to Aura Pen</CardDescription>
           </CardHeader>
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">

@@ -38,7 +38,7 @@ export function AppSidebar() {
           {!collapsed && (
             <div className="overflow-hidden">
               <h2 className="font-semibold text-sm text-gradient font-display truncate">
-                Live Classroom
+                Aura Pen
               </h2>
               <p className="text-[11px] text-muted-foreground truncate">
                 {ROLE_LABELS[role]}
@@ -97,7 +97,7 @@ export function AppSidebar() {
       <SidebarFooter className="border-t border-white/[0.08] p-3">
         {!collapsed && (
           <p className="text-[10px] text-muted-foreground/50 text-center">
-            © 2026 Live Classroom
+            © 2026 Aura Pen
           </p>
         )}
       </SidebarFooter>
