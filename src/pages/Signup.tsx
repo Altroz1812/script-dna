@@ -67,7 +67,7 @@ export default function Signup() {
             <GraduationCap className="w-6 h-6 text-primary-foreground" />
           </div>
           <CardTitle className="text-xl">Create an account</CardTitle>
-          <CardDescription>Get started with Live Classroom</CardDescription>
+          <CardDescription>Get started with Aura Pen</CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">

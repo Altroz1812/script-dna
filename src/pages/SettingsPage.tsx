@@ -12,7 +12,7 @@ export default function SettingsPage() {
         <Card>
           <CardHeader><CardTitle className="text-lg">Application</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex justify-between"><span className="text-sm text-muted-foreground">App Name</span><span className="text-sm font-medium">Live Classroom SaaS</span></div>
+            <div className="flex justify-between"><span className="text-sm text-muted-foreground">App Name</span><span className="text-sm font-medium">Aura Pen</span></div>
             <div className="flex justify-between"><span className="text-sm text-muted-foreground">Version</span><span className="text-sm font-medium">1.0.0</span></div>
             <div className="flex justify-between"><span className="text-sm text-muted-foreground">Environment</span><Badge variant="secondary">Development</Badge></div>
           </CardContent>

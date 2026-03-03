@@ -127,7 +127,7 @@ export default function LandingPage() {
             <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
               <PenTool className="w-4.5 h-4.5 text-primary-foreground" />
             </div>
-            <span className="font-bold text-lg tracking-tight">WriteGenius</span>
+            <span className="font-bold text-lg tracking-tight">Aura Pen</span>
           </Link>
 
           <div className="hidden md:flex items-center gap-8 text-sm">
@@ -615,7 +615,7 @@ export default function LandingPage() {
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
                   <PenTool className="w-4 h-4 text-primary-foreground" />
                 </div>
-                <span className="font-bold">WriteGenius</span>
+                <span className="font-bold">Aura Pen</span>
               </div>
               <p className="text-sm text-muted-foreground">AI-powered handwriting education for the next generation.</p>
             </div>
@@ -645,7 +645,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="border-t border-border/30 mt-8 pt-8 text-center text-xs text-muted-foreground">
-            © 2026 WriteGenius. All rights reserved.
+            © 2026 Aura Pen. All rights reserved.
           </div>
         </div>
       </footer>
