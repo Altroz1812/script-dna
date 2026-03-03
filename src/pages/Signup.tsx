@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { GraduationCap, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { PasswordStrengthMeter } from '@/components/auth/PasswordStrengthMeter';
+import { sanitizeEmail, checkRateLimit, formatRetryTime, checkPasswordStrength } from '@/lib/security';
 
 function getErrorMessage(err: any): string {
   const msg = err?.message ?? '';
@@ -27,9 +29,28 @@ export default function Signup() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
+
+    const cleanEmail = sanitizeEmail(email);
+    if (!cleanEmail) {
+      toast({ title: 'Invalid email', description: 'Please enter a valid email address.', variant: 'destructive' });
+      return;
+    }
+
+    const strength = checkPasswordStrength(password);
+    if (strength.score < 2) {
+      toast({ title: 'Weak password', description: 'Please choose a stronger password.', variant: 'destructive' });
+      return;
+    }
+
+    const rateCheck = checkRateLimit(`signup:${cleanEmail}`);
+    if (!rateCheck.allowed) {
+      toast({ title: 'Too many attempts', description: `Try again in ${formatRetryTime(rateCheck.retryAfterMs)}.`, variant: 'destructive' });
+      return;
+    }
+
     setLoading(true);
     try {
-      await signUp(email, password);
+      await signUp(cleanEmail, password);
       toast({ title: 'Check your email', description: 'We sent you a verification link.' });
     } catch (err: any) {
       toast({ title: 'Sign up failed', description: getErrorMessage(err), variant: 'destructive' });
@@ -56,7 +77,8 @@ export default function Signup() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} autoComplete="new-password" />
+              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete="new-password" />
+              <PasswordStrengthMeter password={password} />
             </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-3">
