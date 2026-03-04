@@ -20,12 +20,35 @@ import {
 import { ROLE_LABELS } from '@/types/roles';
 
 export function AppSidebar() {
-  const { profile } = useAuth();
+  const { profile, loading } = useAuth();
   const { state } = useSidebar();
   const collapsed = state === 'collapsed';
   const location = useLocation();
 
-  const role = profile?.role ?? 'student';
+  // Don't render nav until profile is loaded to avoid defaulting to 'student'
+  if (loading || !profile) {
+    return (
+      <Sidebar collapsible="icon">
+        <SidebarHeader className="border-b border-white/[0.08] px-3 py-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary via-coral to-accent flex items-center justify-center shrink-0 shadow-lg shadow-primary/30 ring-2 ring-primary/20 animate-pulse">
+              <GraduationCap className="w-4.5 h-4.5 text-white" />
+            </div>
+          </div>
+        </SidebarHeader>
+        <SidebarContent className="py-2">
+          <div className="space-y-3 px-3 pt-2">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="h-8 rounded-lg bg-white/[0.04] animate-pulse" />
+            ))}
+          </div>
+        </SidebarContent>
+        <SidebarRail />
+      </Sidebar>
+    );
+  }
+
+  const role = profile.role;
   const navGroups = getNavigationForRole(role);
 
   return (
