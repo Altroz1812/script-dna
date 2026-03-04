@@ -98,7 +98,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4 relative overflow-hidden">
+    <div className="min-h-screen flex items-start sm:items-center justify-center bg-background p-4 py-8 sm:py-4 relative overflow-auto">
       {/* Animated grid pattern */}
       <div className="absolute inset-0 opacity-[0.04] pointer-events-none"
         style={{
