@@ -146,8 +146,8 @@ export default function LandingPage() {
                 </span>
               )}
             </button>
-            <Link to="/login">
-              <Button variant="ghost" size="sm" className="hidden sm:inline-flex">Log In</Button>
+            <Link to="/login" className="hidden sm:block">
+              <Button variant="ghost" size="sm">Log In</Button>
             </Link>
             <Link to="/signup">
               <Button size="sm" className="bg-gradient-to-r from-primary to-accent hover:opacity-90 text-primary-foreground">
@@ -166,6 +166,7 @@ export default function LandingPage() {
             <a href="#features" onClick={e => { smoothScroll(e, 'features'); setMobileMenu(false); }} className="block py-2 text-muted-foreground">Features</a>
             <a href="#courses" onClick={e => { smoothScroll(e, 'courses'); setMobileMenu(false); }} className="block py-2 text-muted-foreground">Courses</a>
             <a href="#testimonials" onClick={e => { smoothScroll(e, 'testimonials'); setMobileMenu(false); }} className="block py-2 text-muted-foreground">Reviews</a>
+            <Link to="/login" onClick={() => setMobileMenu(false)} className="block py-2 text-muted-foreground">Log In</Link>
           </div>
         )}
       </nav>
