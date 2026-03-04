@@ -815,6 +815,10 @@ export type Database = {
         Returns: boolean
       }
       recompute_dashboard_stats: { Args: never; Returns: undefined }
+      teacher_has_student: {
+        Args: { _student_user_id: string; _teacher_id: string }
+        Returns: boolean
+      }
       user_in_org: {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
