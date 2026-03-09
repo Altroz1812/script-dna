@@ -815,8 +815,16 @@ export type Database = {
         Returns: boolean
       }
       recompute_dashboard_stats: { Args: never; Returns: undefined }
+      student_in_batch: {
+        Args: { _batch_id: string; _student_id: string }
+        Returns: boolean
+      }
       teacher_has_student: {
         Args: { _student_user_id: string; _teacher_id: string }
+        Returns: boolean
+      }
+      teacher_owns_batch: {
+        Args: { _batch_id: string; _teacher_id: string }
         Returns: boolean
       }
       user_in_org: {
