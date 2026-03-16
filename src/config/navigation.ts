@@ -66,10 +66,17 @@ export const navigationConfig: NavGroup[] = [
     ],
   },
   {
+    label: 'Family',
+    items: [
+      { title: 'My Children', url: '/my-children', icon: Users, roles: ['parent'] },
+      { title: 'Child Progress', url: '/child-progress', icon: TrendingUp, roles: ['parent'] },
+    ],
+  },
+  {
     label: 'Management',
     items: [
       { title: 'Users', url: '/users', icon: Users, roles: ['superadmin', 'admin'] },
-      { title: 'Students', url: '/students', icon: GraduationCap, roles: ['superadmin', 'admin', 'support', 'teacher', 'parent'] },
+      { title: 'Students', url: '/students', icon: GraduationCap, roles: ['superadmin', 'admin', 'support', 'teacher'] },
       { title: 'Payments', url: '/payments', icon: CreditCard, roles: ['superadmin', 'admin', 'support', 'parent'] },
       { title: 'Payroll', url: '/payroll', icon: DollarSign, roles: ['superadmin'] },
       { title: 'Subscriptions', url: '/subscriptions', icon: CreditCard, roles: ['superadmin'] },
