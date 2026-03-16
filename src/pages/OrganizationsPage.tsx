@@ -106,7 +106,14 @@ export default function OrganizationsPage() {
               <CardContent className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Badge variant="secondary">{o.member_count} members</Badge>
-                  <Button variant="outline" size="sm" onClick={() => openMembers(o)}><UserPlus className="mr-1 h-3 w-3" />Manage</Button>
+                  <div className="flex gap-1">
+                    <Button variant="outline" size="sm" onClick={() => {
+                      setBrandingOrg(o);
+                      const b = o.branding || {};
+                      setBrandName(b.display_name || ''); setBrandPrimaryColor(b.primary_color || '#6366f1'); setBrandLogoUrl(b.logo_url || '');
+                    }}><Palette className="mr-1 h-3 w-3" />Brand</Button>
+                    <Button variant="outline" size="sm" onClick={() => openMembers(o)}><UserPlus className="mr-1 h-3 w-3" />Manage</Button>
+                  </div>
                 </div>
                 <div className="flex items-center justify-between pt-2 border-t border-border">
                   <span className="text-sm text-muted-foreground">Active</span>
