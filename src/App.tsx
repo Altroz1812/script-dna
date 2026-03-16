@@ -35,6 +35,9 @@ import CheckoutPage from "@/pages/CheckoutPage";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
 import ActivityLogsPage from "@/pages/ActivityLogsPage";
+import SubscriptionPlansPage from "@/pages/SubscriptionPlansPage";
+import CouponsPage from "@/pages/CouponsPage";
+import CurriculumPage from "@/pages/CurriculumPage";
 
 const queryClient = new QueryClient();
 

@@ -137,6 +137,18 @@ export const navigationConfig: NavGroup[] = [
         icon: DollarSign,
         roles: ['superadmin'],
       },
+      {
+        title: 'Subscriptions',
+        url: '/subscriptions',
+        icon: CreditCard,
+        roles: ['superadmin'],
+      },
+      {
+        title: 'Coupons',
+        url: '/coupons',
+        icon: Ticket,
+        roles: ['superadmin'],
+      },
     ],
   },
   {
