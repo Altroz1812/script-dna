@@ -113,6 +113,30 @@ export default function Dashboard() {
     staleTime: 1000 * 60 * 2,
   });
 
+  // Parent dashboard data
+  const { data: parentData, isLoading: parentLoading } = useQuery({
+    queryKey: ['parent_dashboard', profile?.id],
+    queryFn: async () => {
+      const { data: links } = await supabase.from('parent_children').select('child_id').eq('parent_id', profile!.id);
+      const childIds = (links || []).map(l => l.child_id);
+      if (childIds.length === 0) return { children: [], payments: [], upcomingClasses: [] };
+      const [profilesRes, progressRes, paymentsRes, classesRes] = await Promise.all([
+        supabase.from('profiles').select('user_id, display_name, email').in('user_id', childIds),
+        supabase.from('student_progress').select('student_id, completion_pct, status, courses(name)').in('student_id', childIds),
+        supabase.from('payments').select('*').order('payment_date', { ascending: false }).limit(5),
+        supabase.from('live_classes').select('id, title, scheduled_at, status, batches(name)').in('status', ['scheduled', 'live']).order('scheduled_at', { ascending: true }).limit(5),
+      ]);
+      const childProfiles = (profilesRes.data || []).map(p => {
+        const progs = (progressRes.data || []).filter((pr: any) => pr.student_id === p.user_id);
+        const avg = progs.length ? Math.round(progs.reduce((s: number, pr: any) => s + (pr.completion_pct || 0), 0) / progs.length) : 0;
+        return { id: p.user_id, name: p.display_name || p.email || '', avgCompletion: avg, courseCount: progs.length };
+      });
+      return { children: childProfiles, payments: paymentsRes.data || [], upcomingClasses: classesRes.data || [] };
+    },
+    enabled: !!profile && isParent,
+    staleTime: 1000 * 60 * 2,
+  });
+
   const { data: orgName } = useQuery({
     queryKey: ['org_name', organizationId],
     queryFn: async () => {
