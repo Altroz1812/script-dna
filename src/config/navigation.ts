@@ -16,6 +16,8 @@ import {
   FileText,
   DollarSign,
   Bell,
+  Ticket,
+  Layers,
   type LucideIcon,
 } from 'lucide-react';
 import type { AppRole } from '@/types/roles';
