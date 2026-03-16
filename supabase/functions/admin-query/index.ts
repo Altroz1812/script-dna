@@ -510,6 +510,69 @@ Deno.serve(async (req) => {
         break
       }
 
+      // ===== TOGGLE ORG ACTIVE =====
+      case 'toggle_org_active': {
+        const { id, is_active } = params
+        const { error } = await supabase.from('organizations').update({ is_active }).eq('id', id)
+        if (error) throw error
+        result = { success: true }
+        break
+      }
+
+      // ===== DEACTIVATE / REACTIVATE USER =====
+      case 'toggle_user_active': {
+        const { user_id, is_active } = params
+        const { error } = await supabase.from('profiles').update({ is_active }).eq('user_id', user_id)
+        if (error) throw error
+        result = { success: true }
+        break
+      }
+
+      // ===== CREATE USER (admin) =====
+      case 'create_user': {
+        const { email, password, display_name, role, organization_id } = params
+        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: { display_name },
+        })
+        if (authError) throw authError
+        const newUserId = authData.user.id
+        // Profile is created by trigger, update display_name
+        await supabase.from('profiles').update({ display_name, organization_id: organization_id || null }).eq('user_id', newUserId)
+        // Set role
+        if (role && role !== 'student') {
+          await supabase.from('user_roles').update({ role }).eq('user_id', newUserId)
+        }
+        // Add to org if specified
+        if (organization_id) {
+          await supabase.from('organization_members').insert({ organization_id, user_id: newUserId })
+        }
+        result = { success: true, user_id: newUserId }
+        break
+      }
+
+      // ===== ADMIN PASSWORD RESET =====
+      case 'admin_reset_password': {
+        const { email } = params
+        const { error: resetError } = await supabase.auth.admin.generateLink({
+          type: 'recovery',
+          email,
+        })
+        if (resetError) throw resetError
+        result = { success: true }
+        break
+      }
+
+      // ===== ACTIVITY LOGS =====
+      case 'list_activity_logs': {
+        const { data: logs } = await supabase.from('activity_logs').select('*').order('created_at', { ascending: false }).limit(200)
+        const { data: loginLogs } = await supabase.from('login_attempts').select('*').order('attempted_at', { ascending: false }).limit(200)
+        result = { activity_logs: logs ?? [], login_attempts: loginLogs ?? [] }
+        break
+      }
+
       default:
         return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
           status: 400,
