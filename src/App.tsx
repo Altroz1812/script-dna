@@ -43,6 +43,8 @@ import PracticeAssignmentsPage from "@/pages/PracticeAssignmentsPage";
 import StudentSubmissionsPage from "@/pages/StudentSubmissionsPage";
 import StudentLessonViewer from "@/pages/StudentLessonViewer";
 import StudentProgressPage from "@/pages/StudentProgressPage";
+import ParentChildrenPage from "@/pages/ParentChildrenPage";
+import ParentProgressPage from "@/pages/ParentProgressPage";
 const queryClient = new QueryClient();
 
 const App = () => (
