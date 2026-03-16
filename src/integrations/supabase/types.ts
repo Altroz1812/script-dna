@@ -776,6 +776,27 @@ export type Database = {
         }
         Relationships: []
       }
+      parent_children: {
+        Row: {
+          child_id: string
+          created_at: string
+          id: string
+          parent_id: string
+        }
+        Insert: {
+          child_id: string
+          created_at?: string
+          id?: string
+          parent_id: string
+        }
+        Update: {
+          child_id?: string
+          created_at?: string
+          id?: string
+          parent_id?: string
+        }
+        Relationships: []
+      }
       payments: {
         Row: {
           amount: number
@@ -1232,6 +1253,10 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      parent_of_student: {
+        Args: { _parent_id: string; _student_id: string }
         Returns: boolean
       }
       recompute_dashboard_stats: { Args: never; Returns: undefined }
