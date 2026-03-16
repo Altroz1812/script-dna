@@ -96,6 +96,8 @@ const App = () => (
                 <Route path="/submissions" element={<StudentSubmissionsPage />} />
                 <Route path="/courses/:courseId/lessons" element={<StudentLessonViewer />} />
                 <Route path="/my-progress" element={<StudentProgressPage />} />
+                <Route path="/my-children" element={<ParentChildrenPage />} />
+                <Route path="/child-progress" element={<ParentProgressPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
