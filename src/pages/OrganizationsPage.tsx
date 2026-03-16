@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { Plus, Trash2, UserPlus, UserMinus, Building2 } from 'lucide-react';
 
@@ -32,6 +33,14 @@ export default function OrganizationsPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this organization?')) return;
     try { await adminQuery('delete_organization', { id }); toast.success('Deleted'); load(); } catch (e: any) { toast.error(e.message); }
+  };
+
+  const handleToggleActive = async (id: string, currentActive: boolean) => {
+    try {
+      await adminQuery('toggle_org_active', { id, is_active: !currentActive });
+      toast.success(currentActive ? 'Organization disabled' : 'Organization enabled');
+      load();
+    } catch (e: any) { toast.error(e.message); }
   };
 
   const openMembers = async (org: any) => {
@@ -74,17 +83,27 @@ export default function OrganizationsPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {orgs.map(o => (
-            <Card key={o.id}>
+            <Card key={o.id} className={!o.is_active ? 'opacity-60' : ''}>
               <CardHeader>
                 <div className="flex justify-between items-start">
-                  <div><CardTitle>{o.name}</CardTitle><p className="text-sm text-muted-foreground mt-1">/{o.slug}</p></div>
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      {o.name}
+                      {!o.is_active && <Badge variant="destructive" className="text-xs">Disabled</Badge>}
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground mt-1">/{o.slug}</p>
+                  </div>
                   <Button variant="ghost" size="icon" onClick={() => handleDelete(o.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Badge variant="secondary">{o.member_count} members</Badge>
                   <Button variant="outline" size="sm" onClick={() => openMembers(o)}><UserPlus className="mr-1 h-3 w-3" />Manage</Button>
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-border">
+                  <span className="text-sm text-muted-foreground">Active</span>
+                  <Switch checked={o.is_active !== false} onCheckedChange={() => handleToggleActive(o.id, o.is_active !== false)} />
                 </div>
               </CardContent>
             </Card>

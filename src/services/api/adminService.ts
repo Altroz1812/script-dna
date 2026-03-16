@@ -85,6 +85,14 @@ export async function adminQuery(action: string, params: any = {}): Promise<any>
     case 'remove_batch_student': return removeBatchStudent(params);
     case 'batch_student_count': return batchStudentCount(params);
 
+    // ===== EDGE FUNCTION ACTIONS (require service role) =====
+    case 'toggle_org_active':
+    case 'toggle_user_active':
+    case 'create_user':
+    case 'admin_reset_password':
+    case 'list_activity_logs':
+      return edgeFunctionAction(action, params);
+
     default:
       throw new Error(`Unknown action: ${action}`);
   }
@@ -572,4 +580,13 @@ async function batchStudentCount(params: any) {
   const { count, error } = await (supabase.from('batch_students' as any).select('id', { count: 'exact', head: true }).eq('batch_id', params.batch_id) as any);
   if (error) throw error;
   return count ?? 0;
+}
+
+async function edgeFunctionAction(action: string, params: any) {
+  const { data, error } = await supabase.functions.invoke('admin-query', {
+    body: { action, params },
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data;
 }

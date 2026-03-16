@@ -34,6 +34,7 @@ import SettingsPage from "@/pages/SettingsPage";
 import CheckoutPage from "@/pages/CheckoutPage";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
+import ActivityLogsPage from "@/pages/ActivityLogsPage";
 
 const queryClient = new QueryClient();
 
@@ -77,6 +78,7 @@ const App = () => (
                 <Route path="/roles" element={<RolesPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/profile" element={<SettingsPage />} />
+                <Route path="/activity-logs" element={<ActivityLogsPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
