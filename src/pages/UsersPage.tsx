@@ -222,7 +222,6 @@ export default function UsersPage() {
                          <Button variant="ghost" size="icon" title="Delete" onClick={() => handleDelete(u.user_id)}>
                            <Trash2 className="h-4 w-4 text-destructive" />
                          </Button>
-                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
