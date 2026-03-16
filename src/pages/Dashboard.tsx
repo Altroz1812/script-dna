@@ -246,6 +246,93 @@ export default function Dashboard() {
     );
   }
 
+  // Parent dashboard
+  if (isParent) {
+    return (
+      <div className="relative min-h-full">
+        <MorphingBlob className="w-[500px] h-[500px] -top-32 -right-32 opacity-40" color="hsl(265 90% 65% / 0.12)" />
+        <div className="relative z-10 space-y-6">
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-end justify-between">
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                <motion.div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary via-coral to-accent flex items-center justify-center shadow-lg shadow-primary/30"
+                  animate={{ rotate: [0, 5, -5, 0] }} transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}>
+                  <Sparkles className="w-5 h-5 text-white" />
+                </motion.div>
+                <h1 className="text-3xl font-bold font-display text-gradient">Parent Dashboard</h1>
+              </div>
+              <p className="text-muted-foreground text-sm pl-[56px]">Monitor your children's learning</p>
+            </div>
+          </motion.div>
+
+          {parentLoading ? <DashboardCardsSkeleton count={4} /> : (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {[
+                  { label: 'Children', value: parentData?.children?.length || 0, icon: Users, color: 'from-purple-300 to-purple-600' },
+                  { label: 'Upcoming Classes', value: parentData?.upcomingClasses?.length || 0, icon: Layers, color: 'from-emerald-300 to-emerald-600' },
+                  { label: 'Recent Payments', value: parentData?.payments?.length || 0, icon: CreditCard, color: 'from-orange-300 to-orange-600' },
+                ].map((c, i) => (
+                  <TiltCard key={c.label} glowColor={GLOW_COLORS[i]} className="h-[140px]">
+                    <div className={`h-full p-5 bg-gradient-to-br ${GRADIENT_PAIRS[i]} flex flex-col justify-between`}>
+                      <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${c.color} flex items-center justify-center shadow-lg`}>
+                        <c.icon className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <span className="text-3xl font-bold font-display text-gradient tracking-tight block">{c.value}</span>
+                        <span className="text-sm text-muted-foreground">{c.label}</span>
+                      </div>
+                    </div>
+                  </TiltCard>
+                ))}
+              </div>
+
+              {/* Children progress summary */}
+              {parentData?.children && parentData.children.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {parentData.children.map((child: any, i: number) => (
+                    <TiltCard key={child.id} className="cursor-pointer group" glowColor={GLOW_COLORS[i % GLOW_COLORS.length]}>
+                      <div className={`p-5 bg-gradient-to-br ${GRADIENT_PAIRS[i % GRADIENT_PAIRS.length]} flex items-center justify-between`}
+                        onClick={() => navigate(`/child-progress?child=${child.id}`)}>
+                        <div>
+                          <h3 className="font-semibold text-foreground">{child.name}</h3>
+                          <p className="text-xs text-muted-foreground mt-0.5">{child.courseCount} course(s) · {child.avgCompletion}% avg completion</p>
+                          <div className="w-24 h-2 rounded-full bg-muted overflow-hidden mt-2">
+                            <div className="h-full bg-primary rounded-full" style={{ width: `${child.avgCompletion}%` }} />
+                          </div>
+                        </div>
+                        <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                      </div>
+                    </TiltCard>
+                  ))}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[
+                  { title: 'My Children', desc: 'View linked children', path: '/my-children', gradient: 'from-purple-500/30 via-purple-600/10 to-transparent', borderColor: 'border-l-purple-500' },
+                  { title: 'Payments', desc: 'View & make payments', path: '/payments', gradient: 'from-emerald-500/30 via-emerald-600/10 to-transparent', borderColor: 'border-l-emerald-500' },
+                  { title: 'Attendance', desc: "Track children's attendance", path: '/attendance', gradient: 'from-orange-500/30 via-orange-600/10 to-transparent', borderColor: 'border-l-orange-500' },
+                ].map(item => (
+                  <TiltCard key={item.title} className="cursor-pointer group" glowColor="hsl(265 90% 65%)">
+                    <div className={`p-5 bg-gradient-to-br ${item.gradient} flex items-center justify-between border-l-[3px] ${item.borderColor}`}
+                      onClick={() => navigate(item.path)}>
+                      <div>
+                        <h3 className="font-semibold text-foreground">{item.title}</h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                    </div>
+                  </TiltCard>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // Admin/Teacher dashboard
   const subtitle = isSuperadmin
     ? 'Platform Overview · All Organizations'
