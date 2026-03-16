@@ -38,7 +38,7 @@ import ActivityLogsPage from "@/pages/ActivityLogsPage";
 import SubscriptionPlansPage from "@/pages/SubscriptionPlansPage";
 import CouponsPage from "@/pages/CouponsPage";
 import CurriculumPage from "@/pages/CurriculumPage";
-
+import SystemMonitoringPage from "@/pages/SystemMonitoringPage";
 const queryClient = new QueryClient();
 
 const App = () => (
