@@ -94,6 +94,25 @@ export async function adminQuery(action: string, params: any = {}): Promise<any>
     case 'revenue_analytics':
     case 'org_performance':
     case 'student_trends':
+    case 'list_subscription_plans':
+    case 'create_subscription_plan':
+    case 'update_subscription_plan':
+    case 'delete_subscription_plan':
+    case 'list_org_subscriptions':
+    case 'assign_org_subscription':
+    case 'cancel_org_subscription':
+    case 'list_coupons':
+    case 'create_coupon':
+    case 'update_coupon':
+    case 'delete_coupon':
+    case 'update_org_branding':
+    case 'list_course_modules':
+    case 'create_course_module':
+    case 'update_course_module':
+    case 'delete_course_module':
+    case 'create_lesson':
+    case 'update_lesson':
+    case 'delete_lesson':
       return edgeFunctionAction(action, params);
 
     default:
