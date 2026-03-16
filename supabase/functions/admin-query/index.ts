@@ -656,7 +656,6 @@ Deno.serve(async (req) => {
       // ===== CURRICULUM (MODULES & LESSONS) =====
       case 'list_course_modules': {
         const { data } = await supabase.from('course_modules').select('*, lessons(*)').eq('course_id', params.course_id).order('sort_order')
-        // sort lessons within each module
         for (const m of data ?? []) {
           if (m.lessons) m.lessons.sort((a: any, b: any) => a.sort_order - b.sort_order)
         }
@@ -699,6 +698,93 @@ Deno.serve(async (req) => {
         const { error } = await supabase.from('lessons').delete().eq('id', params.id)
         if (error) throw error
         result = { success: true }
+        break
+      }
+
+      // ===== ACTIVITY LOGS (extended) =====
+      case 'list_activity_logs': {
+        const [activityRes, loginRes] = await Promise.all([
+          supabase.from('activity_logs').select('*').order('created_at', { ascending: false }).limit(200),
+          supabase.from('login_attempts').select('*').order('attempted_at', { ascending: false }).limit(200),
+        ])
+        // enrich activity logs with user names
+        const userIds = [...new Set((activityRes.data ?? []).filter((a: any) => a.user_id).map((a: any) => a.user_id))]
+        let profileMap: Record<string, string> = {}
+        if (userIds.length) {
+          const { data: profs } = await supabase.from('profiles').select('user_id, display_name, email').in('user_id', userIds)
+          for (const p of profs ?? []) profileMap[p.user_id] = p.display_name || p.email || 'Unknown'
+        }
+        const enrichedLogs = (activityRes.data ?? []).map((a: any) => ({
+          ...a,
+          user_name: a.user_id ? (profileMap[a.user_id] || 'System') : 'System',
+        }))
+        result = { activity_logs: enrichedLogs, login_attempts: loginRes.data ?? [] }
+        break
+      }
+
+      // ===== SYSTEM MONITORING =====
+      case 'system_health': {
+        const [
+          usersRes, coursesRes, batchesRes, orgsRes, paymentsRes, leadsRes,
+          rolesRes, logsRes, loginsRes, subsRes, couponsRes, modulesRes, lessonsRes
+        ] = await Promise.all([
+          supabase.from('profiles').select('id', { count: 'exact', head: true }),
+          supabase.from('courses').select('id', { count: 'exact', head: true }),
+          supabase.from('batches').select('id', { count: 'exact', head: true }),
+          supabase.from('organizations').select('id, is_active', { count: 'exact' }),
+          supabase.from('payments').select('id, amount, status', { count: 'exact' }),
+          supabase.from('leads').select('id', { count: 'exact', head: true }),
+          supabase.from('user_roles').select('role'),
+          supabase.from('activity_logs').select('id', { count: 'exact', head: true }),
+          supabase.from('login_attempts').select('id, success, attempted_at').order('attempted_at', { ascending: false }).limit(100),
+          supabase.from('org_subscriptions').select('id, status', { count: 'exact' }),
+          supabase.from('coupons').select('id, is_active', { count: 'exact' }),
+          supabase.from('course_modules').select('id', { count: 'exact', head: true }),
+          supabase.from('lessons').select('id', { count: 'exact', head: true }),
+        ])
+
+        // Role distribution
+        const roleCounts: Record<string, number> = {}
+        for (const r of rolesRes.data ?? []) roleCounts[r.role] = (roleCounts[r.role] || 0) + 1
+
+        // Active vs inactive orgs
+        const activeOrgs = (orgsRes.data ?? []).filter((o: any) => o.is_active).length
+        const inactiveOrgs = (orgsRes.data ?? []).filter((o: any) => !o.is_active).length
+
+        // Payment totals
+        const completedPayments = (paymentsRes.data ?? []).filter((p: any) => p.status === 'completed')
+        const totalRevenue = completedPayments.reduce((sum: number, p: any) => sum + Number(p.amount), 0)
+        const pendingPayments = (paymentsRes.data ?? []).filter((p: any) => p.status === 'pending').length
+
+        // Login success rate (last 100)
+        const logins = loginsRes.data ?? []
+        const successLogins = logins.filter((l: any) => l.success).length
+        const failedLogins = logins.filter((l: any) => !l.success).length
+
+        // Active subscriptions
+        const activeSubs = (subsRes.data ?? []).filter((s: any) => s.status === 'active').length
+        const activeCoupons = (couponsRes.data ?? []).filter((c: any) => c.is_active).length
+
+        result = {
+          counts: {
+            users: usersRes.count ?? 0,
+            courses: coursesRes.count ?? 0,
+            batches: batchesRes.count ?? 0,
+            organizations: orgsRes.count ?? 0,
+            leads: leadsRes.count ?? 0,
+            payments: paymentsRes.count ?? 0,
+            activityLogs: logsRes.count ?? 0,
+            modules: modulesRes.count ?? 0,
+            lessons: lessonsRes.count ?? 0,
+          },
+          roleCounts,
+          orgHealth: { active: activeOrgs, inactive: inactiveOrgs },
+          revenue: { total: totalRevenue, pendingCount: pendingPayments },
+          loginHealth: { total: logins.length, success: successLogins, failed: failedLogins },
+          subscriptions: { active: activeSubs, total: subsRes.count ?? 0 },
+          coupons: { active: activeCoupons, total: couponsRes.count ?? 0 },
+          timestamp: new Date().toISOString(),
+        }
         break
       }
 
