@@ -197,6 +197,12 @@ export const navigationConfig: NavGroup[] = [
         roles: ['superadmin'],
       },
       {
+        title: 'System Monitoring',
+        url: '/monitoring',
+        icon: Monitor,
+        roles: ['superadmin'],
+      },
+      {
         title: 'Settings',
         url: '/settings',
         icon: Settings,
