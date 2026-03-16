@@ -9,9 +9,10 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Pencil, Trash2, Search, Users, Plus, UserX, UserCheck, KeyRound } from 'lucide-react';
+import { Pencil, Trash2, Search, Users, Plus, UserX, UserCheck, KeyRound, Link2 } from 'lucide-react';
 import { ROLE_LABELS, type AppRole } from '@/types/roles';
 import { TableSkeleton } from '@/components/ui/loading-skeletons';
+import { ParentChildLinkDialog } from '@/components/admin/ParentChildLinkDialog';
 
 interface UserRow {
   user_id: string;
