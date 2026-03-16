@@ -35,6 +35,9 @@ import CheckoutPage from "@/pages/CheckoutPage";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
 import ActivityLogsPage from "@/pages/ActivityLogsPage";
+import SubscriptionPlansPage from "@/pages/SubscriptionPlansPage";
+import CouponsPage from "@/pages/CouponsPage";
+import CurriculumPage from "@/pages/CurriculumPage";
 
 const queryClient = new QueryClient();
 
@@ -79,6 +82,9 @@ const App = () => (
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/profile" element={<SettingsPage />} />
                 <Route path="/activity-logs" element={<ActivityLogsPage />} />
+                <Route path="/subscriptions" element={<SubscriptionPlansPage />} />
+                <Route path="/coupons" element={<CouponsPage />} />
+                <Route path="/curriculum" element={<CurriculumPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>

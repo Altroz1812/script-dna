@@ -9,7 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { Plus, Trash2, UserPlus, UserMinus, Building2 } from 'lucide-react';
+import { Plus, Trash2, UserPlus, UserMinus, Building2, Palette } from 'lucide-react';
+import { Input as ColorInput } from '@/components/ui/input';
 
 export default function OrganizationsPage() {
   const [orgs, setOrgs] = useState<any[]>([]);
@@ -21,6 +22,12 @@ export default function OrganizationsPage() {
   const [members, setMembers] = useState<any[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [selectedUser, setSelectedUser] = useState('');
+
+  // Branding dialog
+  const [brandingOrg, setBrandingOrg] = useState<any>(null);
+  const [brandName, setBrandName] = useState('');
+  const [brandPrimaryColor, setBrandPrimaryColor] = useState('#6366f1');
+  const [brandLogoUrl, setBrandLogoUrl] = useState('');
 
   const load = () => { setLoading(true); adminQuery('list_organizations').then(setOrgs).catch(e => toast.error(e.message)).finally(() => setLoading(false)); };
   useEffect(() => { load(); }, []);
@@ -99,7 +106,14 @@ export default function OrganizationsPage() {
               <CardContent className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Badge variant="secondary">{o.member_count} members</Badge>
-                  <Button variant="outline" size="sm" onClick={() => openMembers(o)}><UserPlus className="mr-1 h-3 w-3" />Manage</Button>
+                  <div className="flex gap-1">
+                    <Button variant="outline" size="sm" onClick={() => {
+                      setBrandingOrg(o);
+                      const b = o.branding || {};
+                      setBrandName(b.display_name || ''); setBrandPrimaryColor(b.primary_color || '#6366f1'); setBrandLogoUrl(b.logo_url || '');
+                    }}><Palette className="mr-1 h-3 w-3" />Brand</Button>
+                    <Button variant="outline" size="sm" onClick={() => openMembers(o)}><UserPlus className="mr-1 h-3 w-3" />Manage</Button>
+                  </div>
                 </div>
                 <div className="flex items-center justify-between pt-2 border-t border-border">
                   <span className="text-sm text-muted-foreground">Active</span>
@@ -132,6 +146,41 @@ export default function OrganizationsPage() {
                 ))
               }
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Branding Dialog */}
+      <Dialog open={!!brandingOrg} onOpenChange={v => { if (!v) setBrandingOrg(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>White-Label Branding: {brandingOrg?.name}</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div><Label>Display Name</Label><Input value={brandName} onChange={e => setBrandName(e.target.value)} placeholder="Custom brand name" /></div>
+            <div><Label>Logo URL</Label><Input value={brandLogoUrl} onChange={e => setBrandLogoUrl(e.target.value)} placeholder="https://..." /></div>
+            <div>
+              <Label>Primary Color</Label>
+              <div className="flex gap-2 items-center">
+                <input type="color" value={brandPrimaryColor} onChange={e => setBrandPrimaryColor(e.target.value)} className="w-10 h-10 rounded border cursor-pointer" />
+                <Input value={brandPrimaryColor} onChange={e => setBrandPrimaryColor(e.target.value)} className="flex-1" />
+              </div>
+            </div>
+            {brandLogoUrl && (
+              <div className="border rounded-md p-4 flex items-center gap-3">
+                <img src={brandLogoUrl} alt="Logo preview" className="h-10 w-10 object-contain" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                <span className="font-medium" style={{ color: brandPrimaryColor }}>{brandName || brandingOrg?.name}</span>
+              </div>
+            )}
+            <Button className="w-full" onClick={async () => {
+              try {
+                await adminQuery('update_org_branding', {
+                  id: brandingOrg.id,
+                  branding: { display_name: brandName || null, logo_url: brandLogoUrl || null, primary_color: brandPrimaryColor },
+                });
+                toast.success('Branding updated');
+                setBrandingOrg(null);
+                load();
+              } catch (e: any) { toast.error(e.message); }
+            }}>Save Branding</Button>
           </div>
         </DialogContent>
       </Dialog>

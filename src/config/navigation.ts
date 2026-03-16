@@ -16,6 +16,8 @@ import {
   FileText,
   DollarSign,
   Bell,
+  Ticket,
+  Layers,
   type LucideIcon,
 } from 'lucide-react';
 import type { AppRole } from '@/types/roles';
@@ -52,6 +54,12 @@ export const navigationConfig: NavGroup[] = [
         url: '/courses',
         icon: BookOpen,
         roles: ['superadmin', 'admin', 'support', 'teacher', 'student'],
+      },
+      {
+        title: 'Curriculum',
+        url: '/curriculum',
+        icon: Layers,
+        roles: ['superadmin', 'admin'],
       },
       {
         title: 'Batches',
@@ -127,6 +135,18 @@ export const navigationConfig: NavGroup[] = [
         title: 'Payroll',
         url: '/payroll',
         icon: DollarSign,
+        roles: ['superadmin'],
+      },
+      {
+        title: 'Subscriptions',
+        url: '/subscriptions',
+        icon: CreditCard,
+        roles: ['superadmin'],
+      },
+      {
+        title: 'Coupons',
+        url: '/coupons',
+        icon: Ticket,
         roles: ['superadmin'],
       },
     ],
