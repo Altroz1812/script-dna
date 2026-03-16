@@ -12,6 +12,7 @@ import {
   PenTool,
   UserPlus,
   HeadphonesIcon,
+  Monitor,
   Video,
   FileText,
   DollarSign,
@@ -193,6 +194,12 @@ export const navigationConfig: NavGroup[] = [
         title: 'Roles & Permissions',
         url: '/roles',
         icon: Shield,
+        roles: ['superadmin'],
+      },
+      {
+        title: 'System Monitoring',
+        url: '/monitoring',
+        icon: Monitor,
         roles: ['superadmin'],
       },
       {
