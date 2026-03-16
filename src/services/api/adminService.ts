@@ -581,3 +581,12 @@ async function batchStudentCount(params: any) {
   if (error) throw error;
   return count ?? 0;
 }
+
+async function edgeFunctionAction(action: string, params: any) {
+  const { data, error } = await supabase.functions.invoke('admin-query', {
+    body: { action, params },
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
