@@ -41,6 +41,8 @@ import CurriculumPage from "@/pages/CurriculumPage";
 import SystemMonitoringPage from "@/pages/SystemMonitoringPage";
 import PracticeAssignmentsPage from "@/pages/PracticeAssignmentsPage";
 import StudentSubmissionsPage from "@/pages/StudentSubmissionsPage";
+import StudentLessonViewer from "@/pages/StudentLessonViewer";
+import StudentProgressPage from "@/pages/StudentProgressPage";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -90,6 +92,8 @@ const App = () => (
                 <Route path="/monitoring" element={<SystemMonitoringPage />} />
                 <Route path="/practice" element={<PracticeAssignmentsPage />} />
                 <Route path="/submissions" element={<StudentSubmissionsPage />} />
+                <Route path="/courses/:courseId/lessons" element={<StudentLessonViewer />} />
+                <Route path="/my-progress" element={<StudentProgressPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>

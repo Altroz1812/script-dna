@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { adminQuery } from '@/services/api/adminService';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { TiltCard } from '@/components/ui/tilt-card';
 import { MagneticButton } from '@/components/ui/magnetic-button';
@@ -85,8 +86,31 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { profile } = useAuth();
 
-  const isSuperadmin = profile?.role === 'superadmin';
+  const role = profile?.role;
+  const isStudent = role === 'student';
+  const isSuperadmin = role === 'superadmin';
   const organizationId = profile?.organizationId ?? null;
+
+  // Student dashboard data
+  const { data: studentData, isLoading: studentLoading } = useQuery({
+    queryKey: ['student_dashboard', profile?.id],
+    queryFn: async () => {
+      const [enrollRes, classRes, subRes, progressRes] = await Promise.all([
+        supabase.from('batch_students').select('batch_id, batches(name, course_id, courses(name))').eq('student_id', profile!.id),
+        supabase.from('live_classes').select('id, title, scheduled_at, status, batches(name)').in('status', ['scheduled', 'live']).order('scheduled_at', { ascending: true }).limit(5),
+        supabase.from('student_submissions').select('id, status, score, created_at, practice_assignments(title)').eq('student_id', profile!.id).order('created_at', { ascending: false }).limit(5),
+        supabase.from('student_progress').select('completion_pct, status').eq('student_id', profile!.id),
+      ]);
+      return {
+        enrollments: enrollRes.data || [],
+        upcomingClasses: classRes.data || [],
+        recentSubmissions: subRes.data || [],
+        progress: progressRes.data || [],
+      };
+    },
+    enabled: !!profile && isStudent,
+    staleTime: 1000 * 60 * 2,
+  });
 
   const { data: orgName } = useQuery({
     queryKey: ['org_name', organizationId],
@@ -96,7 +120,7 @@ export default function Dashboard() {
       const org = await organizationService.getOrganization(organizationId);
       return org?.name ?? null;
     },
-    enabled: !!organizationId,
+    enabled: !!organizationId && !isStudent,
   });
 
   const { data: stats, isLoading } = useQuery<Stats>({
@@ -104,14 +128,8 @@ export default function Dashboard() {
     queryFn: () => adminQuery('get_stats', { organizationId, isSuperadmin }) as Promise<Stats>,
     staleTime: 1000 * 60 * 5,
     retry: 2,
-    enabled: !!profile,
+    enabled: !!profile && !isStudent,
   });
-
-  const subtitle = isSuperadmin
-    ? 'Platform Overview · All Organizations'
-    : orgName
-      ? `${orgName} Overview`
-      : 'Organization Overview';
 
   const cards = useMemo(() => {
     if (!stats) return [];
@@ -131,6 +149,84 @@ export default function Dashboard() {
     }
     return base;
   }, [stats, isSuperadmin]);
+
+  // Student dashboard
+  if (isStudent) {
+    const avgCompletion = studentData?.progress?.length
+      ? Math.round(studentData.progress.reduce((s: number, p: any) => s + (p.completion_pct || 0), 0) / studentData.progress.length)
+      : 0;
+
+    return (
+      <div className="relative min-h-full">
+        <MorphingBlob className="w-[500px] h-[500px] -top-32 -right-32 opacity-40" color="hsl(265 90% 65% / 0.12)" />
+        <div className="relative z-10 space-y-6">
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-end justify-between">
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                <motion.div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary via-coral to-accent flex items-center justify-center shadow-lg shadow-primary/30"
+                  animate={{ rotate: [0, 5, -5, 0] }} transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}>
+                  <Sparkles className="w-5 h-5 text-white" />
+                </motion.div>
+                <h1 className="text-3xl font-bold font-display text-gradient">Welcome back!</h1>
+              </div>
+              <p className="text-muted-foreground text-sm pl-[56px]">Your learning dashboard</p>
+            </div>
+          </motion.div>
+
+          {studentLoading ? <DashboardCardsSkeleton count={4} /> : (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                  { label: 'Courses', value: studentData?.enrollments?.length || 0, icon: BookOpen, color: 'from-purple-300 to-purple-600' },
+                  { label: 'Submissions', value: studentData?.recentSubmissions?.length || 0, icon: GraduationCap, color: 'from-emerald-300 to-emerald-600' },
+                  { label: 'Completion', value: `${avgCompletion}%`, icon: UserCheck, color: 'from-orange-300 to-orange-600' },
+                  { label: 'Upcoming Classes', value: studentData?.upcomingClasses?.length || 0, icon: Layers, color: 'from-blue-300 to-blue-600' },
+                ].map((c, i) => (
+                  <TiltCard key={c.label} glowColor={GLOW_COLORS[i]} className="h-[140px]">
+                    <div className={`h-full p-5 bg-gradient-to-br ${GRADIENT_PAIRS[i]} flex flex-col justify-between`}>
+                      <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${c.color} flex items-center justify-center shadow-lg`}>
+                        <c.icon className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <span className="text-3xl font-bold font-display text-gradient tracking-tight block">{c.value}</span>
+                        <span className="text-sm text-muted-foreground">{c.label}</span>
+                      </div>
+                    </div>
+                  </TiltCard>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[
+                  { title: 'My Courses', desc: 'View enrolled courses & lessons', path: '/courses', gradient: 'from-purple-500/30 via-purple-600/10 to-transparent', borderColor: 'border-l-purple-500' },
+                  { title: 'Practice', desc: 'Download assignments & submit work', path: '/practice', gradient: 'from-emerald-500/30 via-emerald-600/10 to-transparent', borderColor: 'border-l-emerald-500' },
+                  { title: 'My Progress', desc: 'Track scores & improvement', path: '/my-progress', gradient: 'from-orange-500/30 via-orange-600/10 to-transparent', borderColor: 'border-l-orange-500' },
+                ].map(item => (
+                  <TiltCard key={item.title} className="cursor-pointer group" glowColor="hsl(265 90% 65%)">
+                    <div className={`p-5 bg-gradient-to-br ${item.gradient} flex items-center justify-between border-l-[3px] ${item.borderColor}`}
+                      onClick={() => navigate(item.path)}>
+                      <div>
+                        <h3 className="font-semibold text-foreground">{item.title}</h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                    </div>
+                  </TiltCard>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Admin/Teacher dashboard
+  const subtitle = isSuperadmin
+    ? 'Platform Overview · All Organizations'
+    : orgName
+      ? `${orgName} Overview`
+      : 'Organization Overview';
 
   return (
     <div className="relative min-h-full">
@@ -193,19 +289,15 @@ export default function Dashboard() {
                   className="h-full"
                 >
                   <div className={`relative h-full p-5 bg-gradient-to-br ${GRADIENT_PAIRS[i % GRADIENT_PAIRS.length]} flex flex-col justify-between`}>
-                    {/* Inner glow */}
                     <div className="absolute inset-0 rounded-2xl opacity-30 pointer-events-none"
                       style={{ boxShadow: `inset 0 0 40px ${GLOW_COLORS[i % GLOW_COLORS.length].replace(')', ' / 0.15)')}` }}
                     />
-                    {/* Icon */}
                     <div className="flex items-center justify-between relative z-10">
                       <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${ICON_GRADIENTS[i % ICON_GRADIENTS.length]} flex items-center justify-center shadow-lg ${ICON_SHADOWS[i % ICON_SHADOWS.length]}`}>
                         <c.icon className="w-5 h-5 text-white" />
                       </div>
                       <ArrowRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-foreground transition-colors" />
                     </div>
-
-                    {/* Value + Label */}
                     <div className="relative z-10">
                       <AnimatedCounter
                         value={c.value}
@@ -213,8 +305,6 @@ export default function Dashboard() {
                       />
                       <span className="text-sm text-muted-foreground mt-0.5 block">{c.label}</span>
                     </div>
-
-                    {/* Decorative bar */}
                     <div className="absolute bottom-0 left-0 right-0 h-[3px]">
                       <motion.div
                         className={`h-full bg-gradient-to-r ${ICON_GRADIENTS[i % ICON_GRADIENTS.length]}`}
@@ -231,10 +321,8 @@ export default function Dashboard() {
           </motion.div>
         )}
 
-        {/* Enrollment Trends Chart */}
         {!isLoading && <EnrollmentTrendsChart />}
 
-        {/* Quick Access Cards */}
         <motion.div
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6, duration: 0.5 }}

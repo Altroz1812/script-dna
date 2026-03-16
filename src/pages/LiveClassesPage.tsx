@@ -29,6 +29,7 @@ export default function LiveClassesPage() {
   const { isAdmin, role } = useRBAC();
   const { profile } = useAuth();
   const isTeacher = role === 'teacher';
+  const isStudent = role === 'student';
 
   const [classes, setClasses] = useState<any[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
@@ -41,15 +42,17 @@ export default function LiveClassesPage() {
   const load = async () => {
     setLoading(true);
     try {
-      if (isTeacher) {
-        // Teachers: query directly via Supabase (RLS filters to their batches)
-        const [classRes, batchList] = await Promise.all([
-          supabase.from('live_classes').select('*, batches(name)').order('scheduled_at', { ascending: false }),
-          batchService.listBatches(),
-        ]);
-        if (classRes.error) throw classRes.error;
-        setClasses(classRes.data || []);
-        setBatches(batchList);
+      if (isTeacher || isStudent) {
+        // Direct Supabase query — RLS filters to their batches
+        const { data, error } = await supabase
+          .from('live_classes')
+          .select('*, batches(name)')
+          .order('scheduled_at', { ascending: false });
+        if (error) throw error;
+        setClasses(data || []);
+        if (isTeacher) {
+          setBatches(await batchService.listBatches());
+        }
       } else {
         const [c, b] = await Promise.all([
           adminQuery('list_live_classes'),
@@ -110,7 +113,6 @@ export default function LiveClassesPage() {
 
     try {
       if (isTeacher) {
-        // Teacher inserts directly (RLS allows for their batches)
         const roomName = `class-${form.batch_id.slice(0, 8)}-${Date.now()}`;
         const meetingUrl = form.meeting_url || `https://meet.jit.si/${roomName}`;
         const { error } = await supabase.from('live_classes').insert({
@@ -203,91 +205,89 @@ export default function LiveClassesPage() {
   };
 
   const activeClass = classes.find(c => c.id === activeClassroom);
+  const canManage = isAdmin || isTeacher;
 
   return (
     <div className="p-6 space-y-6">
-      {/* Video Classroom Embed */}
       {activeClass && (
         <VideoClassroom
           roomName={activeClass.meeting_url?.replace('https://meet.jit.si/', '') || `class-${activeClass.id.slice(0, 8)}`}
-          displayName={profile?.displayName || 'Teacher'}
+          displayName={profile?.displayName || (isStudent ? 'Student' : 'Teacher')}
           onClose={() => setActiveClassroom(null)}
         />
       )}
 
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">
-          {isTeacher ? 'My Classes' : 'Live Classes'}
+          {isStudent ? 'My Classes' : isTeacher ? 'My Classes' : 'Live Classes'}
         </h1>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button><Plus className="mr-2 h-4 w-4" />Add Live Class</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Link Live Class to Schedule</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div>
-                <Label>Batch</Label>
-                <Select value={form.batch_id} onValueChange={handleBatchChange}>
-                  <SelectTrigger><SelectValue placeholder="Select batch" /></SelectTrigger>
-                  <SelectContent>
-                    {batches.map(b => (
-                      <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>Schedule Entry</Label>
-                <Select
-                  value={form.schedule_id}
-                  onValueChange={v => setForm(f => ({ ...f, schedule_id: v }))}
-                  disabled={!form.batch_id}
-                >
-                  <SelectTrigger><SelectValue placeholder={form.batch_id ? 'Select schedule' : 'Pick a batch first'} /></SelectTrigger>
-                  <SelectContent>
-                    {schedules.length === 0 ? (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">No schedules for this batch</div>
-                    ) : (
-                      schedules.map(s => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.date ? format(new Date(s.date), 'MMM d') : '—'} · {s.start_time?.slice(0, 5)}-{s.end_time?.slice(0, 5)} · {s.title}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {selectedSchedule && (
-                <div className="rounded-md bg-muted p-3 text-sm space-y-1">
-                  <p className="font-medium">{selectedSchedule.title}</p>
-                  <p className="text-muted-foreground">
-                    {selectedSchedule.date ? format(new Date(selectedSchedule.date), 'MMM d, yyyy') : '—'} · {selectedSchedule.start_time?.slice(0, 5)} - {selectedSchedule.end_time?.slice(0, 5)}
-                    {selectedSchedule.room && ` · Room: ${selectedSchedule.room}`}
-                  </p>
+        {canManage && (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button><Plus className="mr-2 h-4 w-4" />Add Live Class</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Link Live Class to Schedule</DialogTitle></DialogHeader>
+              <div className="space-y-3">
+                <div>
+                  <Label>Batch</Label>
+                  <Select value={form.batch_id} onValueChange={handleBatchChange}>
+                    <SelectTrigger><SelectValue placeholder="Select batch" /></SelectTrigger>
+                    <SelectContent>
+                      {batches.map(b => (
+                        <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              )}
-
-              <div>
-                <Label>Meeting URL <span className="text-muted-foreground text-xs">(optional — auto-generates Jitsi room)</span></Label>
-                <Input
-                  value={form.meeting_url}
-                  onChange={e => setForm(f => ({ ...f, meeting_url: e.target.value }))}
-                  placeholder="https://meet.google.com/... or leave blank for Jitsi"
-                />
+                <div>
+                  <Label>Schedule Entry</Label>
+                  <Select
+                    value={form.schedule_id}
+                    onValueChange={v => setForm(f => ({ ...f, schedule_id: v }))}
+                    disabled={!form.batch_id}
+                  >
+                    <SelectTrigger><SelectValue placeholder={form.batch_id ? 'Select schedule' : 'Pick a batch first'} /></SelectTrigger>
+                    <SelectContent>
+                      {schedules.length === 0 ? (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">No schedules for this batch</div>
+                      ) : (
+                        schedules.map(s => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.date ? format(new Date(s.date), 'MMM d') : '—'} · {s.start_time?.slice(0, 5)}-{s.end_time?.slice(0, 5)} · {s.title}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {selectedSchedule && (
+                  <div className="rounded-md bg-muted p-3 text-sm space-y-1">
+                    <p className="font-medium">{selectedSchedule.title}</p>
+                    <p className="text-muted-foreground">
+                      {selectedSchedule.date ? format(new Date(selectedSchedule.date), 'MMM d, yyyy') : '—'} · {selectedSchedule.start_time?.slice(0, 5)} - {selectedSchedule.end_time?.slice(0, 5)}
+                      {selectedSchedule.room && ` · Room: ${selectedSchedule.room}`}
+                    </p>
+                  </div>
+                )}
+                <div>
+                  <Label>Meeting URL <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                  <Input
+                    value={form.meeting_url}
+                    onChange={e => setForm(f => ({ ...f, meeting_url: e.target.value }))}
+                    placeholder="https://meet.google.com/... or leave blank for Jitsi"
+                  />
+                </div>
+                <Button onClick={handleCreate} className="w-full" disabled={!form.schedule_id}>
+                  Create Live Class
+                </Button>
               </div>
-
-              <Button onClick={handleCreate} className="w-full" disabled={!form.schedule_id}>
-                Create Live Class
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
-      {loading ? <TableSkeleton columns={7} rows={5} /> : (
+      {loading ? <TableSkeleton columns={isStudent ? 5 : 7} rows={5} /> : (
         <Card><CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -297,7 +297,8 @@ export default function LiveClassesPage() {
                 <TableHead>Date & Time</TableHead>
                 <TableHead>Duration</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
+                {!isStudent && <TableHead>Actions</TableHead>}
+                {isStudent && <TableHead>Join</TableHead>}
                 {isAdmin && <TableHead className="w-16"></TableHead>}
               </TableRow>
             </TableHeader>
@@ -306,7 +307,7 @@ export default function LiveClassesPage() {
                 <TableRow>
                   <TableCell colSpan={isAdmin ? 7 : 6} className="text-center py-8 text-muted-foreground">
                     <Video className="mx-auto h-8 w-8 mb-2 opacity-50" />
-                    No live classes — create one from a schedule entry
+                    {isStudent ? 'No upcoming classes for your batches' : 'No live classes — create one from a schedule entry'}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -339,32 +340,44 @@ export default function LiveClassesPage() {
                         </Badge>
                       )}
                     </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1.5">
-                        {c.status === 'scheduled' && (
-                          <Button size="sm" variant="default" className="h-7 gap-1" onClick={() => startClass(c)}>
-                            <Play className="h-3.5 w-3.5" /> Start
+                    {isStudent ? (
+                      <TableCell>
+                        {c.status === 'live' && c.meeting_url && (
+                          <Button size="sm" variant="default" className="h-7 gap-1" onClick={() => setActiveClassroom(c.id)}>
+                            <Video className="h-3.5 w-3.5" /> Join
                           </Button>
                         )}
-                        {c.status === 'live' && (
-                          <>
-                            <Button size="sm" variant="default" className="h-7 gap-1" onClick={() => setActiveClassroom(c.id)}>
-                              <Video className="h-3.5 w-3.5" /> Join
+                      </TableCell>
+                    ) : (
+                      <TableCell>
+                        <div className="flex items-center gap-1.5">
+                          {c.status === 'scheduled' && canManage && (
+                            <Button size="sm" variant="default" className="h-7 gap-1" onClick={() => startClass(c)}>
+                              <Play className="h-3.5 w-3.5" /> Start
                             </Button>
-                            <Button size="sm" variant="destructive" className="h-7 gap-1" onClick={() => endClass(c.id)}>
-                              <Square className="h-3.5 w-3.5" /> End
+                          )}
+                          {c.status === 'live' && (
+                            <>
+                              <Button size="sm" variant="default" className="h-7 gap-1" onClick={() => setActiveClassroom(c.id)}>
+                                <Video className="h-3.5 w-3.5" /> Join
+                              </Button>
+                              {canManage && (
+                                <Button size="sm" variant="destructive" className="h-7 gap-1" onClick={() => endClass(c.id)}>
+                                  <Square className="h-3.5 w-3.5" /> End
+                                </Button>
+                              )}
+                            </>
+                          )}
+                          {c.meeting_url && (
+                            <Button size="sm" variant="ghost" className="h-7" asChild>
+                              <a href={c.meeting_url} target="_blank" rel="noopener noreferrer">
+                                <ExternalLink className="h-3.5 w-3.5" />
+                              </a>
                             </Button>
-                          </>
-                        )}
-                        {c.meeting_url && (
-                          <Button size="sm" variant="ghost" className="h-7" asChild>
-                            <a href={c.meeting_url} target="_blank" rel="noopener noreferrer">
-                              <ExternalLink className="h-3.5 w-3.5" />
-                            </a>
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
+                          )}
+                        </div>
+                      </TableCell>
+                    )}
                     {isAdmin && (
                       <TableCell>
                         <Button variant="ghost" size="icon" onClick={() => handleDelete(c.id)}>

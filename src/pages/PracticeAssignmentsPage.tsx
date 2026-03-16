@@ -6,13 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, FileText, Calendar } from 'lucide-react';
+import { Plus, FileText, Calendar, Download, ExternalLink } from 'lucide-react';
 import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { format } from 'date-fns';
 
@@ -121,7 +121,7 @@ export default function PracticeAssignmentsPage() {
         )}
       </div>
 
-      {loading ? <TableSkeleton columns={4} rows={5} /> : (
+      {loading ? <TableSkeleton columns={isStudent ? 4 : 4} rows={5} /> : (
         <Card><CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -129,12 +129,12 @@ export default function PracticeAssignmentsPage() {
                 <TableHead>Title</TableHead>
                 <TableHead>Batch</TableHead>
                 <TableHead>Due Date</TableHead>
-                {isTeacher && <TableHead className="w-20">Actions</TableHead>}
+                <TableHead>{isStudent ? 'Download' : 'Actions'}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {assignments.length === 0 ? (
-                <TableRow><TableCell colSpan={isTeacher ? 4 : 3} className="text-center py-8 text-muted-foreground">
+                <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
                   <FileText className="mx-auto h-8 w-8 mb-2 opacity-50" />
                   No assignments yet
                 </TableCell></TableRow>
@@ -155,11 +155,20 @@ export default function PracticeAssignmentsPage() {
                       </span>
                     ) : '—'}
                   </TableCell>
-                  {isTeacher && (
-                    <TableCell>
-                      <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(a.id)}>Delete</Button>
-                    </TableCell>
-                  )}
+                  <TableCell>
+                    <div className="flex items-center gap-1.5">
+                      {a.file_url && (
+                        <Button variant="ghost" size="sm" asChild>
+                          <a href={a.file_url} target="_blank" rel="noopener noreferrer">
+                            <Download className="h-3.5 w-3.5 mr-1" />{isStudent ? 'Download' : 'View'}
+                          </a>
+                        </Button>
+                      )}
+                      {isTeacher && (
+                        <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(a.id)}>Delete</Button>
+                      )}
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
