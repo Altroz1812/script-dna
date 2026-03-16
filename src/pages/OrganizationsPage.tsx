@@ -9,7 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { Plus, Trash2, UserPlus, UserMinus, Building2 } from 'lucide-react';
+import { Plus, Trash2, UserPlus, UserMinus, Building2, Palette } from 'lucide-react';
+import { Input as ColorInput } from '@/components/ui/input';
 
 export default function OrganizationsPage() {
   const [orgs, setOrgs] = useState<any[]>([]);
@@ -21,6 +22,12 @@ export default function OrganizationsPage() {
   const [members, setMembers] = useState<any[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [selectedUser, setSelectedUser] = useState('');
+
+  // Branding dialog
+  const [brandingOrg, setBrandingOrg] = useState<any>(null);
+  const [brandName, setBrandName] = useState('');
+  const [brandPrimaryColor, setBrandPrimaryColor] = useState('#6366f1');
+  const [brandLogoUrl, setBrandLogoUrl] = useState('');
 
   const load = () => { setLoading(true); adminQuery('list_organizations').then(setOrgs).catch(e => toast.error(e.message)).finally(() => setLoading(false)); };
   useEffect(() => { load(); }, []);
