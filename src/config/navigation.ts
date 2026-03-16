@@ -20,6 +20,7 @@ import {
   Layers,
   NotebookPen,
   FileCheck,
+  TrendingUp,
   type LucideIcon,
 } from 'lucide-react';
 import type { AppRole } from '@/types/roles';

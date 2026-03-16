@@ -92,6 +92,8 @@ const App = () => (
                 <Route path="/monitoring" element={<SystemMonitoringPage />} />
                 <Route path="/practice" element={<PracticeAssignmentsPage />} />
                 <Route path="/submissions" element={<StudentSubmissionsPage />} />
+                <Route path="/courses/:courseId/lessons" element={<StudentLessonViewer />} />
+                <Route path="/my-progress" element={<StudentProgressPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
