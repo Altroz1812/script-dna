@@ -152,6 +152,12 @@ export const navigationConfig: NavGroup[] = [
         icon: Bell,
         roles: ['superadmin', 'admin', 'support'],
       },
+      {
+        title: 'Activity Logs',
+        url: '/activity-logs',
+        icon: Shield,
+        roles: ['superadmin'],
+      },
     ],
   },
   {

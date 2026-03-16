@@ -78,6 +78,7 @@ const App = () => (
                 <Route path="/roles" element={<RolesPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/profile" element={<SettingsPage />} />
+                <Route path="/activity-logs" element={<ActivityLogsPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
