@@ -51,7 +51,7 @@ export const navigationConfig: NavGroup[] = [
       { title: 'Curriculum', url: '/curriculum', icon: Layers, roles: ['superadmin', 'admin'] },
       { title: 'Batches', url: '/batches', icon: Users, roles: ['superadmin', 'admin', 'support', 'teacher', 'student'] },
       { title: 'Schedule', url: '/schedule', icon: CalendarDays, roles: ['superadmin', 'admin'] },
-      { title: 'Attendance', url: '/attendance', icon: ClipboardCheck, roles: ['superadmin', 'admin', 'teacher'] },
+      { title: 'Attendance', url: '/attendance', icon: ClipboardCheck, roles: ['superadmin', 'admin', 'teacher', 'parent'] },
       { title: 'Live Classes', url: '/live-classes', icon: Video, roles: ['superadmin', 'admin', 'teacher', 'student'] },
       { title: 'Materials', url: '/materials', icon: FileText, roles: ['superadmin', 'admin'] },
       { title: 'Practice', url: '/practice', icon: NotebookPen, roles: ['superadmin', 'admin', 'teacher', 'student'] },
