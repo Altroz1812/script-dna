@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { adminQuery } from '@/services/api/adminService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,35 +10,54 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Trash2, Video, Link2 } from 'lucide-react';
+import { Plus, Trash2, Video, Link2, Play, Square, ExternalLink } from 'lucide-react';
 import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { batchService } from '@/services/api/courseService';
 import { format } from 'date-fns';
+import { useRBAC } from '@/hooks/useRBAC';
+import { useAuth } from '@/contexts/AuthContext';
+import { VideoClassroom } from '@/components/classroom/VideoClassroom';
 
 const STATUS_COLORS: Record<string, string> = {
-  scheduled: 'bg-blue-100 text-blue-800',
-  live: 'bg-green-100 text-green-800',
-  completed: 'bg-gray-100 text-gray-800',
-  cancelled: 'bg-red-100 text-red-800',
+  scheduled: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  live: 'bg-green-500/20 text-green-400 border-green-500/30',
+  completed: 'bg-muted text-muted-foreground border-border',
+  cancelled: 'bg-destructive/20 text-destructive border-destructive/30',
 };
 
 export default function LiveClassesPage() {
+  const { isAdmin, role } = useRBAC();
+  const { profile } = useAuth();
+  const isTeacher = role === 'teacher';
+
   const [classes, setClasses] = useState<any[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
   const [schedules, setSchedules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ batch_id: '', schedule_id: '', meeting_url: '' });
+  const [activeClassroom, setActiveClassroom] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
     try {
-      const [c, b] = await Promise.all([
-        adminQuery('list_live_classes'),
-        batchService.listBatches(),
-      ]);
-      setClasses(c);
-      setBatches(b);
+      if (isTeacher) {
+        // Teachers: query directly via Supabase (RLS filters to their batches)
+        const [classRes, batchList] = await Promise.all([
+          supabase.from('live_classes').select('*, batches(name)').order('scheduled_at', { ascending: false }),
+          batchService.listBatches(),
+        ]);
+        if (classRes.error) throw classRes.error;
+        setClasses(classRes.data || []);
+        setBatches(batchList);
+      } else {
+        const [c, b] = await Promise.all([
+          adminQuery('list_live_classes'),
+          batchService.listBatches(),
+        ]);
+        setClasses(c);
+        setBatches(b);
+      }
     } catch (e: any) {
       toast.error(e.message);
     } finally {
@@ -47,11 +67,16 @@ export default function LiveClassesPage() {
 
   useEffect(() => { load(); }, []);
 
-  // Load schedules when batch is selected
   const loadSchedules = async (batchId: string) => {
     try {
-      const data = await adminQuery('list_schedules', { batch_id: batchId });
-      setSchedules(data);
+      if (isTeacher) {
+        const { data, error } = await supabase.from('schedules').select('*').eq('batch_id', batchId);
+        if (error) throw error;
+        setSchedules(data || []);
+      } else {
+        const data = await adminQuery('list_schedules', { batch_id: batchId });
+        setSchedules(data);
+      }
     } catch (e: any) {
       toast.error(e.message);
     }
@@ -75,28 +100,82 @@ export default function LiveClassesPage() {
     const sched = selectedSchedule;
     if (!sched) return;
 
-    // Build scheduled_at from schedule date + start_time
     const scheduledAt = sched.date
       ? `${sched.date}T${sched.start_time}`
       : new Date().toISOString();
 
-    // Calculate duration from start/end time
     const [sh, sm] = (sched.start_time || '09:00').split(':').map(Number);
     const [eh, em] = (sched.end_time || '10:00').split(':').map(Number);
     const durationMinutes = (eh * 60 + em) - (sh * 60 + sm);
 
     try {
-      await adminQuery('create_live_class', {
-        batch_id: form.batch_id,
-        schedule_id: form.schedule_id,
-        title: sched.title,
-        scheduled_at: scheduledAt,
-        duration_minutes: durationMinutes > 0 ? durationMinutes : 60,
-        meeting_url: form.meeting_url || null,
-      });
-      toast.success('Live class created from schedule');
+      if (isTeacher) {
+        // Teacher inserts directly (RLS allows for their batches)
+        const roomName = `class-${form.batch_id.slice(0, 8)}-${Date.now()}`;
+        const meetingUrl = form.meeting_url || `https://meet.jit.si/${roomName}`;
+        const { error } = await supabase.from('live_classes').insert({
+          batch_id: form.batch_id,
+          schedule_id: form.schedule_id,
+          title: sched.title,
+          scheduled_at: scheduledAt,
+          duration_minutes: durationMinutes > 0 ? durationMinutes : 60,
+          meeting_url: meetingUrl,
+        });
+        if (error) throw error;
+      } else {
+        await adminQuery('create_live_class', {
+          batch_id: form.batch_id,
+          schedule_id: form.schedule_id,
+          title: sched.title,
+          scheduled_at: scheduledAt,
+          duration_minutes: durationMinutes > 0 ? durationMinutes : 60,
+          meeting_url: form.meeting_url || null,
+        });
+      }
+      toast.success('Live class created');
       setOpen(false);
       setForm({ batch_id: '', schedule_id: '', meeting_url: '' });
+      load();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
+  const startClass = async (cls: any) => {
+    try {
+      let meetingUrl = cls.meeting_url;
+      if (!meetingUrl) {
+        const roomName = `class-${cls.id.slice(0, 8)}`;
+        meetingUrl = `https://meet.jit.si/${roomName}`;
+      }
+      if (isTeacher) {
+        const { error } = await supabase.from('live_classes')
+          .update({ status: 'live' as any, meeting_url: meetingUrl })
+          .eq('id', cls.id);
+        if (error) throw error;
+      } else {
+        await adminQuery('update_live_class', { id: cls.id, status: 'live', meeting_url: meetingUrl });
+      }
+      toast.success('Class started!');
+      setActiveClassroom(cls.id);
+      load();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
+  const endClass = async (id: string) => {
+    try {
+      if (isTeacher) {
+        const { error } = await supabase.from('live_classes')
+          .update({ status: 'completed' as any })
+          .eq('id', id);
+        if (error) throw error;
+      } else {
+        await adminQuery('update_live_class', { id, status: 'completed' });
+      }
+      toast.success('Class ended');
+      setActiveClassroom(null);
       load();
     } catch (e: any) {
       toast.error(e.message);
@@ -123,10 +202,23 @@ export default function LiveClassesPage() {
     }
   };
 
+  const activeClass = classes.find(c => c.id === activeClassroom);
+
   return (
     <div className="p-6 space-y-6">
+      {/* Video Classroom Embed */}
+      {activeClass && (
+        <VideoClassroom
+          roomName={activeClass.meeting_url?.replace('https://meet.jit.si/', '') || `class-${activeClass.id.slice(0, 8)}`}
+          displayName={profile?.displayName || 'Teacher'}
+          onClose={() => setActiveClassroom(null)}
+        />
+      )}
+
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">Live Classes</h1>
+        <h1 className="text-2xl font-bold text-foreground">
+          {isTeacher ? 'My Classes' : 'Live Classes'}
+        </h1>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button><Plus className="mr-2 h-4 w-4" />Add Live Class</Button>
@@ -179,11 +271,11 @@ export default function LiveClassesPage() {
               )}
 
               <div>
-                <Label>Meeting URL</Label>
+                <Label>Meeting URL <span className="text-muted-foreground text-xs">(optional — auto-generates Jitsi room)</span></Label>
                 <Input
                   value={form.meeting_url}
                   onChange={e => setForm(f => ({ ...f, meeting_url: e.target.value }))}
-                  placeholder="https://meet.google.com/..."
+                  placeholder="https://meet.google.com/... or leave blank for Jitsi"
                 />
               </div>
 
@@ -204,17 +296,17 @@ export default function LiveClassesPage() {
                 <TableHead>Batch</TableHead>
                 <TableHead>Date & Time</TableHead>
                 <TableHead>Duration</TableHead>
-                <TableHead>Meeting</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="w-16"></TableHead>
+                <TableHead>Actions</TableHead>
+                {isAdmin && <TableHead className="w-16"></TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {classes.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={isAdmin ? 7 : 6} className="text-center py-8 text-muted-foreground">
                     <Video className="mx-auto h-8 w-8 mb-2 opacity-50" />
-                    No live classes — link one from an existing schedule entry
+                    No live classes — create one from a schedule entry
                   </TableCell>
                 </TableRow>
               ) : (
@@ -230,28 +322,56 @@ export default function LiveClassesPage() {
                     <TableCell>{new Date(c.scheduled_at).toLocaleString()}</TableCell>
                     <TableCell>{c.duration_minutes}m</TableCell>
                     <TableCell>
-                      {c.meeting_url ? (
-                        <a href={c.meeting_url} target="_blank" rel="noopener noreferrer" className="text-primary underline text-sm">
-                          Join
-                        </a>
-                      ) : '—'}
+                      {isAdmin ? (
+                        <Select value={c.status} onValueChange={v => updateStatus(c.id, v)}>
+                          <SelectTrigger className="w-32 h-8"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="scheduled">Scheduled</SelectItem>
+                            <SelectItem value="live">Live</SelectItem>
+                            <SelectItem value="completed">Completed</SelectItem>
+                            <SelectItem value="cancelled">Cancelled</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Badge variant="outline" className={STATUS_COLORS[c.status] || ''}>
+                          {c.status === 'live' && <span className="mr-1.5 h-2 w-2 rounded-full bg-green-400 animate-pulse inline-block" />}
+                          {c.status}
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell>
-                      <Select value={c.status} onValueChange={v => updateStatus(c.id, v)}>
-                        <SelectTrigger className="w-32 h-8"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="scheduled">Scheduled</SelectItem>
-                          <SelectItem value="live">Live</SelectItem>
-                          <SelectItem value="completed">Completed</SelectItem>
-                          <SelectItem value="cancelled">Cancelled</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <div className="flex items-center gap-1.5">
+                        {c.status === 'scheduled' && (
+                          <Button size="sm" variant="default" className="h-7 gap-1" onClick={() => startClass(c)}>
+                            <Play className="h-3.5 w-3.5" /> Start
+                          </Button>
+                        )}
+                        {c.status === 'live' && (
+                          <>
+                            <Button size="sm" variant="default" className="h-7 gap-1" onClick={() => setActiveClassroom(c.id)}>
+                              <Video className="h-3.5 w-3.5" /> Join
+                            </Button>
+                            <Button size="sm" variant="destructive" className="h-7 gap-1" onClick={() => endClass(c.id)}>
+                              <Square className="h-3.5 w-3.5" /> End
+                            </Button>
+                          </>
+                        )}
+                        {c.meeting_url && (
+                          <Button size="sm" variant="ghost" className="h-7" asChild>
+                            <a href={c.meeting_url} target="_blank" rel="noopener noreferrer">
+                              <ExternalLink className="h-3.5 w-3.5" />
+                            </a>
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(c.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </TableCell>
+                    {isAdmin && (
+                      <TableCell>
+                        <Button variant="ghost" size="icon" onClick={() => handleDelete(c.id)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))
               )}
