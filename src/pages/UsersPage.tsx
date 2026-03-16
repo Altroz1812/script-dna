@@ -209,13 +209,19 @@ export default function UsersPage() {
                         <Button variant="ghost" size="icon" title={u.is_active !== false ? 'Deactivate' : 'Reactivate'} onClick={() => handleToggleActive(u)}>
                           {u.is_active !== false ? <UserX className="h-4 w-4 text-amber-500" /> : <UserCheck className="h-4 w-4 text-emerald-500" />}
                         </Button>
-                        {u.email && (
-                          <Button variant="ghost" size="icon" title="Reset Password" onClick={() => handleResetPassword(u.email!)}>
-                            <KeyRound className="h-4 w-4" />
-                          </Button>
-                        )}
-                        <Button variant="ghost" size="icon" title="Delete" onClick={() => handleDelete(u.user_id)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
+                         {u.email && (
+                           <Button variant="ghost" size="icon" title="Reset Password" onClick={() => handleResetPassword(u.email!)}>
+                             <KeyRound className="h-4 w-4" />
+                           </Button>
+                         )}
+                         {u.role === 'parent' && (
+                           <Button variant="ghost" size="icon" title="Link Children" onClick={() => setLinkParent(u)}>
+                             <Link2 className="h-4 w-4 text-primary" />
+                           </Button>
+                         )}
+                         <Button variant="ghost" size="icon" title="Delete" onClick={() => handleDelete(u.user_id)}>
+                           <Trash2 className="h-4 w-4 text-destructive" />
+                         </Button>
                         </Button>
                       </div>
                     </TableCell>
