@@ -9,9 +9,10 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Pencil, Trash2, Search, Users, Plus, UserX, UserCheck, KeyRound } from 'lucide-react';
+import { Pencil, Trash2, Search, Users, Plus, UserX, UserCheck, KeyRound, Link2 } from 'lucide-react';
 import { ROLE_LABELS, type AppRole } from '@/types/roles';
 import { TableSkeleton } from '@/components/ui/loading-skeletons';
+import { ParentChildLinkDialog } from '@/components/admin/ParentChildLinkDialog';
 
 interface UserRow {
   user_id: string;
@@ -29,6 +30,7 @@ export default function UsersPage() {
   const [roleFilter, setRoleFilter] = useState('all');
   const [editUser, setEditUser] = useState<UserRow | null>(null);
   const [editName, setEditName] = useState('');
+  const [linkParent, setLinkParent] = useState<UserRow | null>(null);
 
   // Create user state
   const [createOpen, setCreateOpen] = useState(false);
@@ -207,14 +209,19 @@ export default function UsersPage() {
                         <Button variant="ghost" size="icon" title={u.is_active !== false ? 'Deactivate' : 'Reactivate'} onClick={() => handleToggleActive(u)}>
                           {u.is_active !== false ? <UserX className="h-4 w-4 text-amber-500" /> : <UserCheck className="h-4 w-4 text-emerald-500" />}
                         </Button>
-                        {u.email && (
-                          <Button variant="ghost" size="icon" title="Reset Password" onClick={() => handleResetPassword(u.email!)}>
-                            <KeyRound className="h-4 w-4" />
-                          </Button>
-                        )}
-                        <Button variant="ghost" size="icon" title="Delete" onClick={() => handleDelete(u.user_id)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                         {u.email && (
+                           <Button variant="ghost" size="icon" title="Reset Password" onClick={() => handleResetPassword(u.email!)}>
+                             <KeyRound className="h-4 w-4" />
+                           </Button>
+                         )}
+                         {u.role === 'parent' && (
+                           <Button variant="ghost" size="icon" title="Link Children" onClick={() => setLinkParent(u)}>
+                             <Link2 className="h-4 w-4 text-primary" />
+                           </Button>
+                         )}
+                         <Button variant="ghost" size="icon" title="Delete" onClick={() => handleDelete(u.user_id)}>
+                           <Trash2 className="h-4 w-4 text-destructive" />
+                         </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -234,6 +241,13 @@ export default function UsersPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ParentChildLinkDialog
+        open={!!linkParent}
+        onOpenChange={v => { if (!v) setLinkParent(null); }}
+        parentUserId={linkParent?.user_id}
+        parentName={linkParent?.display_name || linkParent?.email || undefined}
+      />
     </div>
   );
 }

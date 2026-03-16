@@ -113,6 +113,10 @@ export async function adminQuery(action: string, params: any = {}): Promise<any>
     case 'create_lesson':
     case 'update_lesson':
     case 'delete_lesson':
+    case 'list_parent_children':
+    case 'add_parent_child':
+    case 'remove_parent_child':
+    case 'list_parents':
       return edgeFunctionAction(action, params);
 
     default:
