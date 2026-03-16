@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRBAC } from '@/hooks/useRBAC';
@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Upload, MessageSquare, FileCheck } from 'lucide-react';
+import { Upload, MessageSquare, FileCheck, Camera } from 'lucide-react';
 import { TableSkeleton } from '@/components/ui/loading-skeletons';
 
 export default function StudentSubmissionsPage() {
@@ -20,6 +20,7 @@ export default function StudentSubmissionsPage() {
   const { role } = useRBAC();
   const isTeacher = role === 'teacher';
   const isStudent = role === 'student';
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
@@ -27,7 +28,8 @@ export default function StudentSubmissionsPage() {
   const [submitOpen, setSubmitOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [selectedSubmission, setSelectedSubmission] = useState<any>(null);
-  const [submitForm, setSubmitForm] = useState({ assignment_id: '', file_url: '' });
+  const [submitForm, setSubmitForm] = useState({ assignment_id: '', file: null as File | null });
+  const [uploading, setUploading] = useState(false);
   const [reviewForm, setReviewForm] = useState({ score: '', feedback: '' });
 
   const load = async () => {
@@ -58,19 +60,35 @@ export default function StudentSubmissionsPage() {
 
   const handleSubmit = async () => {
     if (!submitForm.assignment_id) { toast.error('Select an assignment'); return; }
+    setUploading(true);
     try {
+      let fileUrl: string | null = null;
+
+      if (submitForm.file) {
+        const ext = submitForm.file.name.split('.').pop();
+        const path = `${profile!.id}/${Date.now()}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from('submissions')
+          .upload(path, submitForm.file);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage.from('submissions').getPublicUrl(path);
+        fileUrl = urlData.publicUrl;
+      }
+
       const { error } = await supabase.from('student_submissions').insert({
         assignment_id: submitForm.assignment_id,
         student_id: profile?.id,
-        file_url: submitForm.file_url || null,
+        file_url: fileUrl,
       });
       if (error) throw error;
       toast.success('Submission uploaded');
       setSubmitOpen(false);
-      setSubmitForm({ assignment_id: '', file_url: '' });
+      setSubmitForm({ assignment_id: '', file: null });
       load();
     } catch (e: any) {
       toast.error(e.message);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -131,8 +149,44 @@ export default function StudentSubmissionsPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div><Label>File URL (image/PDF link)</Label><Input value={submitForm.file_url} onChange={e => setSubmitForm(f => ({ ...f, file_url: e.target.value }))} placeholder="https://..." /></div>
-                <Button onClick={handleSubmit} className="w-full" disabled={!submitForm.assignment_id}>Submit</Button>
+                <div>
+                  <Label>Upload Handwriting (image/PDF)</Label>
+                  <div className="flex gap-2 mt-1">
+                    <Input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={e => setSubmitForm(f => ({ ...f, file: e.target.files?.[0] || null }))}
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => {
+                        // Create a hidden input with camera capture for mobile
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = 'image/*';
+                        input.capture = 'environment';
+                        input.onchange = (e: any) => {
+                          const file = e.target.files?.[0];
+                          if (file) setSubmitForm(f => ({ ...f, file }));
+                        };
+                        input.click();
+                      }}
+                      title="Take photo"
+                    >
+                      <Camera className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  {submitForm.file && (
+                    <p className="text-xs text-muted-foreground mt-1">{submitForm.file.name}</p>
+                  )}
+                </div>
+                <Button onClick={handleSubmit} className="w-full" disabled={!submitForm.assignment_id || uploading}>
+                  {uploading ? 'Uploading...' : 'Submit'}
+                </Button>
               </div>
             </DialogContent>
           </Dialog>

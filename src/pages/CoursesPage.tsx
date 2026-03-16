@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRBAC } from '@/hooks/useRBAC';
 import { courseService, type Course, type CreateCourseParams } from '@/services/api/courseService';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -13,23 +15,41 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { Plus, Trash2, BookOpen, Clock, Calendar, GraduationCap, IndianRupee } from 'lucide-react';
+import { Plus, Trash2, BookOpen, Clock, Calendar, GraduationCap, IndianRupee, Eye } from 'lucide-react';
 import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
 
 export default function CoursesPage() {
   const { profile } = useAuth();
-  const { isAdmin } = useRBAC();
+  const { isAdmin, role } = useRBAC();
+  const isStudent = role === 'student';
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<Partial<CreateCourseParams>>({
     name: '', description: '', grade_level: '', duration_days: 30, total_hours: 25,
     daily_hours: 1.0, language: 'English', writing_style: 'Cursive', includes_speed: false, fee: 0,
   });
 
+  // Students query courses directly (public SELECT RLS); admins use edge function
   const { data: courses = [], isLoading } = useQuery<Course[]>({
-    queryKey: ['courses'],
-    queryFn: () => courseService.listCourses(),
+    queryKey: ['courses', isStudent],
+    queryFn: async () => {
+      if (isStudent) {
+        // Get enrolled course IDs via batch_students → batches
+        const { data: enrollments } = await supabase
+          .from('batch_students')
+          .select('batch_id, batches(course_id)')
+          .eq('student_id', profile!.id);
+        const courseIds = [...new Set((enrollments || []).map((e: any) => e.batches?.course_id).filter(Boolean))];
+        if (courseIds.length === 0) return [];
+        const { data, error } = await supabase.from('courses').select('*').in('id', courseIds);
+        if (error) throw error;
+        return data || [];
+      }
+      return courseService.listCourses();
+    },
     staleTime: 1000 * 60 * 5,
+    enabled: !!profile,
   });
 
   const createMutation = useMutation({
@@ -84,7 +104,7 @@ export default function CoursesPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Courses</h1>
           <p className="text-muted-foreground text-sm">
-            {isAdmin ? 'Manage courses and curriculum' : 'Browse available courses'}
+            {isStudent ? 'Your enrolled courses' : isAdmin ? 'Manage courses and curriculum' : 'Browse available courses'}
           </p>
         </div>
         {isAdmin && (
@@ -171,7 +191,7 @@ export default function CoursesPage() {
         <Card>
           <CardContent className="p-12 text-center text-muted-foreground">
             <BookOpen className="mx-auto h-12 w-12 mb-4 opacity-50" />
-            <p>No courses yet.{isAdmin ? ' Create one to get started.' : ''}</p>
+            <p>{isStudent ? 'You are not enrolled in any courses yet.' : 'No courses yet.'}{isAdmin ? ' Create one to get started.' : ''}</p>
           </CardContent>
         </Card>
       ) : (
@@ -214,6 +234,11 @@ export default function CoursesPage() {
                     <div className="flex items-center gap-1 font-medium text-foreground"><IndianRupee className="h-3.5 w-3.5" />₹{c.fee.toLocaleString('en-IN')}</div>
                   )}
                 </div>
+                {isStudent && (
+                  <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => navigate(`/courses/${c.id}/lessons`)}>
+                    <Eye className="h-3.5 w-3.5 mr-1.5" /> View Lessons
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ))}
