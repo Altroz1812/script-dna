@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { adminQuery } from '@/services/api/adminService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { batchService } from '@/services/api/courseService';
-import { ClipboardCheck } from 'lucide-react';
 import { TableSkeleton } from '@/components/ui/loading-skeletons';
+import { useRBAC } from '@/hooks/useRBAC';
 
 export default function AttendancePage() {
+  const { role } = useRBAC();
+  const isTeacher = role === 'teacher';
+
   const [batches, setBatches] = useState<any[]>([]);
   const [selectedBatch, setSelectedBatch] = useState('');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
@@ -26,10 +29,26 @@ export default function AttendancePage() {
     if (!selectedBatch) return;
     setLoading(true);
     try {
-      const [studs, att] = await Promise.all([
-        batchService.getStudents(selectedBatch),
-        adminQuery('list_attendance', { batch_id: selectedBatch, date }),
-      ]);
+      let studs: any[];
+      let att: any[];
+
+      if (isTeacher) {
+        // Direct queries — RLS scopes to teacher's batches
+        const [studRes, attRes] = await Promise.all([
+          supabase.from('batch_students').select('*, profiles:student_id(display_name, email)').eq('batch_id', selectedBatch),
+          supabase.from('attendance').select('*').eq('batch_id', selectedBatch).eq('date', date),
+        ]);
+        if (studRes.error) throw studRes.error;
+        if (attRes.error) throw attRes.error;
+        studs = studRes.data || [];
+        att = attRes.data || [];
+      } else {
+        [studs, att] = await Promise.all([
+          batchService.getStudents(selectedBatch),
+          adminQuery('list_attendance', { batch_id: selectedBatch, date }),
+        ]);
+      }
+
       setStudents(studs);
       const rec: Record<string, string> = {};
       for (const s of studs) rec[s.student_id] = 'present';
@@ -43,8 +62,23 @@ export default function AttendancePage() {
   const save = async () => {
     setSaving(true);
     try {
-      const recs = Object.entries(records).map(([student_id, status]) => ({ student_id, status }));
-      await adminQuery('save_attendance', { batch_id: selectedBatch, date, records: recs });
+      if (isTeacher) {
+        // Direct delete + insert using RLS
+        await supabase.from('attendance').delete().eq('batch_id', selectedBatch).eq('date', date);
+        const rows = Object.entries(records).map(([student_id, status]) => ({
+          batch_id: selectedBatch,
+          student_id,
+          date,
+          status: status as any,
+        }));
+        if (rows.length > 0) {
+          const { error } = await supabase.from('attendance').insert(rows);
+          if (error) throw error;
+        }
+      } else {
+        const recs = Object.entries(records).map(([student_id, status]) => ({ student_id, status }));
+        await adminQuery('save_attendance', { batch_id: selectedBatch, date, records: recs });
+      }
       toast.success('Attendance saved');
     } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
   };
@@ -68,7 +102,9 @@ export default function AttendancePage() {
               {students.length === 0 ? <TableRow><TableCell colSpan={2} className="text-center py-8 text-muted-foreground">No students in this batch</TableCell></TableRow> :
                 students.map(s => (
                   <TableRow key={s.student_id}>
-                    <TableCell className="font-medium">{(s as any).profiles?.display_name || s.student_id}</TableCell>
+                    <TableCell className="font-medium">
+                      {(s as any).profiles?.display_name || s.student_id}
+                    </TableCell>
                     <TableCell>
                       <Select value={records[s.student_id] || 'present'} onValueChange={v => setRecords(r => ({ ...r, [s.student_id]: v }))}>
                         <SelectTrigger className="w-28 h-8"><SelectValue /></SelectTrigger>

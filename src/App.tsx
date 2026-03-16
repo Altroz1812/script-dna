@@ -39,6 +39,8 @@ import SubscriptionPlansPage from "@/pages/SubscriptionPlansPage";
 import CouponsPage from "@/pages/CouponsPage";
 import CurriculumPage from "@/pages/CurriculumPage";
 import SystemMonitoringPage from "@/pages/SystemMonitoringPage";
+import PracticeAssignmentsPage from "@/pages/PracticeAssignmentsPage";
+import StudentSubmissionsPage from "@/pages/StudentSubmissionsPage";
 const queryClient = new QueryClient();
 
 const App = () => (
