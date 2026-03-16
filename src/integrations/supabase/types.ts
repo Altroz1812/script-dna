@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_logs: {
+        Row: {
+          action: string
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          ip_address: string | null
+          metadata: Json | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       attendance: {
         Row: {
           batch_id: string
@@ -536,6 +569,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          is_active: boolean
           logo_url: string | null
           name: string
           slug: string
@@ -544,6 +578,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          is_active?: boolean
           logo_url?: string | null
           name: string
           slug: string
@@ -552,6 +587,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          is_active?: boolean
           logo_url?: string | null
           name?: string
           slug?: string
@@ -638,6 +674,7 @@ export type Database = {
           display_name: string | null
           email: string | null
           id: string
+          is_active: boolean
           organization_id: string | null
           updated_at: string
           user_id: string
@@ -648,6 +685,7 @@ export type Database = {
           display_name?: string | null
           email?: string | null
           id?: string
+          is_active?: boolean
           organization_id?: string | null
           updated_at?: string
           user_id: string
@@ -658,6 +696,7 @@ export type Database = {
           display_name?: string | null
           email?: string | null
           id?: string
+          is_active?: boolean
           organization_id?: string | null
           updated_at?: string
           user_id?: string
