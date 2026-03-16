@@ -848,6 +848,60 @@ export type Database = {
         }
         Relationships: []
       }
+      practice_assignments: {
+        Row: {
+          batch_id: string
+          course_id: string | null
+          created_at: string
+          description: string | null
+          due_date: string | null
+          file_url: string | null
+          id: string
+          teacher_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          batch_id: string
+          course_id?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          file_url?: string | null
+          id?: string
+          teacher_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          batch_id?: string
+          course_id?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          file_url?: string | null
+          id?: string
+          teacher_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "practice_assignments_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "practice_assignments_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1040,6 +1094,50 @@ export type Database = {
           },
         ]
       }
+      student_submissions: {
+        Row: {
+          assignment_id: string
+          created_at: string
+          file_url: string | null
+          id: string
+          score: number | null
+          status: Database["public"]["Enums"]["submission_status"]
+          student_id: string
+          teacher_feedback: string | null
+          updated_at: string
+        }
+        Insert: {
+          assignment_id: string
+          created_at?: string
+          file_url?: string | null
+          id?: string
+          score?: number | null
+          status?: Database["public"]["Enums"]["submission_status"]
+          student_id: string
+          teacher_feedback?: string | null
+          updated_at?: string
+        }
+        Update: {
+          assignment_id?: string
+          created_at?: string
+          file_url?: string | null
+          id?: string
+          score?: number | null
+          status?: Database["public"]["Enums"]["submission_status"]
+          student_id?: string
+          teacher_feedback?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_submissions_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "practice_assignments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscription_plans: {
         Row: {
           billing_cycle: string
@@ -1168,6 +1266,7 @@ export type Database = {
       payment_status: "pending" | "completed" | "failed" | "refunded"
       payroll_status: "pending" | "paid"
       rule_status: "pending" | "approved" | "rejected"
+      submission_status: "pending" | "reviewed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1309,6 +1408,7 @@ export const Constants = {
       payment_status: ["pending", "completed", "failed", "refunded"],
       payroll_status: ["pending", "paid"],
       rule_status: ["pending", "approved", "rejected"],
+      submission_status: ["pending", "reviewed"],
     },
   },
 } as const
