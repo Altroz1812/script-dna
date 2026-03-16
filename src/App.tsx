@@ -41,6 +41,8 @@ import CurriculumPage from "@/pages/CurriculumPage";
 import SystemMonitoringPage from "@/pages/SystemMonitoringPage";
 import PracticeAssignmentsPage from "@/pages/PracticeAssignmentsPage";
 import StudentSubmissionsPage from "@/pages/StudentSubmissionsPage";
+import StudentLessonViewer from "@/pages/StudentLessonViewer";
+import StudentProgressPage from "@/pages/StudentProgressPage";
 const queryClient = new QueryClient();
 
 const App = () => (
