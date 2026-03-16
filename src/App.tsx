@@ -39,6 +39,8 @@ import SubscriptionPlansPage from "@/pages/SubscriptionPlansPage";
 import CouponsPage from "@/pages/CouponsPage";
 import CurriculumPage from "@/pages/CurriculumPage";
 import SystemMonitoringPage from "@/pages/SystemMonitoringPage";
+import PracticeAssignmentsPage from "@/pages/PracticeAssignmentsPage";
+import StudentSubmissionsPage from "@/pages/StudentSubmissionsPage";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -86,6 +88,8 @@ const App = () => (
                 <Route path="/coupons" element={<CouponsPage />} />
                 <Route path="/curriculum" element={<CurriculumPage />} />
                 <Route path="/monitoring" element={<SystemMonitoringPage />} />
+                <Route path="/practice" element={<PracticeAssignmentsPage />} />
+                <Route path="/submissions" element={<StudentSubmissionsPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
