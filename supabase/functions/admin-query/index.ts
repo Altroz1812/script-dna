@@ -565,89 +565,140 @@ Deno.serve(async (req) => {
         break
       }
 
-      // ===== ANALYTICS =====
-      case 'revenue_analytics': {
-        // Monthly revenue for last 12 months
-        const { data: payments } = await supabase.from('payments').select('amount, status, payment_date, student_id, created_at').eq('status', 'completed')
-        const monthlyRevenue: Record<string, number> = {}
-        const now = new Date()
-        for (let i = 11; i >= 0; i--) {
-          const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-          monthlyRevenue[key] = 0
-        }
-        for (const p of payments ?? []) {
-          const d = new Date(p.payment_date || p.created_at)
-          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-          if (key in monthlyRevenue) monthlyRevenue[key] = (monthlyRevenue[key] || 0) + Number(p.amount)
-        }
-        // Total revenue
-        const totalRevenue = (payments ?? []).reduce((s: number, p: any) => s + Number(p.amount), 0)
-        // Pending payments
-        const { data: pendingPayments } = await supabase.from('payments').select('amount').eq('status', 'pending')
-        const pendingRevenue = (pendingPayments ?? []).reduce((s: number, p: any) => s + Number(p.amount), 0)
-        result = { monthlyRevenue, totalRevenue, pendingRevenue, totalTransactions: (payments ?? []).length }
+      // ===== SUBSCRIPTION PLANS =====
+      case 'list_subscription_plans': {
+        const { data } = await supabase.from('subscription_plans').select('*').order('price')
+        result = data ?? []
+        break
+      }
+      case 'create_subscription_plan': {
+        const { data, error } = await supabase.from('subscription_plans').insert(params).select().single()
+        if (error) throw error
+        result = data
+        break
+      }
+      case 'update_subscription_plan': {
+        const { id, ...updates } = params
+        const { error } = await supabase.from('subscription_plans').update(updates).eq('id', id)
+        if (error) throw error
+        result = { success: true }
+        break
+      }
+      case 'delete_subscription_plan': {
+        const { error } = await supabase.from('subscription_plans').delete().eq('id', params.id)
+        if (error) throw error
+        result = { success: true }
         break
       }
 
-      case 'org_performance': {
-        const { data: orgs } = await supabase.from('organizations').select('id, name, is_active')
-        const { data: members } = await supabase.from('organization_members').select('organization_id')
-        const { data: courses } = await supabase.from('courses').select('id, organization_id')
-        const { data: batches } = await supabase.from('batches').select('id, organization_id')
-        const { data: payments } = await supabase.from('payments').select('amount, student_id, status').eq('status', 'completed')
-        // Map org members
-        const memberCount: Record<string, number> = {}
-        for (const m of members ?? []) memberCount[m.organization_id] = (memberCount[m.organization_id] || 0) + 1
-        const courseCount: Record<string, number> = {}
-        for (const c of courses ?? []) if (c.organization_id) courseCount[c.organization_id] = (courseCount[c.organization_id] || 0) + 1
-        const batchCount: Record<string, number> = {}
-        for (const b of batches ?? []) if (b.organization_id) batchCount[b.organization_id] = (batchCount[b.organization_id] || 0) + 1
-        // Map students to orgs via org_members
-        const studentOrgMap: Record<string, string> = {}
-        const { data: orgMembers } = await supabase.from('organization_members').select('user_id, organization_id')
-        for (const om of orgMembers ?? []) studentOrgMap[om.user_id] = om.organization_id
-        const orgRevenue: Record<string, number> = {}
-        for (const p of payments ?? []) {
-          const orgId = studentOrgMap[p.student_id]
-          if (orgId) orgRevenue[orgId] = (orgRevenue[orgId] || 0) + Number(p.amount)
+      // ===== ORG SUBSCRIPTIONS =====
+      case 'list_org_subscriptions': {
+        const { data } = await supabase.from('org_subscriptions').select('*, organizations(name), subscription_plans(name, price, billing_cycle)').order('created_at', { ascending: false })
+        result = data ?? []
+        break
+      }
+      case 'assign_org_subscription': {
+        const { organization_id, plan_id, expires_at } = params
+        // upsert
+        const { data: existing } = await supabase.from('org_subscriptions').select('id').eq('organization_id', organization_id).maybeSingle()
+        if (existing) {
+          const { error } = await supabase.from('org_subscriptions').update({ plan_id, status: 'active', starts_at: new Date().toISOString(), expires_at: expires_at || null }).eq('organization_id', organization_id)
+          if (error) throw error
+        } else {
+          const { error } = await supabase.from('org_subscriptions').insert({ organization_id, plan_id, expires_at: expires_at || null })
+          if (error) throw error
         }
-        result = (orgs ?? []).map((o: any) => ({
-          id: o.id, name: o.name, is_active: o.is_active,
-          members: memberCount[o.id] || 0,
-          courses: courseCount[o.id] || 0,
-          batches: batchCount[o.id] || 0,
-          revenue: orgRevenue[o.id] || 0,
-        }))
+        result = { success: true }
+        break
+      }
+      case 'cancel_org_subscription': {
+        const { error } = await supabase.from('org_subscriptions').update({ status: 'cancelled' }).eq('organization_id', params.organization_id)
+        if (error) throw error
+        result = { success: true }
         break
       }
 
-      case 'student_trends': {
-        // Attendance rates by month
-        const { data: attendance } = await supabase.from('attendance').select('status, date')
-        const monthlyAttendance: Record<string, { present: number, total: number }> = {}
-        const now2 = new Date()
-        for (let i = 5; i >= 0; i--) {
-          const d = new Date(now2.getFullYear(), now2.getMonth() - i, 1)
-          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-          monthlyAttendance[key] = { present: 0, total: 0 }
+      // ===== COUPONS =====
+      case 'list_coupons': {
+        const { data } = await supabase.from('coupons').select('*').order('created_at', { ascending: false })
+        result = data ?? []
+        break
+      }
+      case 'create_coupon': {
+        const { data, error } = await supabase.from('coupons').insert(params).select().single()
+        if (error) throw error
+        result = data
+        break
+      }
+      case 'update_coupon': {
+        const { id, ...updates } = params
+        const { error } = await supabase.from('coupons').update(updates).eq('id', id)
+        if (error) throw error
+        result = { success: true }
+        break
+      }
+      case 'delete_coupon': {
+        const { error } = await supabase.from('coupons').delete().eq('id', params.id)
+        if (error) throw error
+        result = { success: true }
+        break
+      }
+
+      // ===== WHITE-LABEL BRANDING =====
+      case 'update_org_branding': {
+        const { id, branding } = params
+        const { error } = await supabase.from('organizations').update({ branding }).eq('id', id)
+        if (error) throw error
+        result = { success: true }
+        break
+      }
+
+      // ===== CURRICULUM (MODULES & LESSONS) =====
+      case 'list_course_modules': {
+        const { data } = await supabase.from('course_modules').select('*, lessons(*)').eq('course_id', params.course_id).order('sort_order')
+        // sort lessons within each module
+        for (const m of data ?? []) {
+          if (m.lessons) m.lessons.sort((a: any, b: any) => a.sort_order - b.sort_order)
         }
-        for (const a of attendance ?? []) {
-          const d = new Date(a.date)
-          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-          if (key in monthlyAttendance) {
-            monthlyAttendance[key].total++
-            if (a.status === 'present') monthlyAttendance[key].present++
-          }
-        }
-        // Student progress summary
-        const { data: progress } = await supabase.from('student_progress').select('*')
-        const inProgress = (progress ?? []).filter((p: any) => p.status === 'in_progress').length
-        const completed = (progress ?? []).filter((p: any) => p.status === 'completed').length
-        const avgCompletion = (progress ?? []).length > 0
-          ? (progress ?? []).reduce((s: number, p: any) => s + Number(p.completion_pct), 0) / (progress ?? []).length
-          : 0
-        result = { monthlyAttendance, progressSummary: { inProgress, completed, total: (progress ?? []).length, avgCompletion } }
+        result = data ?? []
+        break
+      }
+      case 'create_course_module': {
+        const { data, error } = await supabase.from('course_modules').insert(params).select().single()
+        if (error) throw error
+        result = data
+        break
+      }
+      case 'update_course_module': {
+        const { id, ...updates } = params
+        const { error } = await supabase.from('course_modules').update(updates).eq('id', id)
+        if (error) throw error
+        result = { success: true }
+        break
+      }
+      case 'delete_course_module': {
+        const { error } = await supabase.from('course_modules').delete().eq('id', params.id)
+        if (error) throw error
+        result = { success: true }
+        break
+      }
+      case 'create_lesson': {
+        const { data, error } = await supabase.from('lessons').insert(params).select().single()
+        if (error) throw error
+        result = data
+        break
+      }
+      case 'update_lesson': {
+        const { id, ...updates } = params
+        const { error } = await supabase.from('lessons').update(updates).eq('id', id)
+        if (error) throw error
+        result = { success: true }
+        break
+      }
+      case 'delete_lesson': {
+        const { error } = await supabase.from('lessons').delete().eq('id', params.id)
+        if (error) throw error
+        result = { success: true }
         break
       }
 
