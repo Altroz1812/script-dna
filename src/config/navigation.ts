@@ -78,6 +78,7 @@ export const navigationConfig: NavGroup[] = [
   {
     label: 'Tools',
     items: [
+      { title: 'My Progress', url: '/my-progress', icon: TrendingUp, roles: ['student'] },
       { title: 'Font Architect', url: '/font-architect', icon: PenTool, roles: ['superadmin', 'admin'] },
       { title: 'Reports', url: '/reports', icon: BarChart3, roles: ['superadmin', 'admin', 'teacher'] },
       { title: 'Notifications', url: '/notifications', icon: Bell, roles: ['superadmin', 'admin', 'support'] },
