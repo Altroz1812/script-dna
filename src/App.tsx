@@ -34,6 +34,7 @@ import SettingsPage from "@/pages/SettingsPage";
 import CheckoutPage from "@/pages/CheckoutPage";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
+import ActivityLogsPage from "@/pages/ActivityLogsPage";
 
 const queryClient = new QueryClient();
 
