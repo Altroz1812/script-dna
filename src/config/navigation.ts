@@ -12,6 +12,7 @@ import {
   PenTool,
   UserPlus,
   HeadphonesIcon,
+  Monitor,
   Video,
   FileText,
   DollarSign,
