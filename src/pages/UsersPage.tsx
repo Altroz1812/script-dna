@@ -242,6 +242,13 @@ export default function UsersPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ParentChildLinkDialog
+        open={!!linkParent}
+        onOpenChange={v => { if (!v) setLinkParent(null); }}
+        parentUserId={linkParent?.user_id}
+        parentName={linkParent?.display_name || linkParent?.email || undefined}
+      />
     </div>
   );
 }
