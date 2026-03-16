@@ -85,6 +85,14 @@ export async function adminQuery(action: string, params: any = {}): Promise<any>
     case 'remove_batch_student': return removeBatchStudent(params);
     case 'batch_student_count': return batchStudentCount(params);
 
+    // ===== EDGE FUNCTION ACTIONS (require service role) =====
+    case 'toggle_org_active':
+    case 'toggle_user_active':
+    case 'create_user':
+    case 'admin_reset_password':
+    case 'list_activity_logs':
+      return edgeFunctionAction(action, params);
+
     default:
       throw new Error(`Unknown action: ${action}`);
   }
