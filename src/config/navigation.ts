@@ -56,6 +56,12 @@ export const navigationConfig: NavGroup[] = [
         roles: ['superadmin', 'admin', 'support', 'teacher', 'student'],
       },
       {
+        title: 'Curriculum',
+        url: '/curriculum',
+        icon: Layers,
+        roles: ['superadmin', 'admin'],
+      },
+      {
         title: 'Batches',
         url: '/batches',
         icon: Users,
