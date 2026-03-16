@@ -119,7 +119,7 @@ export default function SystemMonitoringPage() {
             <Progress value={loginSuccessRate} className="h-2" />
             <div className="flex justify-between text-sm">
               <span className="flex items-center gap-1 text-muted-foreground">
-                <CheckCircle className="h-3 w-3 text-green-500" /> Successful
+                <CheckCircle className="h-3 w-3 text-primary" /> Successful
               </span>
               <span className="font-medium">{health.loginHealth.success}</span>
             </div>
