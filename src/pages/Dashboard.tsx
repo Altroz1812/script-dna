@@ -145,7 +145,7 @@ export default function Dashboard() {
       const org = await organizationService.getOrganization(organizationId);
       return org?.name ?? null;
     },
-    enabled: !!organizationId && !isStudent,
+    enabled: !!organizationId && !isStudent && !isParent,
   });
 
   const { data: stats, isLoading } = useQuery<Stats>({
@@ -153,7 +153,7 @@ export default function Dashboard() {
     queryFn: () => adminQuery('get_stats', { organizationId, isSuperadmin }) as Promise<Stats>,
     staleTime: 1000 * 60 * 5,
     retry: 2,
-    enabled: !!profile && !isStudent,
+    enabled: !!profile && !isStudent && !isParent,
   });
 
   const cards = useMemo(() => {
