@@ -91,6 +91,9 @@ export async function adminQuery(action: string, params: any = {}): Promise<any>
     case 'create_user':
     case 'admin_reset_password':
     case 'list_activity_logs':
+    case 'revenue_analytics':
+    case 'org_performance':
+    case 'student_trends':
       return edgeFunctionAction(action, params);
 
     default:
