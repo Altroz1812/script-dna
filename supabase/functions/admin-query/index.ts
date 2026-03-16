@@ -565,11 +565,89 @@ Deno.serve(async (req) => {
         break
       }
 
-      // ===== ACTIVITY LOGS =====
-      case 'list_activity_logs': {
-        const { data: logs } = await supabase.from('activity_logs').select('*').order('created_at', { ascending: false }).limit(200)
-        const { data: loginLogs } = await supabase.from('login_attempts').select('*').order('attempted_at', { ascending: false }).limit(200)
-        result = { activity_logs: logs ?? [], login_attempts: loginLogs ?? [] }
+      // ===== ANALYTICS =====
+      case 'revenue_analytics': {
+        // Monthly revenue for last 12 months
+        const { data: payments } = await supabase.from('payments').select('amount, status, payment_date, student_id, created_at').eq('status', 'completed')
+        const monthlyRevenue: Record<string, number> = {}
+        const now = new Date()
+        for (let i = 11; i >= 0; i--) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+          monthlyRevenue[key] = 0
+        }
+        for (const p of payments ?? []) {
+          const d = new Date(p.payment_date || p.created_at)
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+          if (key in monthlyRevenue) monthlyRevenue[key] = (monthlyRevenue[key] || 0) + Number(p.amount)
+        }
+        // Total revenue
+        const totalRevenue = (payments ?? []).reduce((s: number, p: any) => s + Number(p.amount), 0)
+        // Pending payments
+        const { data: pendingPayments } = await supabase.from('payments').select('amount').eq('status', 'pending')
+        const pendingRevenue = (pendingPayments ?? []).reduce((s: number, p: any) => s + Number(p.amount), 0)
+        result = { monthlyRevenue, totalRevenue, pendingRevenue, totalTransactions: (payments ?? []).length }
+        break
+      }
+
+      case 'org_performance': {
+        const { data: orgs } = await supabase.from('organizations').select('id, name, is_active')
+        const { data: members } = await supabase.from('organization_members').select('organization_id')
+        const { data: courses } = await supabase.from('courses').select('id, organization_id')
+        const { data: batches } = await supabase.from('batches').select('id, organization_id')
+        const { data: payments } = await supabase.from('payments').select('amount, student_id, status').eq('status', 'completed')
+        // Map org members
+        const memberCount: Record<string, number> = {}
+        for (const m of members ?? []) memberCount[m.organization_id] = (memberCount[m.organization_id] || 0) + 1
+        const courseCount: Record<string, number> = {}
+        for (const c of courses ?? []) if (c.organization_id) courseCount[c.organization_id] = (courseCount[c.organization_id] || 0) + 1
+        const batchCount: Record<string, number> = {}
+        for (const b of batches ?? []) if (b.organization_id) batchCount[b.organization_id] = (batchCount[b.organization_id] || 0) + 1
+        // Map students to orgs via org_members
+        const studentOrgMap: Record<string, string> = {}
+        const { data: orgMembers } = await supabase.from('organization_members').select('user_id, organization_id')
+        for (const om of orgMembers ?? []) studentOrgMap[om.user_id] = om.organization_id
+        const orgRevenue: Record<string, number> = {}
+        for (const p of payments ?? []) {
+          const orgId = studentOrgMap[p.student_id]
+          if (orgId) orgRevenue[orgId] = (orgRevenue[orgId] || 0) + Number(p.amount)
+        }
+        result = (orgs ?? []).map((o: any) => ({
+          id: o.id, name: o.name, is_active: o.is_active,
+          members: memberCount[o.id] || 0,
+          courses: courseCount[o.id] || 0,
+          batches: batchCount[o.id] || 0,
+          revenue: orgRevenue[o.id] || 0,
+        }))
+        break
+      }
+
+      case 'student_trends': {
+        // Attendance rates by month
+        const { data: attendance } = await supabase.from('attendance').select('status, date')
+        const monthlyAttendance: Record<string, { present: number, total: number }> = {}
+        const now2 = new Date()
+        for (let i = 5; i >= 0; i--) {
+          const d = new Date(now2.getFullYear(), now2.getMonth() - i, 1)
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+          monthlyAttendance[key] = { present: 0, total: 0 }
+        }
+        for (const a of attendance ?? []) {
+          const d = new Date(a.date)
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+          if (key in monthlyAttendance) {
+            monthlyAttendance[key].total++
+            if (a.status === 'present') monthlyAttendance[key].present++
+          }
+        }
+        // Student progress summary
+        const { data: progress } = await supabase.from('student_progress').select('*')
+        const inProgress = (progress ?? []).filter((p: any) => p.status === 'in_progress').length
+        const completed = (progress ?? []).filter((p: any) => p.status === 'completed').length
+        const avgCompletion = (progress ?? []).length > 0
+          ? (progress ?? []).reduce((s: number, p: any) => s + Number(p.completion_pct), 0) / (progress ?? []).length
+          : 0
+        result = { monthlyAttendance, progressSummary: { inProgress, completed, total: (progress ?? []).length, avgCompletion } }
         break
       }
 
