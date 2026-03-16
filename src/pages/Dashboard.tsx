@@ -131,6 +131,25 @@ export default function Dashboard() {
     enabled: !!profile && !isStudent,
   });
 
+  const cards = useMemo(() => {
+    if (!stats) return [];
+    const base = [
+      { label: isSuperadmin ? 'Total Users' : 'Org Members', value: stats.totalUsers, icon: Users, span: '2x1' as const },
+      { label: 'Students', value: stats.roleCounts?.student ?? 0, icon: GraduationCap, span: '1x1' as const },
+      { label: 'Teachers', value: stats.roleCounts?.teacher ?? 0, icon: UserCheck, span: '1x1' as const },
+      { label: 'Courses', value: stats.totalCourses, icon: BookOpen, span: '1x1' as const },
+      { label: 'Batches', value: stats.totalBatches, icon: Layers, span: '1x1' as const },
+    ];
+    if (isSuperadmin) {
+      base.push(
+        { label: 'Organizations', value: stats.totalOrgs, icon: Building2, span: '1x1' as const },
+        { label: 'Leads', value: stats.totalLeads, icon: UserPlus, span: '1x1' as const },
+        { label: 'Payments', value: stats.totalPayments, icon: CreditCard, span: '2x1' as const },
+      );
+    }
+    return base;
+  }, [stats, isSuperadmin]);
+
   // Student dashboard
   if (isStudent) {
     const avgCompletion = studentData?.progress?.length
@@ -177,7 +196,6 @@ export default function Dashboard() {
                 ))}
               </div>
 
-              {/* Quick Actions */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {[
                   { title: 'My Courses', desc: 'View enrolled courses & lessons', path: '/courses', gradient: 'from-purple-500/30 via-purple-600/10 to-transparent', borderColor: 'border-l-purple-500' },
@@ -203,31 +221,12 @@ export default function Dashboard() {
     );
   }
 
-  // Admin/Teacher dashboard (original)
+  // Admin/Teacher dashboard
   const subtitle = isSuperadmin
     ? 'Platform Overview · All Organizations'
     : orgName
       ? `${orgName} Overview`
       : 'Organization Overview';
-
-  const cards = useMemo(() => {
-    if (!stats) return [];
-    const base = [
-      { label: isSuperadmin ? 'Total Users' : 'Org Members', value: stats.totalUsers, icon: Users, span: '2x1' as const },
-      { label: 'Students', value: stats.roleCounts?.student ?? 0, icon: GraduationCap, span: '1x1' as const },
-      { label: 'Teachers', value: stats.roleCounts?.teacher ?? 0, icon: UserCheck, span: '1x1' as const },
-      { label: 'Courses', value: stats.totalCourses, icon: BookOpen, span: '1x1' as const },
-      { label: 'Batches', value: stats.totalBatches, icon: Layers, span: '1x1' as const },
-    ];
-    if (isSuperadmin) {
-      base.push(
-        { label: 'Organizations', value: stats.totalOrgs, icon: Building2, span: '1x1' as const },
-        { label: 'Leads', value: stats.totalLeads, icon: UserPlus, span: '1x1' as const },
-        { label: 'Payments', value: stats.totalPayments, icon: CreditCard, span: '2x1' as const },
-      );
-    }
-    return base;
-  }, [stats, isSuperadmin]);
 
   return (
     <div className="relative min-h-full">
