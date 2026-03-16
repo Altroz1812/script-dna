@@ -802,6 +802,63 @@ export type Database = {
           },
         ]
       }
+      student_progress: {
+        Row: {
+          batch_id: string | null
+          completed_at: string | null
+          completion_pct: number
+          course_id: string
+          id: string
+          sessions_attended: number
+          started_at: string
+          status: string
+          student_id: string
+          total_sessions: number
+          updated_at: string
+        }
+        Insert: {
+          batch_id?: string | null
+          completed_at?: string | null
+          completion_pct?: number
+          course_id: string
+          id?: string
+          sessions_attended?: number
+          started_at?: string
+          status?: string
+          student_id: string
+          total_sessions?: number
+          updated_at?: string
+        }
+        Update: {
+          batch_id?: string | null
+          completed_at?: string | null
+          completion_pct?: number
+          course_id?: string
+          id?: string
+          sessions_attended?: number
+          started_at?: string
+          status?: string
+          student_id?: string
+          total_sessions?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_progress_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_progress_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       uploaded_fonts: {
         Row: {
           created_at: string
