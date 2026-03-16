@@ -149,6 +149,41 @@ export default function OrganizationsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Branding Dialog */}
+      <Dialog open={!!brandingOrg} onOpenChange={v => { if (!v) setBrandingOrg(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>White-Label Branding: {brandingOrg?.name}</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div><Label>Display Name</Label><Input value={brandName} onChange={e => setBrandName(e.target.value)} placeholder="Custom brand name" /></div>
+            <div><Label>Logo URL</Label><Input value={brandLogoUrl} onChange={e => setBrandLogoUrl(e.target.value)} placeholder="https://..." /></div>
+            <div>
+              <Label>Primary Color</Label>
+              <div className="flex gap-2 items-center">
+                <input type="color" value={brandPrimaryColor} onChange={e => setBrandPrimaryColor(e.target.value)} className="w-10 h-10 rounded border cursor-pointer" />
+                <Input value={brandPrimaryColor} onChange={e => setBrandPrimaryColor(e.target.value)} className="flex-1" />
+              </div>
+            </div>
+            {brandLogoUrl && (
+              <div className="border rounded-md p-4 flex items-center gap-3">
+                <img src={brandLogoUrl} alt="Logo preview" className="h-10 w-10 object-contain" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                <span className="font-medium" style={{ color: brandPrimaryColor }}>{brandName || brandingOrg?.name}</span>
+              </div>
+            )}
+            <Button className="w-full" onClick={async () => {
+              try {
+                await adminQuery('update_org_branding', {
+                  id: brandingOrg.id,
+                  branding: { display_name: brandName || null, logo_url: brandLogoUrl || null, primary_color: brandPrimaryColor },
+                });
+                toast.success('Branding updated');
+                setBrandingOrg(null);
+                load();
+              } catch (e: any) { toast.error(e.message); }
+            }}>Save Branding</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
