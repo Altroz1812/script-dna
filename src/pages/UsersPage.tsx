@@ -30,6 +30,7 @@ export default function UsersPage() {
   const [roleFilter, setRoleFilter] = useState('all');
   const [editUser, setEditUser] = useState<UserRow | null>(null);
   const [editName, setEditName] = useState('');
+  const [linkParent, setLinkParent] = useState<UserRow | null>(null);
 
   // Create user state
   const [createOpen, setCreateOpen] = useState(false);
