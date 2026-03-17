@@ -117,6 +117,7 @@ export async function adminQuery(action: string, params: any = {}): Promise<any>
     case 'add_parent_child':
     case 'remove_parent_child':
     case 'list_parents':
+    case 'bulk_create_schedules':
       return edgeFunctionAction(action, params);
 
     default:
