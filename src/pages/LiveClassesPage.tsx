@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Video, Play, Square, Calendar as CalendarIcon, Clock, CheckCircle2, Radio } from 'lucide-react';
+import { EndClassAttendanceDialog } from '@/components/classroom/EndClassAttendanceDialog';
 import { useRBAC } from '@/hooks/useRBAC';
 import { useAuth } from '@/contexts/AuthContext';
 import { VideoClassroom } from '@/components/classroom/VideoClassroom';
