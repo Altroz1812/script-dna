@@ -344,6 +344,15 @@ export default function LiveClassesPage() {
           )}
         </div>
       </div>
+
+      <EndClassAttendanceDialog
+        open={!!endingClass}
+        onOpenChange={(open) => { if (!open) setEndingClass(null); }}
+        liveClass={endingClass}
+        isTeacher={isTeacher}
+        isAdmin={isAdmin}
+        onClassEnded={handleClassEnded}
+      />
     </div>
   );
 }
