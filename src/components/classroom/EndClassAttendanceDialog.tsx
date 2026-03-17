@@ -56,10 +56,16 @@ export function EndClassAttendanceDialog({
       if (isTeacher) {
         const { data, error } = await supabase
           .from('batch_students')
-          .select('student_id, profiles:student_id(display_name, email)')
+          .select('student_id')
           .eq('batch_id', liveClass.batch_id);
         if (error) throw error;
-        studs = (data as any[]) || [];
+        const ids = (data || []).map(s => s.student_id);
+        let profileMap: Record<string, any> = {};
+        if (ids.length > 0) {
+          const { data: profiles } = await supabase.from('profiles').select('user_id, display_name, email').in('user_id', ids);
+          for (const p of (profiles || [])) profileMap[p.user_id] = p;
+        }
+        studs = (data || []).map(s => ({ student_id: s.student_id, profiles: profileMap[s.student_id] || null }));
       } else {
         studs = await batchService.getStudents(liveClass.batch_id);
       }
