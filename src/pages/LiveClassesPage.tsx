@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Video, Play, Square, Calendar as CalendarIcon, Clock, CheckCircle2, Radio } from 'lucide-react';
+import { EndClassAttendanceDialog } from '@/components/classroom/EndClassAttendanceDialog';
 import { useRBAC } from '@/hooks/useRBAC';
 import { useAuth } from '@/contexts/AuthContext';
 import { VideoClassroom } from '@/components/classroom/VideoClassroom';
@@ -43,6 +44,7 @@ export default function LiveClassesPage() {
   const [activeClassroom, setActiveClassroom] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [filter, setFilter] = useState<'today' | 'upcoming' | 'completed' | 'all'>('today');
+  const [endingClass, setEndingClass] = useState<LiveClass | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -116,22 +118,13 @@ export default function LiveClassesPage() {
     }
   };
 
-  const endClass = async (id: string) => {
-    try {
-      if (isTeacher) {
-        const { error } = await supabase.from('live_classes')
-          .update({ status: 'completed' as any })
-          .eq('id', id);
-        if (error) throw error;
-      } else {
-        await adminQuery('update_live_class', { id, status: 'completed' });
-      }
-      toast.success('Class ended');
-      setActiveClassroom(null);
-      load();
-    } catch (e: any) {
-      toast.error(e.message);
-    }
+  const openEndClassDialog = (cls: LiveClass) => {
+    setEndingClass(cls);
+  };
+
+  const handleClassEnded = () => {
+    setActiveClassroom(null);
+    load();
   };
 
   const activeClass = classes.find(c => c.id === activeClassroom);
@@ -179,7 +172,7 @@ export default function LiveClassesPage() {
                       <Video className="h-3 w-3" /> Join
                     </Button>
                     {canManage && (
-                      <Button size="sm" variant="destructive" className="h-7 gap-1" onClick={() => endClass(cls.id)}>
+                      <Button size="sm" variant="destructive" className="h-7 gap-1" onClick={() => openEndClassDialog(cls)}>
                         <Square className="h-3 w-3" /> End
                       </Button>
                     )}
@@ -351,6 +344,15 @@ export default function LiveClassesPage() {
           )}
         </div>
       </div>
+
+      <EndClassAttendanceDialog
+        open={!!endingClass}
+        onOpenChange={(open) => { if (!open) setEndingClass(null); }}
+        liveClass={endingClass}
+        isTeacher={isTeacher}
+        isAdmin={isAdmin}
+        onClassEnded={handleClassEnded}
+      />
     </div>
   );
 }
