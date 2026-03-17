@@ -118,22 +118,13 @@ export default function LiveClassesPage() {
     }
   };
 
-  const endClass = async (id: string) => {
-    try {
-      if (isTeacher) {
-        const { error } = await supabase.from('live_classes')
-          .update({ status: 'completed' as any })
-          .eq('id', id);
-        if (error) throw error;
-      } else {
-        await adminQuery('update_live_class', { id, status: 'completed' });
-      }
-      toast.success('Class ended');
-      setActiveClassroom(null);
-      load();
-    } catch (e: any) {
-      toast.error(e.message);
-    }
+  const openEndClassDialog = (cls: LiveClass) => {
+    setEndingClass(cls);
+  };
+
+  const handleClassEnded = () => {
+    setActiveClassroom(null);
+    load();
   };
 
   const activeClass = classes.find(c => c.id === activeClassroom);
