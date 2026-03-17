@@ -117,6 +117,7 @@ export async function adminQuery(action: string, params: any = {}): Promise<any>
     case 'add_parent_child':
     case 'remove_parent_child':
     case 'list_parents':
+    case 'bulk_create_schedules':
       return edgeFunctionAction(action, params);
 
     default:
@@ -550,7 +551,7 @@ async function deleteCourse(params: any) {
 
 // ===== BATCHES =====
 async function listBatches(params: any) {
-  let query = supabase.from('batches' as any).select('*, courses(name)') as any;
+  let query = supabase.from('batches' as any).select('*, courses(name, duration_days, daily_hours, total_hours)') as any;
   if (params?.course_id) query = query.eq('course_id', params.course_id);
   const { data } = await query.order('created_at', { ascending: false });
   return data ?? [];
