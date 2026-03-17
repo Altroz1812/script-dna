@@ -33,14 +33,20 @@ export default function AttendancePage() {
       let att: any[];
 
       if (isTeacher) {
-        // Direct queries — RLS scopes to teacher's batches
         const [studRes, attRes] = await Promise.all([
-          supabase.from('batch_students').select('*, profiles:student_id(display_name, email)').eq('batch_id', selectedBatch),
+          supabase.from('batch_students').select('*').eq('batch_id', selectedBatch),
           supabase.from('attendance').select('*').eq('batch_id', selectedBatch).eq('date', date),
         ]);
         if (studRes.error) throw studRes.error;
         if (attRes.error) throw attRes.error;
-        studs = studRes.data || [];
+        // Fetch profiles separately
+        const studentIds = (studRes.data || []).map(s => s.student_id);
+        let profileMap: Record<string, any> = {};
+        if (studentIds.length > 0) {
+          const { data: profiles } = await supabase.from('profiles').select('user_id, display_name, email').in('user_id', studentIds);
+          for (const p of (profiles || [])) profileMap[p.user_id] = p;
+        }
+        studs = (studRes.data || []).map(s => ({ ...s, profiles: profileMap[s.student_id] || null }));
         att = attRes.data || [];
       } else {
         [studs, att] = await Promise.all([
