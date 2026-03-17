@@ -120,7 +120,7 @@ export function AppSidebar() {
       <SidebarFooter className="border-t border-white/[0.08] p-3">
         {!collapsed && (
           <p className="text-[10px] text-muted-foreground/50 text-center">
-            © 2026 Aura Pen
+            © 2026 AuraPen
           </p>
         )}
       </SidebarFooter>
