@@ -127,7 +127,7 @@ export default function LandingPage() {
             <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
               <PenTool className="w-4.5 h-4.5 text-primary-foreground" />
             </div>
-            <span className="font-bold text-lg tracking-tight">Aura Pen</span>
+            <span className="font-bold text-lg tracking-tight">AuraPen</span>
           </Link>
 
           <div className="hidden md:flex items-center gap-8 text-sm">
