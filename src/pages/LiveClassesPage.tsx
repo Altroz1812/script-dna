@@ -44,6 +44,7 @@ export default function LiveClassesPage() {
   const [activeClassroom, setActiveClassroom] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [filter, setFilter] = useState<'today' | 'upcoming' | 'completed' | 'all'>('today');
+  const [endingClass, setEndingClass] = useState<LiveClass | null>(null);
 
   const load = async () => {
     setLoading(true);
