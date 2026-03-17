@@ -61,7 +61,7 @@ export function AppSidebar() {
           {!collapsed && (
             <div className="overflow-hidden">
               <h2 className="font-semibold text-sm text-gradient font-display truncate">
-                Aura Pen
+                AuraPen
               </h2>
               <p className="text-[11px] text-muted-foreground truncate">
                 {ROLE_LABELS[role]}
