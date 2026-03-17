@@ -646,7 +646,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="border-t border-border/30 mt-8 pt-8 text-center text-xs text-muted-foreground">
-            © 2026 Aura Pen. All rights reserved.
+            © 2026 AuraPen. All rights reserved.
           </div>
         </div>
       </footer>
