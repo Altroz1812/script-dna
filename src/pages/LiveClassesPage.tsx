@@ -172,7 +172,7 @@ export default function LiveClassesPage() {
                       <Video className="h-3 w-3" /> Join
                     </Button>
                     {canManage && (
-                      <Button size="sm" variant="destructive" className="h-7 gap-1" onClick={() => endClass(cls.id)}>
+                      <Button size="sm" variant="destructive" className="h-7 gap-1" onClick={() => openEndClassDialog(cls)}>
                         <Square className="h-3 w-3" /> End
                       </Button>
                     )}
