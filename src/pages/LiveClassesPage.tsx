@@ -2,21 +2,15 @@ import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { adminQuery } from '@/services/api/adminService';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Trash2, Video, Link2, Play, Square, ExternalLink } from 'lucide-react';
-import { TableSkeleton } from '@/components/ui/loading-skeletons';
-import { batchService } from '@/services/api/courseService';
-import { format } from 'date-fns';
+import { Video, Play, Square, Calendar as CalendarIcon, Clock, CheckCircle2, Radio } from 'lucide-react';
 import { useRBAC } from '@/hooks/useRBAC';
 import { useAuth } from '@/contexts/AuthContext';
 import { VideoClassroom } from '@/components/classroom/VideoClassroom';
+import { format, isToday, isFuture, isPast, parseISO, startOfDay } from 'date-fns';
+import { Calendar } from '@/components/ui/calendar';
 
 const STATUS_COLORS: Record<string, string> = {
   scheduled: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
@@ -25,41 +19,44 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: 'bg-destructive/20 text-destructive border-destructive/30',
 };
 
+type LiveClass = {
+  id: string;
+  title: string;
+  batch_id: string;
+  scheduled_at: string;
+  duration_minutes: number;
+  status: string;
+  meeting_url: string | null;
+  schedule_id: string | null;
+  batches?: { name: string } | null;
+};
+
 export default function LiveClassesPage() {
   const { isAdmin, role } = useRBAC();
   const { profile } = useAuth();
   const isTeacher = role === 'teacher';
   const isStudent = role === 'student';
+  const canManage = isAdmin || isTeacher;
 
-  const [classes, setClasses] = useState<any[]>([]);
-  const [batches, setBatches] = useState<any[]>([]);
-  const [schedules, setSchedules] = useState<any[]>([]);
+  const [classes, setClasses] = useState<LiveClass[]>([]);
   const [loading, setLoading] = useState(true);
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ batch_id: '', schedule_id: '', meeting_url: '' });
   const [activeClassroom, setActiveClassroom] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const [filter, setFilter] = useState<'today' | 'upcoming' | 'completed' | 'all'>('today');
 
   const load = async () => {
     setLoading(true);
     try {
       if (isTeacher || isStudent) {
-        // Direct Supabase query — RLS filters to their batches
         const { data, error } = await supabase
           .from('live_classes')
           .select('*, batches(name)')
-          .order('scheduled_at', { ascending: false });
+          .order('scheduled_at', { ascending: true });
         if (error) throw error;
-        setClasses(data || []);
-        if (isTeacher) {
-          setBatches(await batchService.listBatches());
-        }
+        setClasses((data as any[]) || []);
       } else {
-        const [c, b] = await Promise.all([
-          adminQuery('list_live_classes'),
-          batchService.listBatches(),
-        ]);
+        const c = await adminQuery('list_live_classes');
         setClasses(c);
-        setBatches(b);
       }
     } catch (e: any) {
       toast.error(e.message);
@@ -70,85 +67,38 @@ export default function LiveClassesPage() {
 
   useEffect(() => { load(); }, []);
 
-  const loadSchedules = async (batchId: string) => {
-    try {
-      if (isTeacher) {
-        const { data, error } = await supabase.from('schedules').select('*').eq('batch_id', batchId);
-        if (error) throw error;
-        setSchedules(data || []);
-      } else {
-        const data = await adminQuery('list_schedules', { batch_id: batchId });
-        setSchedules(data);
-      }
-    } catch (e: any) {
-      toast.error(e.message);
-    }
-  };
+  const todaysClasses = useMemo(() => classes.filter(c => isToday(parseISO(c.scheduled_at))), [classes]);
+  const upcomingClasses = useMemo(() => classes.filter(c => isFuture(parseISO(c.scheduled_at)) && !isToday(parseISO(c.scheduled_at)) && c.status !== 'completed'), [classes]);
+  const completedClasses = useMemo(() => classes.filter(c => c.status === 'completed'), [classes]);
+  const liveNow = useMemo(() => classes.filter(c => c.status === 'live'), [classes]);
 
-  const handleBatchChange = (batchId: string) => {
-    setForm(f => ({ ...f, batch_id: batchId, schedule_id: '' }));
-    loadSchedules(batchId);
-  };
+  const filteredClasses = useMemo(() => {
+    if (filter === 'today') return todaysClasses;
+    if (filter === 'upcoming') return upcomingClasses;
+    if (filter === 'completed') return completedClasses;
+    return classes;
+  }, [filter, todaysClasses, upcomingClasses, completedClasses, classes]);
 
-  const selectedSchedule = useMemo(
-    () => schedules.find(s => s.id === form.schedule_id),
-    [schedules, form.schedule_id]
-  );
+  const dateClasses = useMemo(() => {
+    if (!selectedDate) return [];
+    return classes.filter(c => {
+      const d = parseISO(c.scheduled_at);
+      return startOfDay(d).getTime() === startOfDay(selectedDate).getTime();
+    });
+  }, [selectedDate, classes]);
 
-  const handleCreate = async () => {
-    if (!form.batch_id || !form.schedule_id) {
-      toast.error('Select a batch and schedule entry');
-      return;
-    }
-    const sched = selectedSchedule;
-    if (!sched) return;
+  // Dates that have classes for calendar highlighting
+  const classDates = useMemo(() => {
+    const dates = new Set<string>();
+    classes.forEach(c => dates.add(format(parseISO(c.scheduled_at), 'yyyy-MM-dd')));
+    return dates;
+  }, [classes]);
 
-    const scheduledAt = sched.date
-      ? `${sched.date}T${sched.start_time}`
-      : new Date().toISOString();
-
-    const [sh, sm] = (sched.start_time || '09:00').split(':').map(Number);
-    const [eh, em] = (sched.end_time || '10:00').split(':').map(Number);
-    const durationMinutes = (eh * 60 + em) - (sh * 60 + sm);
-
-    try {
-      if (isTeacher) {
-        const roomName = `class-${form.batch_id.slice(0, 8)}-${Date.now()}`;
-        const meetingUrl = form.meeting_url || `https://meet.jit.si/${roomName}`;
-        const { error } = await supabase.from('live_classes').insert({
-          batch_id: form.batch_id,
-          schedule_id: form.schedule_id,
-          title: sched.title,
-          scheduled_at: scheduledAt,
-          duration_minutes: durationMinutes > 0 ? durationMinutes : 60,
-          meeting_url: meetingUrl,
-        });
-        if (error) throw error;
-      } else {
-        await adminQuery('create_live_class', {
-          batch_id: form.batch_id,
-          schedule_id: form.schedule_id,
-          title: sched.title,
-          scheduled_at: scheduledAt,
-          duration_minutes: durationMinutes > 0 ? durationMinutes : 60,
-          meeting_url: form.meeting_url || null,
-        });
-      }
-      toast.success('Live class created');
-      setOpen(false);
-      setForm({ batch_id: '', schedule_id: '', meeting_url: '' });
-      load();
-    } catch (e: any) {
-      toast.error(e.message);
-    }
-  };
-
-  const startClass = async (cls: any) => {
+  const startClass = async (cls: LiveClass) => {
     try {
       let meetingUrl = cls.meeting_url;
       if (!meetingUrl) {
-        const roomName = `class-${cls.id.slice(0, 8)}`;
-        meetingUrl = `https://meet.jit.si/${roomName}`;
+        meetingUrl = `https://meet.jit.si/class-${cls.id.slice(0, 8)}`;
       }
       if (isTeacher) {
         const { error } = await supabase.from('live_classes')
@@ -184,28 +134,69 @@ export default function LiveClassesPage() {
     }
   };
 
-  const updateStatus = async (id: string, status: string) => {
-    try {
-      await adminQuery('update_live_class', { id, status });
-      toast.success('Updated');
-      load();
-    } catch (e: any) {
-      toast.error(e.message);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    try {
-      await adminQuery('delete_live_class', { id });
-      toast.success('Deleted');
-      load();
-    } catch (e: any) {
-      toast.error(e.message);
-    }
-  };
-
   const activeClass = classes.find(c => c.id === activeClassroom);
-  const canManage = isAdmin || isTeacher;
+
+  const ClassCard = ({ cls }: { cls: LiveClass }) => {
+    const isLive = cls.status === 'live';
+    const isScheduled = cls.status === 'scheduled';
+    const scheduledDate = parseISO(cls.scheduled_at);
+    const canStart = canManage && isScheduled && (isToday(scheduledDate) || isPast(scheduledDate));
+
+    return (
+      <Card className={`transition-all hover:shadow-md ${isLive ? 'border-green-500/50 shadow-green-500/10' : ''}`}>
+        <CardContent className="p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                {isLive && <span className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />}
+                <h3 className="font-semibold text-foreground truncate">{cls.title}</h3>
+              </div>
+              <p className="text-sm text-muted-foreground">{cls.batches?.name || '—'}</p>
+              <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <CalendarIcon className="h-3 w-3" />
+                  {format(scheduledDate, 'MMM d, yyyy')}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  {format(scheduledDate, 'hh:mm a')} · {cls.duration_minutes}m
+                </span>
+              </div>
+            </div>
+            <div className="flex flex-col items-end gap-2">
+              <Badge variant="outline" className={STATUS_COLORS[cls.status] || ''}>
+                {cls.status}
+              </Badge>
+              <div className="flex gap-1.5">
+                {canStart && (
+                  <Button size="sm" className="h-7 gap-1" onClick={() => startClass(cls)}>
+                    <Play className="h-3 w-3" /> Start
+                  </Button>
+                )}
+                {isLive && (
+                  <>
+                    <Button size="sm" className="h-7 gap-1" onClick={() => setActiveClassroom(cls.id)}>
+                      <Video className="h-3 w-3" /> Join
+                    </Button>
+                    {canManage && (
+                      <Button size="sm" variant="destructive" className="h-7 gap-1" onClick={() => endClass(cls.id)}>
+                        <Square className="h-3 w-3" /> End
+                      </Button>
+                    )}
+                  </>
+                )}
+                {isStudent && isLive && (
+                  <Button size="sm" className="h-7 gap-1" onClick={() => setActiveClassroom(cls.id)}>
+                    <Video className="h-3 w-3" /> Join
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -217,181 +208,149 @@ export default function LiveClassesPage() {
         />
       )}
 
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">
-          {isStudent ? 'My Classes' : isTeacher ? 'My Classes' : 'Live Classes'}
-        </h1>
-        {canManage && (
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button><Plus className="mr-2 h-4 w-4" />Add Live Class</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Link Live Class to Schedule</DialogTitle></DialogHeader>
-              <div className="space-y-3">
-                <div>
-                  <Label>Batch</Label>
-                  <Select value={form.batch_id} onValueChange={handleBatchChange}>
-                    <SelectTrigger><SelectValue placeholder="Select batch" /></SelectTrigger>
-                    <SelectContent>
-                      {batches.map(b => (
-                        <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Schedule Entry</Label>
-                  <Select
-                    value={form.schedule_id}
-                    onValueChange={v => setForm(f => ({ ...f, schedule_id: v }))}
-                    disabled={!form.batch_id}
-                  >
-                    <SelectTrigger><SelectValue placeholder={form.batch_id ? 'Select schedule' : 'Pick a batch first'} /></SelectTrigger>
-                    <SelectContent>
-                      {schedules.length === 0 ? (
-                        <div className="px-3 py-2 text-sm text-muted-foreground">No schedules for this batch</div>
-                      ) : (
-                        schedules.map(s => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.date ? format(new Date(s.date), 'MMM d') : '—'} · {s.start_time?.slice(0, 5)}-{s.end_time?.slice(0, 5)} · {s.title}
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {selectedSchedule && (
-                  <div className="rounded-md bg-muted p-3 text-sm space-y-1">
-                    <p className="font-medium">{selectedSchedule.title}</p>
-                    <p className="text-muted-foreground">
-                      {selectedSchedule.date ? format(new Date(selectedSchedule.date), 'MMM d, yyyy') : '—'} · {selectedSchedule.start_time?.slice(0, 5)} - {selectedSchedule.end_time?.slice(0, 5)}
-                      {selectedSchedule.room && ` · Room: ${selectedSchedule.room}`}
-                    </p>
-                  </div>
-                )}
-                <div>
-                  <Label>Meeting URL <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                  <Input
-                    value={form.meeting_url}
-                    onChange={e => setForm(f => ({ ...f, meeting_url: e.target.value }))}
-                    placeholder="https://meet.google.com/... or leave blank for Jitsi"
-                  />
-                </div>
-                <Button onClick={handleCreate} className="w-full" disabled={!form.schedule_id}>
-                  Create Live Class
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        )}
+      <h1 className="text-2xl font-bold text-foreground">
+        {isStudent ? 'My Classes' : isTeacher ? 'My Classes' : 'Live Classes'}
+      </h1>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card
+          className={`cursor-pointer transition-all hover:shadow-md ${filter === 'today' ? 'ring-2 ring-primary' : ''}`}
+          onClick={() => setFilter('today')}
+        >
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+              <CalendarIcon className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-foreground">{todaysClasses.length}</p>
+              <p className="text-xs text-muted-foreground">Today</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card
+          className={`cursor-pointer transition-all hover:shadow-md ${filter === 'upcoming' ? 'ring-2 ring-primary' : ''}`}
+          onClick={() => setFilter('upcoming')}
+        >
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+              <Clock className="h-5 w-5 text-blue-500" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-foreground">{upcomingClasses.length}</p>
+              <p className="text-xs text-muted-foreground">Upcoming</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card
+          className={`cursor-pointer transition-all hover:shadow-md ${filter === 'completed' ? 'ring-2 ring-primary' : ''}`}
+          onClick={() => setFilter('completed')}
+        >
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+              <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-foreground">{completedClasses.length}</p>
+              <p className="text-xs text-muted-foreground">Completed</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card
+          className={`cursor-pointer transition-all hover:shadow-md ${liveNow.length > 0 ? 'border-green-500/50' : ''}`}
+          onClick={() => setFilter('all')}
+        >
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${liveNow.length > 0 ? 'bg-green-500/10' : 'bg-muted'}`}>
+              <Radio className={`h-5 w-5 ${liveNow.length > 0 ? 'text-green-500 animate-pulse' : 'text-muted-foreground'}`} />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-foreground">{liveNow.length}</p>
+              <p className="text-xs text-muted-foreground">Live Now</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {loading ? <TableSkeleton columns={isStudent ? 5 : 7} rows={5} /> : (
-        <Card><CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Title</TableHead>
-                <TableHead>Batch</TableHead>
-                <TableHead>Date & Time</TableHead>
-                <TableHead>Duration</TableHead>
-                <TableHead>Status</TableHead>
-                {!isStudent && <TableHead>Actions</TableHead>}
-                {isStudent && <TableHead>Join</TableHead>}
-                {isAdmin && <TableHead className="w-16"></TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {classes.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={isAdmin ? 7 : 6} className="text-center py-8 text-muted-foreground">
-                    <Video className="mx-auto h-8 w-8 mb-2 opacity-50" />
-                    {isStudent ? 'No upcoming classes for your batches' : 'No live classes — create one from a schedule entry'}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                classes.map(c => (
-                  <TableRow key={c.id}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-1.5">
-                        {c.schedule_id && <Link2 className="h-3.5 w-3.5 text-muted-foreground" />}
-                        {c.title}
-                      </div>
-                    </TableCell>
-                    <TableCell>{c.batches?.name || '—'}</TableCell>
-                    <TableCell>{new Date(c.scheduled_at).toLocaleString()}</TableCell>
-                    <TableCell>{c.duration_minutes}m</TableCell>
-                    <TableCell>
-                      {isAdmin ? (
-                        <Select value={c.status} onValueChange={v => updateStatus(c.id, v)}>
-                          <SelectTrigger className="w-32 h-8"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="scheduled">Scheduled</SelectItem>
-                            <SelectItem value="live">Live</SelectItem>
-                            <SelectItem value="completed">Completed</SelectItem>
-                            <SelectItem value="cancelled">Cancelled</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Badge variant="outline" className={STATUS_COLORS[c.status] || ''}>
-                          {c.status === 'live' && <span className="mr-1.5 h-2 w-2 rounded-full bg-green-400 animate-pulse inline-block" />}
-                          {c.status}
-                        </Badge>
-                      )}
-                    </TableCell>
-                    {isStudent ? (
-                      <TableCell>
-                        {c.status === 'live' && c.meeting_url && (
-                          <Button size="sm" variant="default" className="h-7 gap-1" onClick={() => setActiveClassroom(c.id)}>
-                            <Video className="h-3.5 w-3.5" /> Join
-                          </Button>
-                        )}
-                      </TableCell>
-                    ) : (
-                      <TableCell>
-                        <div className="flex items-center gap-1.5">
-                          {c.status === 'scheduled' && canManage && (
-                            <Button size="sm" variant="default" className="h-7 gap-1" onClick={() => startClass(c)}>
-                              <Play className="h-3.5 w-3.5" /> Start
-                            </Button>
-                          )}
-                          {c.status === 'live' && (
-                            <>
-                              <Button size="sm" variant="default" className="h-7 gap-1" onClick={() => setActiveClassroom(c.id)}>
-                                <Video className="h-3.5 w-3.5" /> Join
-                              </Button>
-                              {canManage && (
-                                <Button size="sm" variant="destructive" className="h-7 gap-1" onClick={() => endClass(c.id)}>
-                                  <Square className="h-3.5 w-3.5" /> End
-                                </Button>
-                              )}
-                            </>
-                          )}
-                          {c.meeting_url && (
-                            <Button size="sm" variant="ghost" className="h-7" asChild>
-                              <a href={c.meeting_url} target="_blank" rel="noopener noreferrer">
-                                <ExternalLink className="h-3.5 w-3.5" />
-                              </a>
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    )}
-                    {isAdmin && (
-                      <TableCell>
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(c.id)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent></Card>
-      )}
+      {/* Main content: Calendar + Class List */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Calendar */}
+        <Card className="lg:col-span-1">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Calendar</CardTitle>
+          </CardHeader>
+          <CardContent className="p-3">
+            <Calendar
+              mode="single"
+              selected={selectedDate}
+              onSelect={(d) => { setSelectedDate(d); setFilter('all'); }}
+              modifiers={{
+                hasClass: (date) => classDates.has(format(date, 'yyyy-MM-dd')),
+              }}
+              modifiersClassNames={{
+                hasClass: 'bg-primary/20 font-bold text-primary',
+              }}
+              className="w-full"
+            />
+            {/* Selected date classes */}
+            {selectedDate && dateClasses.length > 0 && (
+              <div className="mt-3 space-y-2 border-t border-border pt-3">
+                <p className="text-xs font-medium text-muted-foreground">{format(selectedDate, 'MMMM d, yyyy')}</p>
+                {dateClasses.map(cls => (
+                  <div key={cls.id} className="flex items-center justify-between text-sm p-2 rounded-md bg-muted/50">
+                    <div className="truncate">
+                      <span className="font-medium">{cls.title}</span>
+                      <span className="text-muted-foreground ml-2">{format(parseISO(cls.scheduled_at), 'hh:mm a')}</span>
+                    </div>
+                    <Badge variant="outline" className={`text-xs ${STATUS_COLORS[cls.status] || ''}`}>
+                      {cls.status}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Class List */}
+        <div className="lg:col-span-2 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-foreground capitalize">
+              {filter === 'all' ? 'All Classes' : `${filter} Classes`}
+            </h2>
+            <span className="text-sm text-muted-foreground">{filteredClasses.length} classes</span>
+          </div>
+
+          {loading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map(i => (
+                <Card key={i}><CardContent className="p-4 h-20 animate-pulse bg-muted/30" /></Card>
+              ))}
+            </div>
+          ) : filteredClasses.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <Video className="mx-auto h-10 w-10 mb-3 text-muted-foreground/50" />
+                <p className="text-muted-foreground">
+                  {filter === 'today' ? 'No classes scheduled for today' :
+                   filter === 'upcoming' ? 'No upcoming classes' :
+                   filter === 'completed' ? 'No completed classes yet' :
+                   'No classes found'}
+                </p>
+                {(isAdmin || isTeacher) && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Classes are auto-created when schedules are generated
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {filteredClasses.map(cls => <ClassCard key={cls.id} cls={cls} />)}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
