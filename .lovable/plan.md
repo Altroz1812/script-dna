@@ -1,53 +1,75 @@
 
 
-## Add In-Class Chat Panel
+## Offline + Online Course Mode — Incremental Plan
 
-### Overview
-Add a toggleable chat panel inside the video classroom that uses LiveKit's built-in data channel for real-time text messaging between all participants. No database tables or new edge functions needed — messages are ephemeral and transmitted via the existing WebRTC connection.
+### What the User Wants
+Based on the uploaded schedule and request:
+1. Courses must be tagged as **"offline"** or **"online"** (delivery method)
+2. Offline courses need a **center/location** field (e.g., "Kudlu Gate", "HSR Layout")
+3. Courses page should display offline and online courses **separately** (two sections or tabs)
+4. Course creation form needs a **delivery_mode** field (offline/online) + conditional **center** field
+5. Course **edit/update** functionality (currently missing — only create + delete exists)
+6. Batches and schedules remain the same but are linked to the course's mode
+7. Offline classes → teacher marks attendance **manually** (already works via AttendancePage)
+8. Online classes → existing LiveKit video classroom flow
+9. Payments and checkout process remain unchanged
 
-### Architecture
+### Database Changes
 
-```text
-VideoClassroom
-├── Header (existing) + Chat toggle button
-├── Content area (flex row)
-│   ├── Video area (flex-1)
-│   │   ├── <VideoConference />
-│   │   └── Teacher/Student controls
-│   └── Chat panel (w-80, collapsible)
-│       ├── Message list (ScrollArea)
-│       └── Input + Send button
+**Migration: Add `delivery_mode` and `center` columns to `courses` table**
+
+```sql
+ALTER TABLE public.courses ADD COLUMN delivery_mode text NOT NULL DEFAULT 'online';
+ALTER TABLE public.courses ADD COLUMN center text NULL;
 ```
 
-### Implementation
+- `delivery_mode`: `'online'` or `'offline'`
+- `center`: location name for offline courses (nullable, only relevant when offline)
+- Default `'online'` so existing courses keep working
 
-**1. Create `src/components/classroom/ClassroomChat.tsx`**
-- Uses `useRoomContext()` from LiveKit to access the room
-- Sends messages via `room.localParticipant.publishData()` with a JSON payload: `{ type: 'chat', sender, message, timestamp }`
-- Listens for incoming messages via `RoomEvent.DataReceived`
-- Maintains local message state (array of `{ sender, message, timestamp }`)
-- Auto-scrolls to latest message
-- Input field with Enter-to-send and a Send button
+No new tables needed. No RLS changes needed (existing policies cover it).
 
-**2. Update `src/components/classroom/VideoClassroom.tsx`**
-- Add a `MessageSquare` toggle button in the header bar
-- Add `chatOpen` state
-- Wrap the video + chat in a flex row layout
-- Conditionally render `<ClassroomChat />` inside `<LiveKitRoom>` when panel is open
-- Show unread message count badge on the toggle button
+### Frontend Changes
 
-**3. Update `src/components/classroom/StudentDataListener.tsx`**
-- Filter out messages with `type: 'chat'` so they don't trigger control actions (mute/kick)
+**1. Update `CoursesPage.tsx`**
+- Add tabs or segmented filter: "Online Courses" / "Offline Courses" / "All"
+- Each course card shows a badge: `Online` or `Offline` + center name if offline
+- Add an **Edit** button on each course card (admin only)
+- Edit dialog: same form as create, pre-populated, calls a new `update_course` admin action
 
-### Technical Details
-- Messages use LiveKit data channels (reliable mode) — zero latency, no server storage
-- Chat messages are distinguished from teacher control messages by a `type: 'chat'` field in the JSON payload
-- The StudentDataListener already has a try/catch for non-JSON; we add a check to skip `type === 'chat'` messages
+**2. Update Course Create Dialog (in `CoursesPage.tsx`)**
+- Add `delivery_mode` radio/select: Online | Offline
+- When "Offline" selected, show a `center` text input (location name)
+- Pass `delivery_mode` and `center` to the create mutation
 
-### Files
-| File | Action |
-|------|--------|
-| `src/components/classroom/ClassroomChat.tsx` | **Create** |
-| `src/components/classroom/VideoClassroom.tsx` | **Update** — add toggle + layout |
-| `src/components/classroom/StudentDataListener.tsx` | **Update** — ignore chat messages |
+**3. Update `courseService.ts`**
+- Add `delivery_mode` and `center` fields to `Course` and `CreateCourseParams` types
+- Add `updateCourse()` method calling `admin_query('update_course', ...)`
+
+**4. Update `admin-query/index.ts` edge function**
+- Add `delivery_mode` and `center` to `create_course` insert
+- Add new `update_course` action: updates all editable fields by course ID
+
+**5. Update `LiveClassesPage.tsx` (minimal)**
+- For offline courses, the "Join" video button should not appear — only manual attendance applies
+- Online courses keep the LiveKit video flow as-is
+- This requires knowing the course's `delivery_mode` via the batch → course join (already available in live_classes query via `batches`)
+
+**6. Update `BatchesPage.tsx` (minimal)**
+- Show the course delivery mode badge next to batch names so admins know which batches are online vs offline
+
+### What Stays Unchanged
+- Attendance page (already supports manual marking for any batch)
+- Schedule creation (works for both modes — just time slots)
+- Payments and checkout flow
+- LiveKit integration (only used when course is online)
+- Database RLS policies
+
+### Implementation Order
+1. Database migration (add 2 columns)
+2. Edge function updates (create_course + new update_course action)
+3. Course service types update
+4. Course page: delivery mode in create form + edit dialog + filtered display
+5. LiveClassesPage: hide video join for offline courses
+6. BatchesPage: show delivery mode badge
 
