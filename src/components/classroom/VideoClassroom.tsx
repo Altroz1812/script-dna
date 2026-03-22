@@ -63,6 +63,14 @@ export function VideoClassroom({ roomName, displayName, isTeacher, onClose }: Vi
       <div className="flex items-center justify-between px-4 py-2 bg-muted/50 border-b border-border shrink-0">
         <span className="text-sm font-medium text-foreground">Live Classroom</span>
         <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" className="h-7 w-7 relative" onClick={() => { setChatOpen(o => !o); setUnread(0); }}>
+            <MessageSquare className="h-4 w-4" />
+            {unread > 0 && (
+              <Badge className="absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[10px] leading-none flex items-center justify-center" variant="destructive">
+                {unread}
+              </Badge>
+            )}
+          </Button>
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setFullscreen(f => !f)}>
             {fullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </Button>
