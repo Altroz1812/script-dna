@@ -19,6 +19,7 @@ import {
   Ticket,
   Layers,
   NotebookPen,
+  ShoppingBag,
   FileCheck,
   TrendingUp,
   type LucideIcon,
