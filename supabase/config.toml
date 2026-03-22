@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.public-courses]
 verify_jwt = false
+
+[functions.livekit-token]
+verify_jwt = false

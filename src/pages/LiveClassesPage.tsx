@@ -98,17 +98,14 @@ export default function LiveClassesPage() {
 
   const startClass = async (cls: LiveClass) => {
     try {
-      let meetingUrl = cls.meeting_url;
-      if (!meetingUrl) {
-        meetingUrl = `https://meet.jit.si/class-${cls.id.slice(0, 8)}`;
-      }
+      const roomName = `class-${cls.id.slice(0, 8)}`;
       if (isTeacher) {
         const { error } = await supabase.from('live_classes')
-          .update({ status: 'live' as any, meeting_url: meetingUrl })
+          .update({ status: 'live' as any, meeting_url: roomName })
           .eq('id', cls.id);
         if (error) throw error;
       } else {
-        await adminQuery('update_live_class', { id: cls.id, status: 'live', meeting_url: meetingUrl });
+        await adminQuery('update_live_class', { id: cls.id, status: 'live', meeting_url: roomName });
       }
       toast.success('Class started!');
       setActiveClassroom(cls.id);
@@ -195,8 +192,9 @@ export default function LiveClassesPage() {
     <div className="p-6 space-y-6">
       {activeClass && (
         <VideoClassroom
-          roomName={activeClass.meeting_url?.replace('https://meet.jit.si/', '') || `class-${activeClass.id.slice(0, 8)}`}
+          roomName={activeClass.meeting_url || `class-${activeClass.id.slice(0, 8)}`}
           displayName={profile?.displayName || (isStudent ? 'Student' : 'Teacher')}
+          isTeacher={isTeacher || isAdmin}
           onClose={() => setActiveClassroom(null)}
         />
       )}
