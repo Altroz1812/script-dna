@@ -1,4 +1,7 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+
+const CART_ITEMS_KEY = 'aurapen_cart_items';
+const CART_STUDENTS_KEY = 'aurapen_cart_students';
 
 export interface CartItem {
   id: string;
@@ -35,9 +38,29 @@ export function useCart() {
   return ctx;
 }
 
+function loadFromStorage<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>([]);
-  const [studentDetails, setStudentDetailsState] = useState<Record<string, StudentDetail[]>>({});
+  const [items, setItems] = useState<CartItem[]>(() => loadFromStorage(CART_ITEMS_KEY, []));
+  const [studentDetails, setStudentDetailsState] = useState<Record<string, StudentDetail[]>>(
+    () => loadFromStorage(CART_STUDENTS_KEY, {})
+  );
+
+  // Sync to localStorage on changes
+  useEffect(() => {
+    localStorage.setItem(CART_ITEMS_KEY, JSON.stringify(items));
+  }, [items]);
+
+  useEffect(() => {
+    localStorage.setItem(CART_STUDENTS_KEY, JSON.stringify(studentDetails));
+  }, [studentDetails]);
 
   const addItem = useCallback((item: CartItem) => {
     setItems(prev => prev.some(i => i.id === item.id) ? prev : [...prev, item]);
@@ -55,6 +78,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const clearCart = useCallback(() => {
     setItems([]);
     setStudentDetailsState({});
+    localStorage.removeItem(CART_ITEMS_KEY);
+    localStorage.removeItem(CART_STUDENTS_KEY);
   }, []);
 
   const isInCart = useCallback((id: string) => items.some(i => i.id === id), [items]);
