@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { Plus, Trash2, BookOpen, Clock, Calendar, GraduationCap, IndianRupee, Eye, Pencil, MapPin, Wifi, Building2 } from 'lucide-react';
 import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
@@ -23,6 +24,8 @@ export default function CoursesPage() {
   const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
   const [editCourse, setEditCourse] = useState<Course | null>(null);
+  const [selectedCenter, setSelectedCenter] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState('all');
 
   const { data: courses = [], isLoading } = useQuery<Course[]>({
     queryKey: ['courses', isStudent],
@@ -92,8 +95,14 @@ export default function CoursesPage() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const centers = [...new Set(courses.filter(c => c.center).map(c => c.center!))].sort();
+
+  const filterByCenter = (list: Course[]) =>
+    selectedCenter === 'all' ? list : list.filter(c => c.center === selectedCenter);
+
   const onlineCourses = courses.filter(c => (c.delivery_mode || 'online') === 'online');
-  const offlineCourses = courses.filter(c => c.delivery_mode === 'offline');
+  const offlineCourses = filterByCenter(courses.filter(c => c.delivery_mode === 'offline'));
+  const allFiltered = [...onlineCourses, ...offlineCourses];
 
   const CourseCard = ({ c }: { c: Course }) => {
     const isOffline = c.delivery_mode === 'offline';
@@ -207,17 +216,33 @@ export default function CoursesPage() {
         )}
       </div>
 
-      <Tabs defaultValue="all">
-        <TabsList>
-          <TabsTrigger value="all">All ({courses.length})</TabsTrigger>
-          <TabsTrigger value="online">
-            <Wifi className="h-3.5 w-3.5 mr-1" /> Online ({onlineCourses.length})
-          </TabsTrigger>
-          <TabsTrigger value="offline">
-            <Building2 className="h-3.5 w-3.5 mr-1" /> Offline ({offlineCourses.length})
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="all"><CourseGrid items={courses} /></TabsContent>
+      <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); if (v === 'online') setSelectedCenter('all'); }}>
+        <div className="flex flex-wrap items-center gap-3">
+          <TabsList>
+            <TabsTrigger value="all">All ({allFiltered.length})</TabsTrigger>
+            <TabsTrigger value="online">
+              <Wifi className="h-3.5 w-3.5 mr-1" /> Online ({onlineCourses.length})
+            </TabsTrigger>
+            <TabsTrigger value="offline">
+              <Building2 className="h-3.5 w-3.5 mr-1" /> Offline ({offlineCourses.length})
+            </TabsTrigger>
+          </TabsList>
+          {activeTab !== 'online' && centers.length > 0 && (
+            <Select value={selectedCenter} onValueChange={setSelectedCenter}>
+              <SelectTrigger className="w-[200px]">
+                <MapPin className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+                <SelectValue placeholder="All Branches" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Branches</SelectItem>
+                {centers.map(c => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+        <TabsContent value="all"><CourseGrid items={allFiltered} /></TabsContent>
         <TabsContent value="online"><CourseGrid items={onlineCourses} /></TabsContent>
         <TabsContent value="offline"><CourseGrid items={offlineCourses} /></TabsContent>
       </Tabs>
