@@ -15,6 +15,8 @@ export interface Course {
   writing_style: string | null;
   includes_speed: boolean;
   fee: number | null;
+  delivery_mode: string;
+  center: string | null;
 }
 
 export interface Batch {
@@ -25,7 +27,7 @@ export interface Batch {
   teacher_id: string | null;
   created_at: string;
   updated_at: string;
-  courses?: { name: string; duration_days?: number; daily_hours?: number; total_hours?: number };
+  courses?: { name: string; duration_days?: number; daily_hours?: number; total_hours?: number; delivery_mode?: string };
   teacher_profile?: { display_name: string | null; email: string | null } | null;
 }
 
@@ -49,6 +51,8 @@ export interface CreateCourseParams {
   writing_style?: string;
   includes_speed?: boolean;
   fee?: number;
+  delivery_mode?: string;
+  center?: string;
 }
 
 export const courseService = {
@@ -58,6 +62,10 @@ export const courseService = {
 
   async createCourse(params: CreateCourseParams): Promise<Course> {
     return await adminQuery('create_course', params);
+  },
+
+  async updateCourse(id: string, updates: Partial<CreateCourseParams>): Promise<void> {
+    await adminQuery('update_course', { id, ...updates });
   },
 
   async deleteCourse(id: string): Promise<void> {
