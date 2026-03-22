@@ -55,8 +55,8 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-white/[0.08] px-3 py-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary via-coral to-accent flex items-center justify-center shrink-0 shadow-lg shadow-primary/30 ring-2 ring-primary/20">
-            <GraduationCap className="w-4.5 h-4.5 text-white" />
+          <div className="w-9 h-9 rounded-xl overflow-hidden shrink-0 shadow-lg shadow-primary/30 ring-2 ring-primary/20">
+            <img src={aurapenLogo} alt="AuraPen" className="w-full h-full object-contain" />
           </div>
           {!collapsed && (
             <div className="overflow-hidden">

@@ -613,8 +613,8 @@ export default function LandingPage() {
           <div className="grid sm:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-                  <PenTool className="w-4 h-4 text-primary-foreground" />
+                <div className="w-8 h-8 rounded-lg overflow-hidden">
+                  <img src="/favicon.png" alt="AuraPen" className="w-full h-full object-contain" />
                 </div>
                 <span className="font-bold">AuraPen</span>
               </div>
