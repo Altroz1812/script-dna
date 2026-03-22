@@ -2,7 +2,7 @@ import { useLocation } from 'react-router-dom';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/contexts/AuthContext';
 import { getNavigationForRole } from '@/config/navigation';
-import { GraduationCap } from 'lucide-react';
+import aurapenLogo from '/favicon.png';
 import {
   Sidebar,
   SidebarContent,
