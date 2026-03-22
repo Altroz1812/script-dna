@@ -251,7 +251,7 @@ Deno.serve(async (req) => {
 
       // ===== LIVE CLASSES =====
       case 'list_live_classes': {
-        const { data } = await supabase.from('live_classes').select('*, batches(name), schedules(date, start_time, end_time, title, room)').order('scheduled_at', { ascending: false })
+        const { data } = await supabase.from('live_classes').select('*, batches(name, courses(delivery_mode)), schedules(date, start_time, end_time, title, room)').order('scheduled_at', { ascending: false })
         result = data ?? []
         break
       }
