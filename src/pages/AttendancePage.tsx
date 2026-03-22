@@ -57,7 +57,7 @@ export default function AttendancePage() {
 
       setStudents(studs);
       const rec: Record<string, string> = {};
-      for (const s of studs) rec[s.student_id] = 'present';
+      for (const s of studs) rec[s.student_id] = 'absent';
       for (const a of att) rec[a.student_id] = a.status;
       setRecords(rec);
     } catch (e: any) { toast.error(e.message); } finally { setLoading(false); }

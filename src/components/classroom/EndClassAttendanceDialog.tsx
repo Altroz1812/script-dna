@@ -72,7 +72,7 @@ export function EndClassAttendanceDialog({
       setStudents(studs);
       // Default all to present
       const rec: Record<string, string> = {};
-      studs.forEach(s => { rec[s.student_id] = 'present'; });
+      studs.forEach(s => { rec[s.student_id] = 'absent'; });
       setRecords(rec);
     } catch (e: any) {
       toast.error(e.message);
