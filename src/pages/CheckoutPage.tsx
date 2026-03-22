@@ -320,6 +320,17 @@ function StudentDetailsStep({
         <p className="text-muted-foreground">Tell us who will be enrolled in each course</p>
       </div>
 
+      {items.length >= 2 && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="py-3 px-4 flex items-center gap-2 text-sm text-primary">
+            <Percent className="h-4 w-4 shrink-0" />
+            <span className="font-medium">
+              {items.length >= 3 ? '10%' : '5%'} multi-course discount applied for enrolling in {items.length} courses!
+            </span>
+          </CardContent>
+        </Card>
+      )}
+
       {items.map(item => (
         <StudentCourseCard
           key={item.id}
