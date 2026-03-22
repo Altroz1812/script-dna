@@ -95,8 +95,14 @@ export default function CoursesPage() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const centers = [...new Set(courses.filter(c => c.center).map(c => c.center!))].sort();
+
+  const filterByCenter = (list: Course[]) =>
+    selectedCenter === 'all' ? list : list.filter(c => c.center === selectedCenter);
+
   const onlineCourses = courses.filter(c => (c.delivery_mode || 'online') === 'online');
-  const offlineCourses = courses.filter(c => c.delivery_mode === 'offline');
+  const offlineCourses = filterByCenter(courses.filter(c => c.delivery_mode === 'offline'));
+  const allFiltered = [...onlineCourses, ...offlineCourses];
 
   const CourseCard = ({ c }: { c: Course }) => {
     const isOffline = c.delivery_mode === 'offline';
