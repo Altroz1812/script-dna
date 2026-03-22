@@ -52,7 +52,7 @@ export default function LiveClassesPage() {
       if (isTeacher || isStudent) {
         const { data, error } = await supabase
           .from('live_classes')
-          .select('*, batches(name)')
+          .select('*, batches(name, courses(delivery_mode))')
           .order('scheduled_at', { ascending: true });
         if (error) throw error;
         setClasses((data as any[]) || []);
