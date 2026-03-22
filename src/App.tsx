@@ -45,6 +45,7 @@ import StudentLessonViewer from "@/pages/StudentLessonViewer";
 import StudentProgressPage from "@/pages/StudentProgressPage";
 import ParentChildrenPage from "@/pages/ParentChildrenPage";
 import ParentProgressPage from "@/pages/ParentProgressPage";
+import OrderHistoryPage from "@/pages/OrderHistoryPage";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -98,6 +99,7 @@ const App = () => (
                 <Route path="/my-progress" element={<StudentProgressPage />} />
                 <Route path="/my-children" element={<ParentChildrenPage />} />
                 <Route path="/child-progress" element={<ParentProgressPage />} />
+                <Route path="/my-orders" element={<OrderHistoryPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
