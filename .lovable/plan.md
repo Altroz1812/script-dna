@@ -1,31 +1,29 @@
 
 
-## Improve Video Classroom Error Handling
+## Fix: Default Attendance to "Absent" in End-Class Dialog
 
 ### Problem
-When LiveKit connection fails (e.g. server unreachable at `wss://class-e31h62p3.livekit.cloud`), users see a generic error or the UI hangs with no clear guidance.
+When a teacher ends a class via the "End Class & Save Attendance" dialog, all enrolled students default to "Present" — even those who never joined. This produces inaccurate attendance records.
 
-### Changes
+### Root Cause
+In `EndClassAttendanceDialog.tsx`, line `studs.forEach(s => { rec[s.student_id] = 'present'; });` defaults every student to present. The teacher must manually switch non-attendees to absent, which is error-prone.
 
-**Update `src/components/classroom/VideoClassroom.tsx`**
+### Fix
 
-1. Add a **pre-connect WebSocket check** before rendering `<LiveKitRoom>` — after getting the token, test `new WebSocket(serverUrl)` with a 5-second timeout to verify the server is reachable
-2. Add `connectionState` tracking: `'connecting' | 'connected' | 'failed'`
-3. Use LiveKitRoom's `onError` callback to catch runtime connection failures
-4. Replace the plain error text with an `Alert` component showing:
-   - **Icon**: `WifiOff` for unreachable server, `AlertTriangle` for auth/config errors
-   - **Title**: "Video server unreachable" or "Connection failed"
-   - **Description**: User-friendly guidance (e.g. "The video server is not responding. This may be due to server maintenance. Please try again later or contact your administrator.")
-   - **Actions**: Retry button + Close button
-5. Add a connection timeout (15s) — if LiveKitRoom doesn't connect within that window, show the error state automatically
+**Update `src/components/classroom/EndClassAttendanceDialog.tsx`**
+- Change the default status from `'present'` to `'absent'` when populating the records
+- This way the teacher only marks students who actually attended as "Present", rather than having to remember who was absent
 
-**Update `supabase/functions/livekit-token/index.ts`**
+**Update `src/pages/AttendancePage.tsx`**
+- Same fix: change default from `'present'` to `'absent'` in the manual attendance page for consistency
 
-6. Add a server-side URL validation: check that `LIVEKIT_URL` starts with `wss://` and return a clearer error message if misconfigured (e.g. `"LiveKit server URL is invalid"`)
+### What Stays the Same
+- The database trigger `auto_mark_attendance_on_class_end` uses `ON CONFLICT DO NOTHING`, so it won't overwrite the manually saved records since they're inserted first
+- The save flow (delete existing + insert new records) remains unchanged
 
 ### Files
 | File | Action |
 |------|--------|
-| `src/components/classroom/VideoClassroom.tsx` | Update — WebSocket pre-check, Alert UI, connection timeout |
-| `supabase/functions/livekit-token/index.ts` | Update — validate URL format |
+| `src/components/classroom/EndClassAttendanceDialog.tsx` | Update — default to `'absent'` |
+| `src/pages/AttendancePage.tsx` | Update — default to `'absent'` |
 
