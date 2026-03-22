@@ -1,39 +1,19 @@
 
 
-## Fix: Auth Gate + Cart Persistence for Checkout
+## Replace Logo and Favicon with New AuraPen Image (Background Removed)
 
-### Root Cause
-Two issues are breaking the checkout flow:
+### What Will Happen
 
-1. **Cart data is lost on Google sign-in** — The cart uses React state (`useState`), which resets when the page reloads during Google OAuth redirect. User adds courses → clicks checkout → signs in with Google → redirected back to `/checkout` → cart is empty.
+1. **Process the uploaded image** — Use the AI image generation model to remove the dark background from the uploaded logo, producing a transparent PNG.
 
-2. **Auth gate gets bypassed** — If the user is already logged in (e.g., demo accounts), the checkout auto-advances past the sign-in step. For new customers coming from the landing page, the redirect wipes their cart.
+2. **Replace `public/favicon.png`** — Copy the processed transparent logo to `public/favicon.png`, replacing the current file. This automatically updates the favicon (referenced in `index.html`) and all places that use `/favicon.png`.
 
-### What Will Change
+3. **No code changes needed** — The logo is already referenced correctly across the app:
+   - `index.html` → favicon
+   - `LandingPage.tsx` → header and footer logos
+   - `AppSidebar.tsx` → sidebar logo
 
-#### 1. Persist Cart in localStorage (`src/contexts/CartContext.tsx`)
-- Replace `useState` with state that syncs to `localStorage` on every change
-- On mount, hydrate cart items and student details from `localStorage`
-- This ensures cart survives the Google OAuth redirect round-trip
-- Clear `localStorage` when `clearCart()` is called
-
-#### 2. Harden Auth Gate in CheckoutPage (`src/pages/CheckoutPage.tsx`)
-- Step 0 (Sign In) is shown whenever `session` is null — this already works in code
-- After Google OAuth redirect back to `/checkout`, the session will be set and cart will be restored from localStorage
-- Add a loading state while auth is resolving to prevent flicker
-- Disable the "Next" button entirely until session is confirmed
-- Show the auth loading state from `useAuth()` so the page doesn't flash step 0 → step 1
-
-#### 3. Handle Auth Loading State
-- While `loading` is true from `useAuth()`, show a spinner instead of the auth gate or student details
-- Once loading resolves: if no session → show auth gate; if session → advance to step 1
-
-### Files to Modify
-- `src/contexts/CartContext.tsx` — Add localStorage persistence for items and studentDetails
-- `src/pages/CheckoutPage.tsx` — Add auth loading guard, ensure step 0 blocks properly
-
-### Technical Notes
-- localStorage keys: `aurapen_cart_items`, `aurapen_cart_students`
-- Cart hydration happens once on mount; writes happen on every state change via `useEffect`
-- No database changes needed
+### Files
+- **Replace**: `public/favicon.png` with the new transparent-background logo
+- **No code edits required** — all references already point to `/favicon.png`
 
