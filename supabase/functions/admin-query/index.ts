@@ -434,7 +434,7 @@ Deno.serve(async (req) => {
 
       // ===== BATCHES =====
       case 'list_batches': {
-        let query = supabase.from('batches').select('*, courses(name, duration_days, daily_hours, total_hours)')
+        let query = supabase.from('batches').select('*, courses(name, duration_days, daily_hours, total_hours, delivery_mode)')
         if (params?.course_id) query = query.eq('course_id', params.course_id)
         const { data } = await query.order('created_at', { ascending: false })
         result = data ?? []
