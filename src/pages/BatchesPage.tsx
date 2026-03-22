@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Trash2, Users, UserPlus, UserMinus, Layers } from 'lucide-react';
+import { Plus, Trash2, Users, UserPlus, UserMinus, Layers, Wifi, Building2 } from 'lucide-react';
 import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
 
 export default function BatchesPage() {
