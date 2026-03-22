@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { X, Maximize2, Minimize2, Loader2 } from 'lucide-react';
+import { X, Maximize2, Minimize2, Loader2, MessageSquare } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import {
   LiveKitRoom,
@@ -10,6 +11,7 @@ import {
 import '@livekit/components-styles';
 import { TeacherControls } from './TeacherControls';
 import { StudentDataListener } from './StudentDataListener';
+import { ClassroomChat } from './ClassroomChat';
 
 interface VideoClassroomProps {
   roomName: string;
@@ -24,6 +26,8 @@ export function VideoClassroom({ roomName, displayName, isTeacher, onClose }: Vi
   const [serverUrl, setServerUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [unread, setUnread] = useState(0);
 
   const fetchToken = useCallback(async () => {
     setLoading(true);
