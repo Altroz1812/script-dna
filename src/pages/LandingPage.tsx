@@ -124,8 +124,8 @@ export default function LandingPage() {
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'bg-card/90 backdrop-blur-xl border-b border-border/50 shadow-lg' : 'bg-transparent'}`}>
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-              <PenTool className="w-4.5 h-4.5 text-primary-foreground" />
+            <div className="w-9 h-9 rounded-lg overflow-hidden">
+              <img src="/favicon.png" alt="AuraPen" className="w-full h-full object-contain" />
             </div>
             <span className="font-bold text-lg tracking-tight">AuraPen</span>
           </Link>
@@ -613,8 +613,8 @@ export default function LandingPage() {
           <div className="grid sm:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-                  <PenTool className="w-4 h-4 text-primary-foreground" />
+                <div className="w-8 h-8 rounded-lg overflow-hidden">
+                  <img src="/favicon.png" alt="AuraPen" className="w-full h-full object-contain" />
                 </div>
                 <span className="font-bold">AuraPen</span>
               </div>
