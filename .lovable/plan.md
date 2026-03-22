@@ -1,75 +1,68 @@
 
 
-# Visual Overhaul: Make the Theme Rich and Stunning
+## Cashfree Payment Gateway + Enhanced Checkout Flow
 
-## Problems Identified
-1. Dashboard stat cards have very faint gradients (e.g. `from-purple-500/20`) making them look washed out
-2. Stat numbers (AnimatedCounter) aren't visually prominent - they blend into the dark background
-3. The enrollment chart section appears empty/missing below the cards
-4. Sidebar and header feel flat with minimal visual contrast
-5. Landing page hero and feature cards lack depth and vibrancy
-6. Quick access cards at the bottom are too subtle
-7. No visual hierarchy - everything looks the same level of importance
+### Overview
+Rebuild the checkout flow into a multi-step process: (1) auth gate — force login/signup with Google, (2) student details collection per course, (3) discount calculation based on student count/course count, (4) Cashfree payment via edge function, (5) order confirmation.
 
-## Plan
+### Step 1: Cashfree API Secret
+- Use the `add_secret` tool to request the user's **Cashfree App ID** and **Secret Key** (test or production). These are needed in the edge function.
 
-### 1. Boost Dashboard Card Vibrancy
-- Increase card gradient opacity from `/20` to `/40` and add a subtle inner glow
-- Make stat numbers use the `text-gradient` class with brighter gradient stops
-- Add a subtle animated shimmer border on hover to each TiltCard
-- Give the "2x1" span cards a more prominent visual treatment (larger icon, bolder gradient)
+### Step 2: Database Changes (Migration)
+- Create an `orders` table to track checkout orders:
+  - `id`, `user_id`, `total_amount`, `discount_amount`, `final_amount`, `status` (pending/paid/failed), `cashfree_order_id`, `payment_session_id`, `student_details` (jsonb — array of student names per course), `created_at`, `updated_at`
+- Add RLS: users can read their own orders; admins/superadmins can manage all.
 
-### 2. Richer Color Palette Application
-- Update `GRADIENT_PAIRS` to use stronger opacity values and add secondary color stops
-- Update `ICON_GRADIENTS` to be more saturated with shadow glows matching each icon color
-- Add colored shadow (`shadow-purple-500/20`, `shadow-emerald-500/20`, etc.) to icon containers
+### Step 3: Edge Function — `cashfree-order`
+- Accepts: `{ items, student_details, discount_amount, final_amount }`
+- Validates the logged-in user (JWT from Authorization header)
+- Creates a row in `orders` table
+- Calls Cashfree "Create Order" API (`https://api.cashfree.com/pg/orders` or sandbox equivalent) with the order amount and customer details
+- Returns `payment_session_id` to the frontend for the Cashfree JS SDK drop-in
 
-### 3. Sidebar Visual Enhancement
-- Add a subtle vertical gradient background to the sidebar (darker at bottom)
-- Add a glowing dot or pulse indicator next to the active menu item
-- Make the sidebar header logo area have a more prominent gradient background panel
-- Add hover glow effects on menu items
+### Step 4: Edge Function — `cashfree-webhook`
+- Receives Cashfree payment notifications
+- Verifies signature using the secret key
+- Updates `orders.status` to `paid` or `failed`
+- On success: creates `payments` records and a `leads` entry
 
-### 4. Header Polish
-- Add a subtle gradient line at the bottom of the header (purple-to-coral thin line)
-- Make the user avatar ring glow on hover
+### Step 5: Checkout Page Rebuild (`CheckoutPage.tsx`)
+Multi-step flow with these screens:
 
-### 5. Landing Page Elevation
-- Feature cards: add gradient border-on-hover effect using the existing `gradient-border` class
-- Hero section: add floating particle/dot decorations using absolute-positioned animated elements
-- Testimonial cards: add subtle colored left-border accents
-- Stats section: make numbers larger and add individual color coding per stat
+1. **Auth Gate** — If not logged in, show a "Sign in to continue" screen with Google Sign-In button. Redirect back to `/checkout` after auth.
 
-### 6. Login Page Enhancement
-- Add a subtle animated grid/dot pattern behind the morphing blobs
-- Make the demo login cards have colored left borders matching role colors
-- Add a gradient ring animation around the logo
+2. **Student Details** — For each course in cart, ask: "How many students?" and collect each student's name and age/grade. Store in local state.
 
-### 7. Dashboard Chart Fix
-- Verify the EnrollmentTrendsChart renders properly; if data is empty, add a visual placeholder
-- Add gradient background to the chart container card
-- Make chart area colors more vibrant
+3. **Discount Summary** — Calculate discounts:
+   - 2 courses → 5% off
+   - 3+ courses → 10% off
+   - 2 students per course → 5% off per course
+   - 3+ students per course → 10% off per course
+   - Also apply coupon codes (existing `coupons` table)
+   - Show itemized breakdown with discount applied
 
-### 8. Global Enhancements
-- Increase the `--border` lightness slightly (from 16% to 18%) for better card edge visibility
-- Add a subtle animated gradient line utility class for section dividers
-- Make `glass-panel` backdrop-filter stronger with higher saturation
+4. **Payment** — Load Cashfree JS SDK (`https://sdk.cashfree.com/js/v3/cashfree.js`), call the edge function to create order, then open Cashfree payment drop-in. On success/failure, show result.
 
-## Technical Details
+5. **Confirmation** — Order success screen with order ID.
 
-### Files to modify:
-- `src/pages/Dashboard.tsx` - Boost gradient arrays, card layout, stat styling
-- `src/index.css` - Strengthen glass-panel, border visibility, add new utility classes
-- `src/components/layout/AppSidebar.tsx` - Sidebar gradient bg, active item glow
-- `src/components/layout/AppHeader.tsx` - Bottom gradient line, avatar hover glow
-- `src/pages/Login.tsx` - Role-colored demo cards, grid pattern background
-- `src/pages/LandingPage.tsx` - Feature card borders, hero decorations, stat colors
-- `src/components/dashboard/EnrollmentTrendsChart.tsx` - Brighter chart gradients, container styling
-- `src/components/ui/tilt-card.tsx` - Stronger default glow, border visibility
-- `tailwind.config.ts` - Minor additions if needed for new animation keyframes
+### Step 6: CartContext Update
+- Add `studentDetails` map to cart context: `Record<courseId, { name: string; grade: string }[]>`
+- Add helper to set/get student details per course item
 
-### Performance considerations:
-- All enhancements use CSS gradients, opacity, and existing Framer Motion - no new heavy dependencies
-- Glow effects use box-shadow (GPU-composited) rather than filter: blur
-- Keep film grain overlay at current 3% opacity to avoid performance issues
+### Step 7: Google Sign-In Integration
+- Use the existing Lovable Cloud managed Google OAuth (configure via Social Login tool)
+- Add a Google sign-in button on the checkout auth gate step
+
+### Files to Create/Modify
+- **Create**: `supabase/functions/cashfree-order/index.ts`
+- **Create**: `supabase/functions/cashfree-webhook/index.ts`
+- **Modify**: `src/pages/CheckoutPage.tsx` (complete rewrite — multi-step)
+- **Modify**: `src/contexts/CartContext.tsx` (add student details)
+- **Migration**: Create `orders` table
+
+### Technical Details
+- Cashfree JS SDK loaded via `<script>` tag dynamically
+- Payment mode: Cashfree Drop (embedded checkout)
+- Discount logic is client-side for display but validated server-side in the edge function
+- Webhook endpoint does not require JWT (public endpoint with signature verification)
 
