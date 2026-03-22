@@ -224,8 +224,13 @@ export default function BatchesPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="flex items-center gap-2 text-sm">
+                <div className="flex items-center gap-2 text-sm flex-wrap">
                   <Badge variant="secondary">Max {b.max_students}</Badge>
+                  {(b as any).courses?.delivery_mode === 'offline' ? (
+                    <Badge variant="outline" className="gap-1"><Building2 className="h-3 w-3" /> Offline</Badge>
+                  ) : (
+                    <Badge variant="outline" className="gap-1"><Wifi className="h-3 w-3" /> Online</Badge>
+                  )}
                   <span className="text-muted-foreground">
                     Teacher: {b.teacher_id ? 'Assigned' : 'None'}
                   </span>
