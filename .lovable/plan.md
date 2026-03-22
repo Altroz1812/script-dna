@@ -1,68 +1,70 @@
 
 
-## Cashfree Payment Gateway + Enhanced Checkout Flow
+## Rebuild Checkout: Multi-Step with Auth Gate + Student Details
 
-### Overview
-Rebuild the checkout flow into a multi-step process: (1) auth gate — force login/signup with Google, (2) student details collection per course, (3) discount calculation based on student count/course count, (4) Cashfree payment via edge function, (5) order confirmation.
+### Problem
+The current checkout page is a simple contact form — no Google sign-in requirement, no student details collection per course, and no discount logic. The approved plan called for a multi-step flow but it was never implemented.
 
-### Step 1: Cashfree API Secret
-- Use the `add_secret` tool to request the user's **Cashfree App ID** and **Secret Key** (test or production). These are needed in the edge function.
+### What Will Change
 
-### Step 2: Database Changes (Migration)
-- Create an `orders` table to track checkout orders:
-  - `id`, `user_id`, `total_amount`, `discount_amount`, `final_amount`, `status` (pending/paid/failed), `cashfree_order_id`, `payment_session_id`, `student_details` (jsonb — array of student names per course), `created_at`, `updated_at`
-- Add RLS: users can read their own orders; admins/superadmins can manage all.
+#### 1. Configure Google OAuth (Social Login)
+- Use the Configure Social Login tool to set up Google sign-in via Lovable Cloud's managed OAuth
+- This generates the `src/integrations/lovable/` module automatically
 
-### Step 3: Edge Function — `cashfree-order`
-- Accepts: `{ items, student_details, discount_amount, final_amount }`
-- Validates the logged-in user (JWT from Authorization header)
-- Creates a row in `orders` table
-- Calls Cashfree "Create Order" API (`https://api.cashfree.com/pg/orders` or sandbox equivalent) with the order amount and customer details
-- Returns `payment_session_id` to the frontend for the Cashfree JS SDK drop-in
+#### 2. Update CartContext (`src/contexts/CartContext.tsx`)
+- Add `studentDetails: Record<string, { name: string; grade: string }[]>` to track students per course
+- Add `setStudentDetails(courseId, students)` and `getStudentDetails(courseId)` helpers
 
-### Step 4: Edge Function — `cashfree-webhook`
-- Receives Cashfree payment notifications
-- Verifies signature using the secret key
-- Updates `orders.status` to `paid` or `failed`
-- On success: creates `payments` records and a `leads` entry
+#### 3. Complete Rewrite of CheckoutPage (`src/pages/CheckoutPage.tsx`)
+Multi-step wizard with 4 steps:
 
-### Step 5: Checkout Page Rebuild (`CheckoutPage.tsx`)
-Multi-step flow with these screens:
+**Step 1 — Auth Gate**: If user is not logged in, show a full-screen prompt with Google Sign-In button (using `lovable.auth.signInWithOAuth("google")`). No manual contact form. User must sign in to proceed.
 
-1. **Auth Gate** — If not logged in, show a "Sign in to continue" screen with Google Sign-In button. Redirect back to `/checkout` after auth.
+**Step 2 — Student Details**: For each course in cart, show a card asking "How many students will enroll?" with a number selector (1-5). For each student, collect name and grade/age. All fields required before proceeding.
 
-2. **Student Details** — For each course in cart, ask: "How many students?" and collect each student's name and age/grade. Store in local state.
+**Step 3 — Discount & Summary**: Show itemized breakdown with automatic discounts:
+- 2 courses → 5% off subtotal
+- 3+ courses → 10% off subtotal
+- 2 students in a course → 5% off that course
+- 3+ students in a course → 10% off that course
+- Optional coupon code field (validates against `coupons` table)
+- Clear display of original price, discount amount, and final total
 
-3. **Discount Summary** — Calculate discounts:
-   - 2 courses → 5% off
-   - 3+ courses → 10% off
-   - 2 students per course → 5% off per course
-   - 3+ students per course → 10% off per course
-   - Also apply coupon codes (existing `coupons` table)
-   - Show itemized breakdown with discount applied
+**Step 4 — Payment & Confirmation**: Call the `cashfree-order` edge function to create an order, load Cashfree JS SDK, open payment drop-in. Show success/failure result.
 
-4. **Payment** — Load Cashfree JS SDK (`https://sdk.cashfree.com/js/v3/cashfree.js`), call the edge function to create order, then open Cashfree payment drop-in. On success/failure, show result.
+#### 4. Update `cashfree-order` Edge Function
+- Add `create_order` action: accepts cart items, student details, calculates discount server-side, creates order in `orders` table, calls Cashfree API, returns `payment_session_id`
+- Add `verify_payment` action: verifies payment status after completion
 
-5. **Confirmation** — Order success screen with order ID.
+#### 5. Create `orders` Table (Migration)
+```sql
+CREATE TABLE public.orders (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  total_amount numeric NOT NULL,
+  discount_amount numeric NOT NULL DEFAULT 0,
+  final_amount numeric NOT NULL,
+  status text NOT NULL DEFAULT 'pending',
+  cashfree_order_id text,
+  payment_session_id text,
+  student_details jsonb NOT NULL DEFAULT '[]',
+  coupon_code text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+-- RLS: users read own orders, admins manage all
+```
 
-### Step 6: CartContext Update
-- Add `studentDetails` map to cart context: `Record<courseId, { name: string; grade: string }[]>`
-- Add helper to set/get student details per course item
+### Files
+- **Configure**: Google Social Login via tool
+- **Migration**: Create `orders` table with RLS
+- **Modify**: `src/contexts/CartContext.tsx` — add student details state
+- **Rewrite**: `src/pages/CheckoutPage.tsx` — 4-step wizard
+- **Modify**: `supabase/functions/cashfree-order/index.ts` — add order creation + Cashfree API call
 
-### Step 7: Google Sign-In Integration
-- Use the existing Lovable Cloud managed Google OAuth (configure via Social Login tool)
-- Add a Google sign-in button on the checkout auth gate step
-
-### Files to Create/Modify
-- **Create**: `supabase/functions/cashfree-order/index.ts`
-- **Create**: `supabase/functions/cashfree-webhook/index.ts`
-- **Modify**: `src/pages/CheckoutPage.tsx` (complete rewrite — multi-step)
-- **Modify**: `src/contexts/CartContext.tsx` (add student details)
-- **Migration**: Create `orders` table
-
-### Technical Details
-- Cashfree JS SDK loaded via `<script>` tag dynamically
-- Payment mode: Cashfree Drop (embedded checkout)
-- Discount logic is client-side for display but validated server-side in the edge function
-- Webhook endpoint does not require JWT (public endpoint with signature verification)
+### Technical Notes
+- Google OAuth uses `lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin })` — no custom credentials needed
+- Discount calculation happens both client-side (for display) and server-side (in edge function, for validation)
+- Cashfree JS SDK loaded dynamically via script tag when reaching payment step
+- The `orders` table stores `student_details` as JSONB for flexibility
 
