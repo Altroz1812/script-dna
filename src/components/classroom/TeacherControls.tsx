@@ -9,7 +9,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { MicOff, VideoOff, UserX, Shield, Users } from 'lucide-react';
 import { useParticipants, useRoomContext } from '@livekit/components-react';
-import { RoomEvent, type RemoteParticipant } from 'livekit-client';
 import { toast } from '@/hooks/use-toast';
 
 export function TeacherControls() {
