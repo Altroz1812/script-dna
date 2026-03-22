@@ -207,7 +207,12 @@ export default function CheckoutPage() {
       </div>
 
       <main className="max-w-4xl mx-auto px-6 py-8">
-        {items.length === 0 && !success ? (
+        {authLoading ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="h-10 w-10 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
+            <p className="text-muted-foreground">Loading your session...</p>
+          </div>
+        ) : items.length === 0 && !success ? (
           <EmptyCart />
         ) : (
           <AnimatePresence mode="wait">
