@@ -42,7 +42,7 @@ function calculateDiscounts(items: { id: string; fee: number }[], studentDetails
 
 export default function CheckoutPage() {
   const { items, removeItem, clearCart, studentDetails, setStudentDetails, getStudentDetails } = useCart();
-  const { session, profile } = useAuth();
+  const { session, loading: authLoading } = useAuth();
   const [step, setStep] = useState(0);
   const [couponCode, setCouponCode] = useState('');
   const [couponDiscount, setCouponDiscount] = useState(0);
