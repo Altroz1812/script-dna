@@ -45,6 +45,7 @@ import StudentLessonViewer from "@/pages/StudentLessonViewer";
 import StudentProgressPage from "@/pages/StudentProgressPage";
 import ParentChildrenPage from "@/pages/ParentChildrenPage";
 import ParentProgressPage from "@/pages/ParentProgressPage";
+import OrderHistoryPage from "@/pages/OrderHistoryPage";
 const queryClient = new QueryClient();
 
 const App = () => (
