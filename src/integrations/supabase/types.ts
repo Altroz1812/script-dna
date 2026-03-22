@@ -797,6 +797,39 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_config: {
+        Row: {
+          app_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          mode: string
+          provider: string
+          secret_key: string
+          updated_at: string
+        }
+        Insert: {
+          app_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          mode?: string
+          provider?: string
+          secret_key?: string
+          updated_at?: string
+        }
+        Update: {
+          app_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          mode?: string
+          provider?: string
+          secret_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       payments: {
         Row: {
           amount: number
