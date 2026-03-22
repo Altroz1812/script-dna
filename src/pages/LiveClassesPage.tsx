@@ -192,8 +192,9 @@ export default function LiveClassesPage() {
     <div className="p-6 space-y-6">
       {activeClass && (
         <VideoClassroom
-          roomName={activeClass.meeting_url?.replace('https://meet.jit.si/', '') || `class-${activeClass.id.slice(0, 8)}`}
+          roomName={activeClass.meeting_url || `class-${activeClass.id.slice(0, 8)}`}
           displayName={profile?.displayName || (isStudent ? 'Student' : 'Teacher')}
+          isTeacher={isTeacher || isAdmin}
           onClose={() => setActiveClassroom(null)}
         />
       )}
