@@ -666,6 +666,51 @@ export type Database = {
         }
         Relationships: []
       }
+      orders: {
+        Row: {
+          cashfree_order_id: string | null
+          coupon_code: string | null
+          created_at: string
+          discount_amount: number
+          final_amount: number
+          id: string
+          payment_session_id: string | null
+          status: string
+          student_details: Json
+          total_amount: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cashfree_order_id?: string | null
+          coupon_code?: string | null
+          created_at?: string
+          discount_amount?: number
+          final_amount: number
+          id?: string
+          payment_session_id?: string | null
+          status?: string
+          student_details?: Json
+          total_amount: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cashfree_order_id?: string | null
+          coupon_code?: string | null
+          created_at?: string
+          discount_amount?: number
+          final_amount?: number
+          id?: string
+          payment_session_id?: string | null
+          status?: string
+          student_details?: Json
+          total_amount?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       org_subscriptions: {
         Row: {
           created_at: string
