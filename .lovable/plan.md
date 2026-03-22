@@ -1,70 +1,39 @@
 
 
-## Rebuild Checkout: Multi-Step with Auth Gate + Student Details
+## Fix: Auth Gate + Cart Persistence for Checkout
 
-### Problem
-The current checkout page is a simple contact form — no Google sign-in requirement, no student details collection per course, and no discount logic. The approved plan called for a multi-step flow but it was never implemented.
+### Root Cause
+Two issues are breaking the checkout flow:
+
+1. **Cart data is lost on Google sign-in** — The cart uses React state (`useState`), which resets when the page reloads during Google OAuth redirect. User adds courses → clicks checkout → signs in with Google → redirected back to `/checkout` → cart is empty.
+
+2. **Auth gate gets bypassed** — If the user is already logged in (e.g., demo accounts), the checkout auto-advances past the sign-in step. For new customers coming from the landing page, the redirect wipes their cart.
 
 ### What Will Change
 
-#### 1. Configure Google OAuth (Social Login)
-- Use the Configure Social Login tool to set up Google sign-in via Lovable Cloud's managed OAuth
-- This generates the `src/integrations/lovable/` module automatically
+#### 1. Persist Cart in localStorage (`src/contexts/CartContext.tsx`)
+- Replace `useState` with state that syncs to `localStorage` on every change
+- On mount, hydrate cart items and student details from `localStorage`
+- This ensures cart survives the Google OAuth redirect round-trip
+- Clear `localStorage` when `clearCart()` is called
 
-#### 2. Update CartContext (`src/contexts/CartContext.tsx`)
-- Add `studentDetails: Record<string, { name: string; grade: string }[]>` to track students per course
-- Add `setStudentDetails(courseId, students)` and `getStudentDetails(courseId)` helpers
+#### 2. Harden Auth Gate in CheckoutPage (`src/pages/CheckoutPage.tsx`)
+- Step 0 (Sign In) is shown whenever `session` is null — this already works in code
+- After Google OAuth redirect back to `/checkout`, the session will be set and cart will be restored from localStorage
+- Add a loading state while auth is resolving to prevent flicker
+- Disable the "Next" button entirely until session is confirmed
+- Show the auth loading state from `useAuth()` so the page doesn't flash step 0 → step 1
 
-#### 3. Complete Rewrite of CheckoutPage (`src/pages/CheckoutPage.tsx`)
-Multi-step wizard with 4 steps:
+#### 3. Handle Auth Loading State
+- While `loading` is true from `useAuth()`, show a spinner instead of the auth gate or student details
+- Once loading resolves: if no session → show auth gate; if session → advance to step 1
 
-**Step 1 — Auth Gate**: If user is not logged in, show a full-screen prompt with Google Sign-In button (using `lovable.auth.signInWithOAuth("google")`). No manual contact form. User must sign in to proceed.
-
-**Step 2 — Student Details**: For each course in cart, show a card asking "How many students will enroll?" with a number selector (1-5). For each student, collect name and grade/age. All fields required before proceeding.
-
-**Step 3 — Discount & Summary**: Show itemized breakdown with automatic discounts:
-- 2 courses → 5% off subtotal
-- 3+ courses → 10% off subtotal
-- 2 students in a course → 5% off that course
-- 3+ students in a course → 10% off that course
-- Optional coupon code field (validates against `coupons` table)
-- Clear display of original price, discount amount, and final total
-
-**Step 4 — Payment & Confirmation**: Call the `cashfree-order` edge function to create an order, load Cashfree JS SDK, open payment drop-in. Show success/failure result.
-
-#### 4. Update `cashfree-order` Edge Function
-- Add `create_order` action: accepts cart items, student details, calculates discount server-side, creates order in `orders` table, calls Cashfree API, returns `payment_session_id`
-- Add `verify_payment` action: verifies payment status after completion
-
-#### 5. Create `orders` Table (Migration)
-```sql
-CREATE TABLE public.orders (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL,
-  total_amount numeric NOT NULL,
-  discount_amount numeric NOT NULL DEFAULT 0,
-  final_amount numeric NOT NULL,
-  status text NOT NULL DEFAULT 'pending',
-  cashfree_order_id text,
-  payment_session_id text,
-  student_details jsonb NOT NULL DEFAULT '[]',
-  coupon_code text,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
--- RLS: users read own orders, admins manage all
-```
-
-### Files
-- **Configure**: Google Social Login via tool
-- **Migration**: Create `orders` table with RLS
-- **Modify**: `src/contexts/CartContext.tsx` — add student details state
-- **Rewrite**: `src/pages/CheckoutPage.tsx` — 4-step wizard
-- **Modify**: `supabase/functions/cashfree-order/index.ts` — add order creation + Cashfree API call
+### Files to Modify
+- `src/contexts/CartContext.tsx` — Add localStorage persistence for items and studentDetails
+- `src/pages/CheckoutPage.tsx` — Add auth loading guard, ensure step 0 blocks properly
 
 ### Technical Notes
-- Google OAuth uses `lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin })` — no custom credentials needed
-- Discount calculation happens both client-side (for display) and server-side (in edge function, for validation)
-- Cashfree JS SDK loaded dynamically via script tag when reaching payment step
-- The `orders` table stores `student_details` as JSONB for flexibility
+- localStorage keys: `aurapen_cart_items`, `aurapen_cart_students`
+- Cart hydration happens once on mount; writes happen on every state change via `useEffect`
+- No database changes needed
 
