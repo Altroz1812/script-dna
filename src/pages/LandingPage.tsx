@@ -197,11 +197,45 @@ export default function LandingPage() {
               ))}
             </div>
             {items.length > 0 && (
-              <div className="p-6 border-t border-border/50 space-y-4">
-                <div className="flex justify-between font-semibold">
-                  <span>Total</span>
-                  <span>₹{total.toLocaleString()}</span>
-                </div>
+               <div className="p-6 border-t border-border/50 space-y-3">
+                {(() => {
+                  const subtotal = items.reduce((s, i) => s + (i.fee || 0), 0);
+                  const courseCount = items.length;
+                  let courseDiscountPct = 0;
+                  if (courseCount >= 3) courseDiscountPct = 10;
+                  else if (courseCount === 2) courseDiscountPct = 5;
+                  const courseDiscount = subtotal * (courseDiscountPct / 100);
+                  const discountedTotal = subtotal - courseDiscount;
+
+                  return (
+                    <>
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>Subtotal</span>
+                        <span>₹{subtotal.toLocaleString()}</span>
+                      </div>
+                      {courseDiscountPct > 0 && (
+                        <div className="flex justify-between text-sm text-primary font-medium">
+                          <span>Multi-course discount ({courseDiscountPct}%)</span>
+                          <span>-₹{Math.round(courseDiscount).toLocaleString()}</span>
+                        </div>
+                      )}
+                      {courseCount >= 2 && (
+                        <p className="text-xs text-primary/80 bg-primary/5 rounded-md px-3 py-2">
+                          🎉 {courseCount >= 3 ? '10%' : '5%'} off for {courseCount} courses! Add more to save more.
+                        </p>
+                      )}
+                      {courseCount === 1 && (
+                        <p className="text-xs text-muted-foreground bg-secondary/50 rounded-md px-3 py-2">
+                          💡 Add another course to unlock 5% multi-course discount!
+                        </p>
+                      )}
+                      <div className="flex justify-between font-semibold">
+                        <span>Total</span>
+                        <span>₹{Math.round(discountedTotal).toLocaleString()}</span>
+                      </div>
+                    </>
+                  );
+                })()}
                 <Button className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90" onClick={() => { setCartOpen(false); navigate('/checkout'); }}>
                   Checkout <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
