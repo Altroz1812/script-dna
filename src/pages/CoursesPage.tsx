@@ -216,17 +216,33 @@ export default function CoursesPage() {
         )}
       </div>
 
-      <Tabs defaultValue="all">
-        <TabsList>
-          <TabsTrigger value="all">All ({courses.length})</TabsTrigger>
-          <TabsTrigger value="online">
-            <Wifi className="h-3.5 w-3.5 mr-1" /> Online ({onlineCourses.length})
-          </TabsTrigger>
-          <TabsTrigger value="offline">
-            <Building2 className="h-3.5 w-3.5 mr-1" /> Offline ({offlineCourses.length})
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="all"><CourseGrid items={courses} /></TabsContent>
+      <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); if (v === 'online') setSelectedCenter('all'); }}>
+        <div className="flex flex-wrap items-center gap-3">
+          <TabsList>
+            <TabsTrigger value="all">All ({allFiltered.length})</TabsTrigger>
+            <TabsTrigger value="online">
+              <Wifi className="h-3.5 w-3.5 mr-1" /> Online ({onlineCourses.length})
+            </TabsTrigger>
+            <TabsTrigger value="offline">
+              <Building2 className="h-3.5 w-3.5 mr-1" /> Offline ({offlineCourses.length})
+            </TabsTrigger>
+          </TabsList>
+          {activeTab !== 'online' && centers.length > 0 && (
+            <Select value={selectedCenter} onValueChange={setSelectedCenter}>
+              <SelectTrigger className="w-[200px]">
+                <MapPin className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+                <SelectValue placeholder="All Branches" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Branches</SelectItem>
+                {centers.map(c => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+        <TabsContent value="all"><CourseGrid items={allFiltered} /></TabsContent>
         <TabsContent value="online"><CourseGrid items={onlineCourses} /></TabsContent>
         <TabsContent value="offline"><CourseGrid items={offlineCourses} /></TabsContent>
       </Tabs>
