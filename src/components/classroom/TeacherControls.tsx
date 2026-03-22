@@ -16,7 +16,7 @@ export function TeacherControls() {
   const participants = useParticipants();
   const remoteParticipants = participants.filter(
     (p) => p.identity !== room.localParticipant.identity
-  ) as RemoteParticipant[];
+  );
 
   const muteAllMics = async () => {
     for (const p of remoteParticipants) {
