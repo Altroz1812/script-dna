@@ -16,6 +16,7 @@ export function StudentDataListener() {
         const msg = JSON.parse(new TextDecoder().decode(payload));
         const myIdentity = room.localParticipant.identity;
 
+        if (msg.type === 'chat') return; // handled by ClassroomChat
         if (msg.target !== myIdentity) return;
 
         switch (msg.action) {
