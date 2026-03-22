@@ -99,6 +99,7 @@ const App = () => (
                 <Route path="/my-progress" element={<StudentProgressPage />} />
                 <Route path="/my-children" element={<ParentChildrenPage />} />
                 <Route path="/child-progress" element={<ParentProgressPage />} />
+                <Route path="/my-orders" element={<OrderHistoryPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
