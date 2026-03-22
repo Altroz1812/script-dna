@@ -8,6 +8,8 @@ import {
   RoomAudioRenderer,
 } from '@livekit/components-react';
 import '@livekit/components-styles';
+import { TeacherControls } from './TeacherControls';
+import { StudentDataListener } from './StudentDataListener';
 
 interface VideoClassroomProps {
   roomName: string;
