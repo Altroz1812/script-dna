@@ -29,7 +29,7 @@ type LiveClass = {
   status: string;
   meeting_url: string | null;
   schedule_id: string | null;
-  batches?: { name: string } | null;
+  batches?: { name: string; courses?: { delivery_mode?: string } | null } | null;
 };
 
 export default function LiveClassesPage() {
@@ -52,7 +52,7 @@ export default function LiveClassesPage() {
       if (isTeacher || isStudent) {
         const { data, error } = await supabase
           .from('live_classes')
-          .select('*, batches(name)')
+          .select('*, batches(name, courses(delivery_mode))')
           .order('scheduled_at', { ascending: true });
         if (error) throw error;
         setClasses((data as any[]) || []);
@@ -131,6 +131,7 @@ export default function LiveClassesPage() {
     const isScheduled = cls.status === 'scheduled';
     const scheduledDate = parseISO(cls.scheduled_at);
     const canStart = canManage && isScheduled && (isToday(scheduledDate) || isPast(scheduledDate));
+    const isOfflineCourse = cls.batches?.courses?.delivery_mode === 'offline';
 
     return (
       <Card className={`transition-all hover:shadow-md ${isLive ? 'border-green-500/50 shadow-green-500/10' : ''}`}>
@@ -158,27 +159,33 @@ export default function LiveClassesPage() {
                 {cls.status}
               </Badge>
               <div className="flex gap-1.5">
-                {canStart && (
-                  <Button size="sm" className="h-7 gap-1" onClick={() => startClass(cls)}>
-                    <Play className="h-3 w-3" /> Start
-                  </Button>
-                )}
-                {isLive && (
+                {isOfflineCourse ? (
+                  <Badge variant="outline" className="h-7 text-xs">Offline — Manual Attendance</Badge>
+                ) : (
                   <>
-                    <Button size="sm" className="h-7 gap-1" onClick={() => setActiveClassroom(cls.id)}>
-                      <Video className="h-3 w-3" /> Join
-                    </Button>
-                    {canManage && (
-                      <Button size="sm" variant="destructive" className="h-7 gap-1" onClick={() => openEndClassDialog(cls)}>
-                        <Square className="h-3 w-3" /> End
+                    {canStart && (
+                      <Button size="sm" className="h-7 gap-1" onClick={() => startClass(cls)}>
+                        <Play className="h-3 w-3" /> Start
+                      </Button>
+                    )}
+                    {isLive && (
+                      <>
+                        <Button size="sm" className="h-7 gap-1" onClick={() => setActiveClassroom(cls.id)}>
+                          <Video className="h-3 w-3" /> Join
+                        </Button>
+                        {canManage && (
+                          <Button size="sm" variant="destructive" className="h-7 gap-1" onClick={() => openEndClassDialog(cls)}>
+                            <Square className="h-3 w-3" /> End
+                          </Button>
+                        )}
+                      </>
+                    )}
+                    {isStudent && isLive && (
+                      <Button size="sm" className="h-7 gap-1" onClick={() => setActiveClassroom(cls.id)}>
+                        <Video className="h-3 w-3" /> Join
                       </Button>
                     )}
                   </>
-                )}
-                {isStudent && isLive && (
-                  <Button size="sm" className="h-7 gap-1" onClick={() => setActiveClassroom(cls.id)}>
-                    <Video className="h-3 w-3" /> Join
-                  </Button>
                 )}
               </div>
             </div>

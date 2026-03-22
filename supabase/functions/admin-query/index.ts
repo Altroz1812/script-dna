@@ -251,7 +251,7 @@ Deno.serve(async (req) => {
 
       // ===== LIVE CLASSES =====
       case 'list_live_classes': {
-        const { data } = await supabase.from('live_classes').select('*, batches(name), schedules(date, start_time, end_time, title, room)').order('scheduled_at', { ascending: false })
+        const { data } = await supabase.from('live_classes').select('*, batches(name, courses(delivery_mode)), schedules(date, start_time, end_time, title, room)').order('scheduled_at', { ascending: false })
         result = data ?? []
         break
       }
@@ -400,7 +400,7 @@ Deno.serve(async (req) => {
         break
       }
       case 'create_course': {
-        const { name, description, created_by, grade_level, duration_days, total_hours, daily_hours, language, writing_style, includes_speed, fee } = params
+        const { name, description, created_by, grade_level, duration_days, total_hours, daily_hours, language, writing_style, includes_speed, fee, delivery_mode, center } = params
         const { data, error } = await supabase.from('courses').insert({
           name, description, created_by,
           grade_level: grade_level || null,
@@ -411,9 +411,18 @@ Deno.serve(async (req) => {
           writing_style: writing_style || null,
           includes_speed: includes_speed || false,
           fee: fee ?? 0,
+          delivery_mode: delivery_mode || 'online',
+          center: center || null,
         }).select().single()
         if (error) throw error
         result = data
+        break
+      }
+      case 'update_course': {
+        const { id, ...updates } = params
+        const { error } = await supabase.from('courses').update(updates).eq('id', id)
+        if (error) throw error
+        result = { success: true }
         break
       }
       case 'delete_course': {
@@ -425,7 +434,7 @@ Deno.serve(async (req) => {
 
       // ===== BATCHES =====
       case 'list_batches': {
-        let query = supabase.from('batches').select('*, courses(name, duration_days, daily_hours, total_hours)')
+        let query = supabase.from('batches').select('*, courses(name, duration_days, daily_hours, total_hours, delivery_mode)')
         if (params?.course_id) query = query.eq('course_id', params.course_id)
         const { data } = await query.order('created_at', { ascending: false })
         result = data ?? []

@@ -254,9 +254,11 @@ export type Database = {
       }
       courses: {
         Row: {
+          center: string | null
           created_at: string
           created_by: string
           daily_hours: number | null
+          delivery_mode: string
           description: string | null
           duration_days: number | null
           fee: number | null
@@ -271,9 +273,11 @@ export type Database = {
           writing_style: string | null
         }
         Insert: {
+          center?: string | null
           created_at?: string
           created_by: string
           daily_hours?: number | null
+          delivery_mode?: string
           description?: string | null
           duration_days?: number | null
           fee?: number | null
@@ -288,9 +292,11 @@ export type Database = {
           writing_style?: string | null
         }
         Update: {
+          center?: string | null
           created_at?: string
           created_by?: string
           daily_hours?: number | null
+          delivery_mode?: string
           description?: string | null
           duration_days?: number | null
           fee?: number | null
