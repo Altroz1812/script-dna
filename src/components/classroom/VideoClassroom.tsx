@@ -81,37 +81,44 @@ export function VideoClassroom({ roomName, displayName, isTeacher, onClose }: Vi
       </div>
 
       {/* Content area */}
-      <div className={`flex-1 ${fullscreen ? 'h-[calc(100vh-41px)]' : 'h-[500px]'}`}>
-        {loading && (
-          <div className="flex items-center justify-center h-full">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            <span className="ml-2 text-muted-foreground">Connecting to classroom...</span>
-          </div>
-        )}
+      <div className={`flex-1 flex ${fullscreen ? 'h-[calc(100vh-41px)]' : 'h-[500px]'}`}>
+        <div className="flex-1 min-w-0">
+          {loading && (
+            <div className="flex items-center justify-center h-full">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <span className="ml-2 text-muted-foreground">Connecting to classroom...</span>
+            </div>
+          )}
 
-        {error && (
-          <div className="flex flex-col items-center justify-center h-full gap-3">
-            <p className="text-destructive text-sm">{error}</p>
-            <Button size="sm" onClick={fetchToken}>Retry</Button>
-          </div>
-        )}
+          {error && (
+            <div className="flex flex-col items-center justify-center h-full gap-3">
+              <p className="text-destructive text-sm">{error}</p>
+              <Button size="sm" onClick={fetchToken}>Retry</Button>
+            </div>
+          )}
 
-        {token && serverUrl && (
-          <LiveKitRoom
-            serverUrl={serverUrl}
-            token={token}
-            connect={true}
-            video={true}
-            audio={true}
-            style={{ height: '100%' }}
-            onDisconnected={onClose}
-          >
-            <VideoConference />
-            <RoomAudioRenderer />
-            {isTeacher && <TeacherControls />}
-            {!isTeacher && <StudentDataListener />}
-          </LiveKitRoom>
-        )}
+          {token && serverUrl && (
+            <LiveKitRoom
+              serverUrl={serverUrl}
+              token={token}
+              connect={true}
+              video={true}
+              audio={true}
+              style={{ height: '100%' }}
+              onDisconnected={onClose}
+            >
+              <VideoConference />
+              <RoomAudioRenderer />
+              {isTeacher && <TeacherControls />}
+              {!isTeacher && <StudentDataListener />}
+              {chatOpen && (
+                <div className="fixed right-0 top-0 bottom-0 w-80 z-50">
+                  <ClassroomChat onNewMessage={() => { if (!chatOpen) setUnread(u => u + 1); }} />
+                </div>
+              )}
+            </LiveKitRoom>
+          )}
+        </div>
       </div>
     </div>
   );
