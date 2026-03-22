@@ -229,6 +229,9 @@ export default function LandingPage() {
                           💡 Add another course to unlock 5% multi-course discount!
                         </p>
                       )}
+                      <p className="text-xs text-muted-foreground bg-secondary/50 rounded-md px-3 py-2">
+                        👨‍👧‍👦 Enroll 2 students per course for 5% off, or 3+ for 10% off — apply at checkout!
+                      </p>
                       <div className="flex justify-between font-semibold">
                         <span>Total</span>
                         <span>₹{Math.round(discountedTotal).toLocaleString()}</span>
