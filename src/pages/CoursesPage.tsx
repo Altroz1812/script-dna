@@ -24,6 +24,8 @@ export default function CoursesPage() {
   const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
   const [editCourse, setEditCourse] = useState<Course | null>(null);
+  const [selectedCenter, setSelectedCenter] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState('all');
 
   const { data: courses = [], isLoading } = useQuery<Course[]>({
     queryKey: ['courses', isStudent],
