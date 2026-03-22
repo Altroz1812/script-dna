@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { X, Maximize2, Minimize2, Loader2, MessageSquare } from 'lucide-react';
+import { X, Maximize2, Minimize2, Loader2, MessageSquare, WifiOff, AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
 import {
   LiveKitRoom,
@@ -20,42 +21,104 @@ interface VideoClassroomProps {
   onClose: () => void;
 }
 
+type ConnectionState = 'idle' | 'fetching' | 'checking' | 'ready' | 'failed';
+
+function wsPreCheck(url: string, timeoutMs = 5000): Promise<boolean> {
+  return new Promise((resolve) => {
+    try {
+      const wsUrl = url.replace(/^https?:\/\//, 'wss://').replace(/^wss:\/\//, 'wss://');
+      const ws = new WebSocket(wsUrl);
+      const timer = setTimeout(() => { ws.close(); resolve(false); }, timeoutMs);
+      ws.onopen = () => { clearTimeout(timer); ws.close(); resolve(true); };
+      ws.onerror = () => { clearTimeout(timer); ws.close(); resolve(false); };
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
 export function VideoClassroom({ roomName, displayName, isTeacher, onClose }: VideoClassroomProps) {
   const [fullscreen, setFullscreen] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [serverUrl, setServerUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [errorType, setErrorType] = useState<'unreachable' | 'config' | 'generic'>('generic');
+  const [connectionState, setConnectionState] = useState<ConnectionState>('idle');
   const [chatOpen, setChatOpen] = useState(false);
   const [unread, setUnread] = useState(0);
+  const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   const fetchToken = useCallback(async () => {
-    setLoading(true);
+    setConnectionState('fetching');
     setError(null);
+    setToken(null);
+    setServerUrl(null);
+
     try {
       const { data, error: fnError } = await supabase.functions.invoke('livekit-token', {
-        body: {
-          roomName,
-          participantName: displayName,
-          isTeacher: !!isTeacher,
-        },
+        body: { roomName, participantName: displayName, isTeacher: !!isTeacher },
       });
 
       if (fnError) throw new Error(fnError.message);
-      if (data?.error) throw new Error(data.error);
+      if (data?.error) {
+        if (data.error.includes('not configured') || data.error.includes('invalid')) {
+          setErrorType('config');
+        }
+        throw new Error(data.error);
+      }
+
+      // Pre-check WebSocket connectivity
+      setConnectionState('checking');
+      const reachable = await wsPreCheck(data.url);
+      if (!reachable) {
+        setErrorType('unreachable');
+        setError('The video server is not responding. It may be undergoing maintenance or the URL may be incorrect.');
+        setConnectionState('failed');
+        return;
+      }
 
       setToken(data.token);
       setServerUrl(data.url);
+      setConnectionState('ready');
+
+      // Safety timeout — if LiveKitRoom doesn't connect within 15s, show error
+      connectionTimeoutRef.current = setTimeout(() => {
+        // Only trigger if still in 'ready' (not yet connected inside LiveKitRoom)
+        setErrorType('unreachable');
+        setError('Connection timed out. The video server did not respond in time.');
+        setConnectionState('failed');
+        setToken(null);
+        setServerUrl(null);
+      }, 15000);
     } catch (err: any) {
-      setError(err.message || 'Failed to connect to classroom');
-    } finally {
-      setLoading(false);
+      if (!error) {
+        setErrorType('generic');
+        setError(err.message || 'Failed to connect to classroom');
+      }
+      setConnectionState('failed');
     }
   }, [roomName, displayName, isTeacher]);
 
   useEffect(() => {
     fetchToken();
+    return () => { if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current); };
   }, [fetchToken]);
+
+  const handleLiveKitConnected = useCallback(() => {
+    if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
+  }, []);
+
+  const handleLiveKitError = useCallback((err: Error) => {
+    if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
+    setErrorType('unreachable');
+    setError(err.message || 'Lost connection to video server.');
+    setConnectionState('failed');
+    setToken(null);
+    setServerUrl(null);
+  }, []);
+
+  const isLoading = connectionState === 'fetching' || connectionState === 'checking';
+  const isFailed = connectionState === 'failed';
 
   return (
     <div className={`${fullscreen ? 'fixed inset-0 z-50' : 'relative w-full'} bg-background border border-border rounded-lg overflow-hidden flex flex-col`}>
@@ -83,21 +146,47 @@ export function VideoClassroom({ roomName, displayName, isTeacher, onClose }: Vi
       {/* Content area */}
       <div className={`flex-1 flex ${fullscreen ? 'h-[calc(100vh-41px)]' : 'h-[500px]'}`}>
         <div className="flex-1 min-w-0">
-          {loading && (
+          {isLoading && (
             <div className="flex items-center justify-center h-full">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              <span className="ml-2 text-muted-foreground">Connecting to classroom...</span>
+              <span className="ml-2 text-muted-foreground">
+                {connectionState === 'checking' ? 'Verifying video server...' : 'Connecting to classroom...'}
+              </span>
             </div>
           )}
 
-          {error && (
-            <div className="flex flex-col items-center justify-center h-full gap-3">
-              <p className="text-destructive text-sm">{error}</p>
-              <Button size="sm" onClick={fetchToken}>Retry</Button>
+          {isFailed && (
+            <div className="flex items-center justify-center h-full p-6">
+              <Alert variant="destructive" className="max-w-md">
+                {errorType === 'unreachable' ? (
+                  <WifiOff className="h-5 w-5" />
+                ) : (
+                  <AlertTriangle className="h-5 w-5" />
+                )}
+                <AlertTitle>
+                  {errorType === 'unreachable' ? 'Video server unreachable' : errorType === 'config' ? 'Configuration error' : 'Connection failed'}
+                </AlertTitle>
+                <AlertDescription className="mt-2">
+                  <p className="mb-3">
+                    {errorType === 'unreachable'
+                      ? 'The video server is not responding. This may be due to server maintenance or an incorrect server URL. Please try again later or contact your administrator.'
+                      : errorType === 'config'
+                        ? 'The video service is not properly configured. Please contact your administrator to check the server settings.'
+                        : error || 'An unexpected error occurred while connecting to the classroom.'}
+                  </p>
+                  {errorType === 'unreachable' && (
+                    <p className="text-xs text-muted-foreground mb-3">Server URL may be inactive or unreachable.</p>
+                  )}
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={fetchToken}>Retry</Button>
+                    <Button size="sm" variant="outline" onClick={onClose}>Close</Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
             </div>
           )}
 
-          {token && serverUrl && (
+          {token && serverUrl && connectionState === 'ready' && (
             <LiveKitRoom
               serverUrl={serverUrl}
               token={token}
@@ -105,6 +194,8 @@ export function VideoClassroom({ roomName, displayName, isTeacher, onClose }: Vi
               video={true}
               audio={true}
               style={{ height: '100%' }}
+              onConnected={handleLiveKitConnected}
+              onError={handleLiveKitError}
               onDisconnected={onClose}
             >
               <VideoConference />

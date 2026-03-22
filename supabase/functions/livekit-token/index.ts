@@ -111,7 +111,17 @@ serve(async (req) => {
 
     if (!livekitUrl || !apiKey || !apiSecret) {
       return new Response(
-        JSON.stringify({ error: "LiveKit not configured" }),
+        JSON.stringify({ error: "LiveKit not configured. Please set LIVEKIT_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET." }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    if (!livekitUrl.startsWith("wss://")) {
+      return new Response(
+        JSON.stringify({ error: "LiveKit server URL is invalid. It must start with wss://" }),
         {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
