@@ -96,6 +96,8 @@ export function VideoClassroom({ roomName, displayName, isTeacher, onClose }: Vi
           >
             <VideoConference />
             <RoomAudioRenderer />
+            {isTeacher && <TeacherControls />}
+            {!isTeacher && <StudentDataListener />}
           </LiveKitRoom>
         )}
       </div>
