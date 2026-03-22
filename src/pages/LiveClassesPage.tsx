@@ -131,6 +131,7 @@ export default function LiveClassesPage() {
     const isScheduled = cls.status === 'scheduled';
     const scheduledDate = parseISO(cls.scheduled_at);
     const canStart = canManage && isScheduled && (isToday(scheduledDate) || isPast(scheduledDate));
+    const isOfflineCourse = cls.batches?.courses?.delivery_mode === 'offline';
 
     return (
       <Card className={`transition-all hover:shadow-md ${isLive ? 'border-green-500/50 shadow-green-500/10' : ''}`}>
