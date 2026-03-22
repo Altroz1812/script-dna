@@ -21,19 +21,11 @@ export function TeacherControls() {
   ) as RemoteParticipant[];
 
   const muteAllMics = async () => {
-    let count = 0;
     for (const p of remoteParticipants) {
-      for (const pub of p.audioTrackPublications.values()) {
-        if (pub.track && !pub.isMuted) {
-          await (p as RemoteParticipant).setTrackSubscriptionPermissions?.(false);
-          // Server-side mute via room admin permissions
-          room.localParticipant.publishData(
-            new TextEncoder().encode(JSON.stringify({ action: 'mute_audio', target: p.identity })),
-            { reliable: true }
-          );
-          count++;
-        }
-      }
+      room.localParticipant.publishData(
+        new TextEncoder().encode(JSON.stringify({ action: 'mute_audio', target: p.identity })),
+        { reliable: true }
+      );
     }
     toast({
       title: 'Muted all participants',
