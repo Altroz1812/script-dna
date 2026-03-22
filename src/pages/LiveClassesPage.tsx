@@ -159,27 +159,33 @@ export default function LiveClassesPage() {
                 {cls.status}
               </Badge>
               <div className="flex gap-1.5">
-                {canStart && (
-                  <Button size="sm" className="h-7 gap-1" onClick={() => startClass(cls)}>
-                    <Play className="h-3 w-3" /> Start
-                  </Button>
-                )}
-                {isLive && (
+                {isOfflineCourse ? (
+                  <Badge variant="outline" className="h-7 text-xs">Offline — Manual Attendance</Badge>
+                ) : (
                   <>
-                    <Button size="sm" className="h-7 gap-1" onClick={() => setActiveClassroom(cls.id)}>
-                      <Video className="h-3 w-3" /> Join
-                    </Button>
-                    {canManage && (
-                      <Button size="sm" variant="destructive" className="h-7 gap-1" onClick={() => openEndClassDialog(cls)}>
-                        <Square className="h-3 w-3" /> End
+                    {canStart && (
+                      <Button size="sm" className="h-7 gap-1" onClick={() => startClass(cls)}>
+                        <Play className="h-3 w-3" /> Start
+                      </Button>
+                    )}
+                    {isLive && (
+                      <>
+                        <Button size="sm" className="h-7 gap-1" onClick={() => setActiveClassroom(cls.id)}>
+                          <Video className="h-3 w-3" /> Join
+                        </Button>
+                        {canManage && (
+                          <Button size="sm" variant="destructive" className="h-7 gap-1" onClick={() => openEndClassDialog(cls)}>
+                            <Square className="h-3 w-3" /> End
+                          </Button>
+                        )}
+                      </>
+                    )}
+                    {isStudent && isLive && (
+                      <Button size="sm" className="h-7 gap-1" onClick={() => setActiveClassroom(cls.id)}>
+                        <Video className="h-3 w-3" /> Join
                       </Button>
                     )}
                   </>
-                )}
-                {isStudent && isLive && (
-                  <Button size="sm" className="h-7 gap-1" onClick={() => setActiveClassroom(cls.id)}>
-                    <Video className="h-3 w-3" /> Join
-                  </Button>
                 )}
               </div>
             </div>
