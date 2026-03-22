@@ -29,7 +29,7 @@ type LiveClass = {
   status: string;
   meeting_url: string | null;
   schedule_id: string | null;
-  batches?: { name: string } | null;
+  batches?: { name: string; courses?: { delivery_mode?: string } | null } | null;
 };
 
 export default function LiveClassesPage() {
