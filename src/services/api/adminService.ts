@@ -377,7 +377,7 @@ async function saveAttendance(params: any) {
 
 // ===== LIVE CLASSES =====
 async function listLiveClasses() {
-  const { data } = await (supabase.from('live_classes' as any).select('*, batches(name)').order('scheduled_at', { ascending: false }) as any);
+  const { data } = await (supabase.from('live_classes' as any).select('*, batches(name, teacher_id, courses(delivery_mode))').order('scheduled_at', { ascending: false }) as any);
   return data ?? [];
 }
 
