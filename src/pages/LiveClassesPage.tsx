@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Video, Play, Square, Calendar as CalendarIcon, Clock, CheckCircle2, Radio } from 'lucide-react';
+import { Video, Play, Square, Calendar as CalendarIcon, Clock, CheckCircle2, Radio, UserRoundCog } from 'lucide-react';
 import { EndClassAttendanceDialog } from '@/components/classroom/EndClassAttendanceDialog';
+import { ReassignTeacherDialog } from '@/components/classroom/ReassignTeacherDialog';
 import { useRBAC } from '@/hooks/useRBAC';
 import { useAuth } from '@/contexts/AuthContext';
 import { VideoClassroom } from '@/components/classroom/VideoClassroom';
@@ -29,7 +30,9 @@ type LiveClass = {
   status: string;
   meeting_url: string | null;
   schedule_id: string | null;
-  batches?: { name: string; courses?: { delivery_mode?: string } | null } | null;
+  started_by: string | null;
+  batches?: { name: string; teacher_id?: string | null; courses?: { delivery_mode?: string } | null } | null;
+  teacher_name?: string | null;
 };
 
 export default function LiveClassesPage() {
@@ -45,14 +48,31 @@ export default function LiveClassesPage() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [filter, setFilter] = useState<'today' | 'upcoming' | 'completed' | 'all'>('today');
   const [endingClass, setEndingClass] = useState<LiveClass | null>(null);
+  const [reassignClass, setReassignClass] = useState<LiveClass | null>(null);
 
   const load = async () => {
     setLoading(true);
     try {
-      if (isTeacher || isStudent) {
+      if (isAdmin) {
+        // Admin: fetch via admin query and enrich with teacher names
+        const c = await adminQuery('list_live_classes');
+        // Gather teacher IDs from batches
+        const teacherIds = [...new Set((c ?? []).map((cls: any) => cls.batches?.teacher_id).filter(Boolean))];
+        let teacherMap: Record<string, string> = {};
+        if (teacherIds.length > 0) {
+          const teachers = await adminQuery('list_teachers');
+          for (const t of teachers ?? []) {
+            teacherMap[t.user_id] = t.display_name || t.email || 'Unknown';
+          }
+        }
+        setClasses((c ?? []).map((cls: any) => ({
+          ...cls,
+          teacher_name: cls.batches?.teacher_id ? (teacherMap[cls.batches.teacher_id] || null) : null,
+        })));
+      } else if (isTeacher || isStudent) {
         const { data, error } = await supabase
           .from('live_classes')
-          .select('*, batches(name, courses(delivery_mode))')
+          .select('*, batches(name, teacher_id, courses(delivery_mode))')
           .order('scheduled_at', { ascending: true });
         if (error) throw error;
         setClasses((data as any[]) || []);
@@ -89,7 +109,6 @@ export default function LiveClassesPage() {
     });
   }, [selectedDate, classes]);
 
-  // Dates that have classes for calendar highlighting
   const classDates = useMemo(() => {
     const dates = new Set<string>();
     classes.forEach(c => dates.add(format(parseISO(c.scheduled_at), 'yyyy-MM-dd')));
@@ -99,13 +118,20 @@ export default function LiveClassesPage() {
   const startClass = async (cls: LiveClass) => {
     try {
       const roomName = `class-${cls.id.slice(0, 8)}`;
+      const updatePayload: any = { status: 'live', meeting_url: roomName };
+      
+      // Track who started the class
+      if (isAdmin && profile?.id) {
+        updatePayload.started_by = profile.id;
+      }
+
       if (isTeacher) {
         const { error } = await supabase.from('live_classes')
           .update({ status: 'live' as any, meeting_url: roomName })
           .eq('id', cls.id);
         if (error) throw error;
       } else {
-        await adminQuery('update_live_class', { id: cls.id, status: 'live', meeting_url: roomName });
+        await adminQuery('update_live_class', { id: cls.id, ...updatePayload });
       }
       toast.success('Class started!');
       setActiveClassroom(cls.id);
@@ -113,10 +139,6 @@ export default function LiveClassesPage() {
     } catch (e: any) {
       toast.error(e.message);
     }
-  };
-
-  const openEndClassDialog = (cls: LiveClass) => {
-    setEndingClass(cls);
   };
 
   const handleClassEnded = () => {
@@ -132,6 +154,7 @@ export default function LiveClassesPage() {
     const scheduledDate = parseISO(cls.scheduled_at);
     const canStart = canManage && isScheduled && (isToday(scheduledDate) || isPast(scheduledDate));
     const isOfflineCourse = cls.batches?.courses?.delivery_mode === 'offline';
+    const startedByAdmin = cls.started_by && cls.batches?.teacher_id && cls.started_by !== cls.batches.teacher_id;
 
     return (
       <Card className={`transition-all hover:shadow-md ${isLive ? 'border-green-500/50 shadow-green-500/10' : ''}`}>
@@ -143,6 +166,12 @@ export default function LiveClassesPage() {
                 <h3 className="font-semibold text-foreground truncate">{cls.title}</h3>
               </div>
               <p className="text-sm text-muted-foreground">{cls.batches?.name || '—'}</p>
+              {/* Teacher info */}
+              {(isAdmin || isTeacher) && (cls.teacher_name || cls.batches?.teacher_id) && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Teacher: <span className="font-medium text-foreground">{cls.teacher_name || 'Assigned'}</span>
+                </p>
+              )}
               <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1">
                   <CalendarIcon className="h-3 w-3" />
@@ -155,10 +184,17 @@ export default function LiveClassesPage() {
               </div>
             </div>
             <div className="flex flex-col items-end gap-2">
-              <Badge variant="outline" className={STATUS_COLORS[cls.status] || ''}>
-                {cls.status}
-              </Badge>
-              <div className="flex gap-1.5">
+              <div className="flex items-center gap-1.5">
+                <Badge variant="outline" className={STATUS_COLORS[cls.status] || ''}>
+                  {cls.status}
+                </Badge>
+                {startedByAdmin && (
+                  <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-500 border-amber-500/30">
+                    Admin Started
+                  </Badge>
+                )}
+              </div>
+              <div className="flex gap-1.5 flex-wrap justify-end">
                 {isOfflineCourse ? (
                   <Badge variant="outline" className="h-7 text-xs">Offline — Manual Attendance</Badge>
                 ) : (
@@ -168,21 +204,25 @@ export default function LiveClassesPage() {
                         <Play className="h-3 w-3" /> Start
                       </Button>
                     )}
-                    {isLive && (
-                      <>
-                        <Button size="sm" className="h-7 gap-1" onClick={() => setActiveClassroom(cls.id)}>
-                          <Video className="h-3 w-3" /> Join
-                        </Button>
-                        {canManage && (
-                          <Button size="sm" variant="destructive" className="h-7 gap-1" onClick={() => openEndClassDialog(cls)}>
-                            <Square className="h-3 w-3" /> End
-                          </Button>
-                        )}
-                      </>
+                    {isLive && canManage && (
+                      <Button size="sm" className="h-7 gap-1" onClick={() => setActiveClassroom(cls.id)}>
+                        <Video className="h-3 w-3" /> Join
+                      </Button>
+                    )}
+                    {isLive && canManage && (
+                      <Button size="sm" variant="destructive" className="h-7 gap-1" onClick={() => setEndingClass(cls)}>
+                        <Square className="h-3 w-3" /> End
+                      </Button>
                     )}
                     {isStudent && isLive && (
                       <Button size="sm" className="h-7 gap-1" onClick={() => setActiveClassroom(cls.id)}>
                         <Video className="h-3 w-3" /> Join
+                      </Button>
+                    )}
+                    {/* Reassign button for admins on scheduled classes */}
+                    {isAdmin && isScheduled && (
+                      <Button size="sm" variant="outline" className="h-7 gap-1" onClick={() => setReassignClass(cls)}>
+                        <UserRoundCog className="h-3 w-3" /> Reassign
                       </Button>
                     )}
                   </>
@@ -200,7 +240,7 @@ export default function LiveClassesPage() {
       {activeClass && (
         <VideoClassroom
           roomName={activeClass.meeting_url || `class-${activeClass.id.slice(0, 8)}`}
-          displayName={profile?.displayName || (isStudent ? 'Student' : 'Teacher')}
+          displayName={profile?.displayName || (isStudent ? 'Student' : isAdmin ? 'Admin' : 'Teacher')}
           isTeacher={isTeacher || isAdmin}
           onClose={() => setActiveClassroom(null)}
         />
@@ -290,7 +330,6 @@ export default function LiveClassesPage() {
               }}
               className="w-full"
             />
-            {/* Selected date classes */}
             {selectedDate && dateClasses.length > 0 && (
               <div className="mt-3 space-y-2 border-t border-border pt-3">
                 <p className="text-xs font-medium text-muted-foreground">{format(selectedDate, 'MMMM d, yyyy')}</p>
@@ -358,6 +397,18 @@ export default function LiveClassesPage() {
         isAdmin={isAdmin}
         onClassEnded={handleClassEnded}
       />
+
+      {reassignClass && (
+        <ReassignTeacherDialog
+          open={!!reassignClass}
+          onOpenChange={(open) => { if (!open) setReassignClass(null); }}
+          batchId={reassignClass.batch_id}
+          batchName={reassignClass.batches?.name || 'Unknown'}
+          currentTeacherId={reassignClass.batches?.teacher_id || null}
+          currentTeacherName={reassignClass.teacher_name || null}
+          onReassigned={load}
+        />
+      )}
     </div>
   );
 }
