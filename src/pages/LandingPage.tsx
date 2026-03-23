@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useCart, CartItem } from '@/contexts/CartContext';
 import { supabase } from '@/integrations/supabase/client';
+import { BatchPickerDialog } from '@/components/courses/BatchPickerDialog';
 import heroVideo from '@/assets/hero-video.mp4';
 
 type CourseDisplay = CartItem & { language: string | null; writing_style: string | null; total_hours: number | null };
@@ -92,6 +93,7 @@ export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
   const [courses, setCourses] = useState<CourseDisplay[]>([]);
   const [carouselPaused, setCarouselPaused] = useState(false);
+  const [batchPickerCourse, setBatchPickerCourse] = useState<CourseDisplay | null>(null);
 
   // Parallax scroll
   const heroRef = useRef<HTMLElement>(null);
@@ -114,8 +116,19 @@ export default function LandingPage() {
   }, []);
 
   const toggleCart = (course: CourseDisplay) => {
-    if (isInCart(course.id)) removeItem(course.id);
-    else addItem(course);
+    if (isInCart(course.id)) {
+      removeItem(course.id);
+    } else {
+      // Open batch picker instead of directly adding
+      setBatchPickerCourse(course);
+    }
+  };
+
+  const handleBatchSelected = (batchId: string, batchName: string) => {
+    if (batchPickerCourse) {
+      addItem({ ...batchPickerCourse, batch_id: batchId, batch_name: batchName });
+      setBatchPickerCourse(null);
+    }
   };
 
   return (
@@ -187,7 +200,7 @@ export default function LandingPage() {
                 <div key={item.id} className="flex items-start justify-between p-4 rounded-lg bg-secondary/30 border border-border/30">
                   <div>
                     <p className="font-medium text-sm">{item.name}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{item.duration_days} days</p>
+                    <p className="text-xs text-muted-foreground mt-1">{item.batch_name} · {item.duration_days} days</p>
                   </div>
                   <div className="text-right">
                     <p className="font-semibold text-sm">₹{item.fee?.toLocaleString()}</p>
@@ -687,6 +700,14 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+      {/* Batch Picker Dialog */}
+      <BatchPickerDialog
+        open={!!batchPickerCourse}
+        onOpenChange={(open) => { if (!open) setBatchPickerCourse(null); }}
+        courseId={batchPickerCourse?.id ?? ''}
+        courseName={batchPickerCourse?.name ?? ''}
+        onSelect={handleBatchSelected}
+      />
     </div>
   );
 }

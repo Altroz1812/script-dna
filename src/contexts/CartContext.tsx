@@ -10,6 +10,8 @@ export interface CartItem {
   fee: number;
   grade_level: string | null;
   duration_days: number | null;
+  batch_id: string;
+  batch_name: string;
 }
 
 export interface StudentDetail {
