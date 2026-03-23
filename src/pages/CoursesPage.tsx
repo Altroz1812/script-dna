@@ -11,8 +11,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Progress } from '@/components/ui/progress';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
-import { Plus, Trash2, BookOpen, Clock, Calendar, GraduationCap, IndianRupee, Eye, Pencil, MapPin, Wifi, Building2 } from 'lucide-react';
+import { Plus, Trash2, BookOpen, Clock, Calendar, GraduationCap, IndianRupee, Eye, Pencil, MapPin, Wifi, Building2, Users, ChevronDown } from 'lucide-react';
 import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
 import { CourseForm } from '@/components/courses/CourseForm';
 
