@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useCart, CartItem } from '@/contexts/CartContext';
 import { supabase } from '@/integrations/supabase/client';
+import { BatchPickerDialog } from '@/components/courses/BatchPickerDialog';
 import heroVideo from '@/assets/hero-video.mp4';
 
 type CourseDisplay = CartItem & { language: string | null; writing_style: string | null; total_hours: number | null };
