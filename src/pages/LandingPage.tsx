@@ -200,7 +200,7 @@ export default function LandingPage() {
                 <div key={item.id} className="flex items-start justify-between p-4 rounded-lg bg-secondary/30 border border-border/30">
                   <div>
                     <p className="font-medium text-sm">{item.name}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{item.duration_days} days</p>
+                    <p className="text-xs text-muted-foreground mt-1">{item.batch_name} · {item.duration_days} days</p>
                   </div>
                   <div className="text-right">
                     <p className="font-semibold text-sm">₹{item.fee?.toLocaleString()}</p>
