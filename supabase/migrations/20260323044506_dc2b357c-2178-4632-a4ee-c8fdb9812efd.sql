@@ -1,0 +1,1 @@
+ALTER TABLE public.live_classes ADD COLUMN started_by uuid DEFAULT NULL;

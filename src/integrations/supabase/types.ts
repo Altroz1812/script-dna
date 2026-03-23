@@ -532,6 +532,7 @@ export type Database = {
           meeting_url: string | null
           schedule_id: string | null
           scheduled_at: string
+          started_by: string | null
           status: Database["public"]["Enums"]["live_class_status"]
           title: string
           updated_at: string
@@ -544,6 +545,7 @@ export type Database = {
           meeting_url?: string | null
           schedule_id?: string | null
           scheduled_at: string
+          started_by?: string | null
           status?: Database["public"]["Enums"]["live_class_status"]
           title: string
           updated_at?: string
@@ -556,6 +558,7 @@ export type Database = {
           meeting_url?: string | null
           schedule_id?: string | null
           scheduled_at?: string
+          started_by?: string | null
           status?: Database["public"]["Enums"]["live_class_status"]
           title?: string
           updated_at?: string
