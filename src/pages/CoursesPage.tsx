@@ -99,6 +99,43 @@ export default function CoursesPage() {
 
   const centers = [...new Set(courses.filter(c => c.center).map(c => c.center!))].sort();
 
+  // Fetch batches with student counts for all courses
+  const courseIds = courses.map(c => c.id);
+  const { data: allBatches = [] } = useQuery({
+    queryKey: ['course_batches', courseIds],
+    queryFn: async () => {
+      if (courseIds.length === 0) return [];
+      const { data } = await supabase
+        .from('batches')
+        .select('id, name, max_students, teacher_id, course_id, batch_students(count)')
+        .in('course_id', courseIds);
+      // Fetch teacher names
+      const teacherIds = [...new Set((data ?? []).filter((b: any) => b.teacher_id).map((b: any) => b.teacher_id))];
+      let nameMap: Record<string, string> = {};
+      if (teacherIds.length > 0) {
+        const { data: profiles } = await supabase.from('profiles').select('user_id, display_name').in('user_id', teacherIds);
+        for (const p of profiles ?? []) nameMap[p.user_id] = p.display_name ?? '';
+      }
+      return (data ?? []).map((b: any) => ({
+        id: b.id,
+        name: b.name,
+        max_students: b.max_students,
+        teacher_id: b.teacher_id,
+        course_id: b.course_id,
+        enrolled_count: b.batch_students?.[0]?.count ?? 0,
+        teacher_name: b.teacher_id ? nameMap[b.teacher_id] || null : null,
+      }));
+    },
+    enabled: courseIds.length > 0,
+    staleTime: 1000 * 60 * 2,
+  });
+
+  const batchesByCourse = allBatches.reduce<Record<string, typeof allBatches>>((acc, b) => {
+    if (!acc[b.course_id]) acc[b.course_id] = [];
+    acc[b.course_id].push(b);
+    return acc;
+  }, {});
+
   const filterByCenter = (list: Course[]) =>
     selectedCenter === 'all' ? list : list.filter(c => c.center === selectedCenter);
 
@@ -108,6 +145,7 @@ export default function CoursesPage() {
 
   const CourseCard = ({ c }: { c: Course }) => {
     const isOffline = c.delivery_mode === 'offline';
+    const courseBatches = batchesByCourse[c.id] || [];
     return (
       <Card key={c.id}>
         <CardHeader className="pb-3">
@@ -160,6 +198,47 @@ export default function CoursesPage() {
               <div className="flex items-center gap-1 font-medium text-foreground"><IndianRupee className="h-3.5 w-3.5" />₹{c.fee.toLocaleString('en-IN')}</div>
             )}
           </div>
+
+          {/* Batch/Slot Details */}
+          {courseBatches.length > 0 && (
+            <Collapsible>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm" className="w-full justify-between text-muted-foreground hover:text-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Users className="h-3.5 w-3.5" /> {courseBatches.length} batch{courseBatches.length !== 1 ? 'es' : ''}
+                  </span>
+                  <ChevronDown className="h-3.5 w-3.5 transition-transform" />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-2 pt-2">
+                {courseBatches.map(b => {
+                  const pct = Math.round((b.enrolled_count / b.max_students) * 100);
+                  const isFull = b.enrolled_count >= b.max_students;
+                  const remaining = b.max_students - b.enrolled_count;
+                  return (
+                    <div key={b.id} className={`p-3 rounded-lg border text-sm space-y-1.5 ${isFull ? 'bg-muted/30 opacity-60' : 'border-border/50'}`}>
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">{b.name}</span>
+                        {isFull ? (
+                          <Badge variant="destructive" className="text-[10px]">Full</Badge>
+                        ) : (
+                          <span className={`text-xs font-medium ${pct >= 90 ? 'text-destructive' : pct >= 75 ? 'text-warning' : 'text-primary'}`}>
+                            {remaining} seat{remaining !== 1 ? 's' : ''} left
+                          </span>
+                        )}
+                      </div>
+                      {b.teacher_name && <p className="text-xs text-muted-foreground">Teacher: {b.teacher_name}</p>}
+                      <div className="flex items-center gap-2">
+                        <Progress value={pct} className="h-1.5 flex-1" />
+                        <span className="text-[10px] text-muted-foreground">{b.enrolled_count}/{b.max_students}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
           {isStudent && (
             <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => navigate(`/courses/${c.id}/lessons`)}>
               <Eye className="h-3.5 w-3.5 mr-1.5" /> View Lessons
