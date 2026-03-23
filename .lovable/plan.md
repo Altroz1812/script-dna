@@ -1,29 +1,54 @@
 
 
-## Fix: Default Attendance to "Absent" in End-Class Dialog
+## Admin/SuperAdmin Class Management & Teacher Reassignment
 
-### Problem
-When a teacher ends a class via the "End Class & Save Attendance" dialog, all enrolled students default to "Present" — even those who never joined. This produces inaccurate attendance records.
+### What Changes
 
-### Root Cause
-In `EndClassAttendanceDialog.tsx`, line `studs.forEach(s => { rec[s.student_id] = 'present'; });` defaults every student to present. The teacher must manually switch non-attendees to absent, which is error-prone.
+**1. Allow Admin/SuperAdmin to start and join any live class**
+Currently `startClass` works for admins via `adminQuery`, but the Join button only shows for teachers and students. Update the ClassCard logic so admins/superadmins see Start and Join buttons on all classes regardless of batch ownership.
 
-### Fix
+**2. Show assigned teacher info on each class card**
+Fetch `batches(name, teacher_id, courses(delivery_mode))` and join teacher profile data so each card displays the assigned teacher's name. This gives admins visibility into who should be teaching.
 
-**Update `src/components/classroom/EndClassAttendanceDialog.tsx`**
-- Change the default status from `'present'` to `'absent'` when populating the records
-- This way the teacher only marks students who actually attended as "Present", rather than having to remember who was absent
+**3. Add "Reassign Teacher" dialog for admins**
+A new dialog component (`ReassignTeacherDialog`) that:
+- Shows current assigned teacher
+- Lists available teachers (from `list_teachers` admin query)
+- Allows selecting a replacement teacher
+- Updates the `batches.teacher_id` for that batch via `adminQuery('update_batch', { id, teacher_id })`
+- Optionally sends a notification to the new teacher
 
-**Update `src/pages/AttendancePage.tsx`**
-- Same fix: change default from `'present'` to `'absent'` in the manual attendance page for consistency
+**4. Update VideoClassroom to grant teacher privileges to admins**
+The `isTeacher` prop already accepts `isTeacher || isAdmin` from LiveClassesPage, so admins joining get teacher controls. No change needed here.
 
-### What Stays the Same
-- The database trigger `auto_mark_attendance_on_class_end` uses `ON CONFLICT DO NOTHING`, so it won't overwrite the manually saved records since they're inserted first
-- The save flow (delete existing + insert new records) remains unchanged
+**5. Track who started the class**
+Add a `started_by` column to `live_classes` so it's clear if an admin started the class on behalf of a teacher. The assigned teacher can then see "Class started by Admin" and join directly.
 
-### Files
+### Files to Change
+
 | File | Action |
 |------|--------|
-| `src/components/classroom/EndClassAttendanceDialog.tsx` | Update — default to `'absent'` |
-| `src/pages/AttendancePage.tsx` | Update — default to `'absent'` |
+| `src/pages/LiveClassesPage.tsx` | Update ClassCard buttons: admins see Start/Join on all classes; add Reassign button; fetch teacher profile; pass `started_by` on start |
+| `src/components/classroom/ReassignTeacherDialog.tsx` | **New** — dialog to pick a new teacher from available list and update batch |
+| `src/services/api/adminService.ts` | Add `reassign_batch_teacher` action that updates `batches.teacher_id` |
+| Database migration | Add `started_by uuid` column to `live_classes` table |
+
+### Technical Details
+
+**Database migration:**
+```sql
+ALTER TABLE public.live_classes 
+ADD COLUMN started_by uuid DEFAULT NULL;
+```
+
+**LiveClassesPage changes:**
+- Expand `LiveClass` type to include `batches.teacher_id` and a teacher profile name
+- In `startClass`, pass `started_by: profile.id` when admin starts
+- ClassCard: show teacher name, add "Reassign" button (admin only, scheduled classes), show "Started by Admin" badge when `started_by` differs from batch teacher
+- Fix duplicate Join button (lines 171-186 show Join for both `isLive && canManage` and `isStudent && isLive`)
+
+**ReassignTeacherDialog:**
+- Fetches teacher list via `adminQuery('list_teachers')`
+- On confirm, calls `adminQuery('update_batch', { id: batchId, teacher_id: newTeacherId })`
+- Optionally creates a notification for the new teacher
 
