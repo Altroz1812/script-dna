@@ -1,54 +1,69 @@
 
 
-## Admin/SuperAdmin Class Management & Teacher Reassignment
+## Show Batch/Slot Details on Courses Page with Seat Enforcement
+
+### Problem
+The Courses page currently shows only course cards without any batch/slot information. Users cannot see available batches, remaining seats, or select a batch before enrollment. There is no enforcement of the `max_students` limit on the UI side.
 
 ### What Changes
 
-**1. Allow Admin/SuperAdmin to start and join any live class**
-Currently `startClass` works for admins via `adminQuery`, but the Join button only shows for teachers and students. Update the ClassCard logic so admins/superadmins see Start and Join buttons on all classes regardless of batch ownership.
+**1. Fetch batch data with student counts per course**
+- For each course, query `batches` with their `max_students` and current enrolled count from `batch_students`
+- Display this as an expandable section within each course card
 
-**2. Show assigned teacher info on each class card**
-Fetch `batches(name, teacher_id, courses(delivery_mode))` and join teacher profile data so each card displays the assigned teacher's name. This gives admins visibility into who should be teaching.
+**2. Show batch details on each course card**
+- Under each course card, list available batches with: batch name, teacher name, enrolled count / max capacity, and a visual seat indicator (progress bar)
+- Batches that are full show a "Full" badge and disable enrollment
 
-**3. Add "Reassign Teacher" dialog for admins**
-A new dialog component (`ReassignTeacherDialog`) that:
-- Shows current assigned teacher
-- Lists available teachers (from `list_teachers` admin query)
-- Allows selecting a replacement teacher
-- Updates the `batches.teacher_id` for that batch via `adminQuery('update_batch', { id, teacher_id })`
-- Optionally sends a notification to the new teacher
+**3. Batch selection before proceeding (for landing page cart flow)**
+- Update `CartItem` type to include `batch_id` and `batch_name`
+- On the landing page course carousel, clicking "Add to Cart" opens a batch picker dialog showing available batches with seat counts
+- Only batches with available seats are selectable
+- The selected batch is stored with the cart item
 
-**4. Update VideoClassroom to grant teacher privileges to admins**
-The `isTeacher` prop already accepts `isTeacher || isAdmin` from LiveClassesPage, so admins joining get teacher controls. No change needed here.
-
-**5. Track who started the class**
-Add a `started_by` column to `live_classes` so it's clear if an admin started the class on behalf of a teacher. The assigned teacher can then see "Class started by Admin" and join directly.
+**4. Enforce max_students on the backend**
+- Add a check in the `admin-query` edge function's `add_batch_student` action: count current students, reject if `>= max_students`
 
 ### Files to Change
 
 | File | Action |
 |------|--------|
-| `src/pages/LiveClassesPage.tsx` | Update ClassCard buttons: admins see Start/Join on all classes; add Reassign button; fetch teacher profile; pass `started_by` on start |
-| `src/components/classroom/ReassignTeacherDialog.tsx` | **New** — dialog to pick a new teacher from available list and update batch |
-| `src/services/api/adminService.ts` | Add `reassign_batch_teacher` action that updates `batches.teacher_id` |
-| Database migration | Add `started_by uuid` column to `live_classes` table |
+| `src/pages/CoursesPage.tsx` | Add batch listing per course card with seat counts |
+| `src/contexts/CartContext.tsx` | Extend `CartItem` with `batch_id` and `batch_name` |
+| `src/pages/LandingPage.tsx` | Add batch selection dialog when adding to cart |
+| `src/components/courses/BatchPickerDialog.tsx` | **New** — dialog to select a batch with seat availability |
+| `supabase/functions/admin-query/index.ts` | Add seat limit check in `add_batch_student` |
 
 ### Technical Details
 
-**Database migration:**
+**CoursesPage batch display:**
+- Fetch batches per course using `supabase.from('batches').select('*, batch_students(count)').eq('course_id', courseId)`
+- For each batch, show: name, `enrolled / max_students` seats, teacher assignment
+- Progress bar: green when < 75% full, yellow 75-90%, red > 90%
+
+**BatchPickerDialog:**
+- Receives `courseId`, fetches batches with counts
+- Renders radio-style batch cards showing name, teacher, seats remaining
+- Full batches are greyed out and unselectable
+- On confirm, adds the course + selected batch to cart
+
+**Backend enforcement (admin-query `add_batch_student`):**
 ```sql
-ALTER TABLE public.live_classes 
-ADD COLUMN started_by uuid DEFAULT NULL;
+SELECT COUNT(*) FROM batch_students WHERE batch_id = $1
+-- compare against batches.max_students, throw error if full
 ```
 
-**LiveClassesPage changes:**
-- Expand `LiveClass` type to include `batches.teacher_id` and a teacher profile name
-- In `startClass`, pass `started_by: profile.id` when admin starts
-- ClassCard: show teacher name, add "Reassign" button (admin only, scheduled classes), show "Started by Admin" badge when `started_by` differs from batch teacher
-- Fix duplicate Join button (lines 171-186 show Join for both `isLive && canManage` and `isStudent && isLive`)
-
-**ReassignTeacherDialog:**
-- Fetches teacher list via `adminQuery('list_teachers')`
-- On confirm, calls `adminQuery('update_batch', { id: batchId, teacher_id: newTeacherId })`
-- Optionally creates a notification for the new teacher
+**CartItem extension:**
+```typescript
+export interface CartItem {
+  id: string;          // course id
+  name: string;
+  description: string | null;
+  fee: number;
+  grade_level: string | null;
+  duration_days: number | null;
+  batch_id: string;    // NEW
+  batch_name: string;  // NEW
+}
+```
 
