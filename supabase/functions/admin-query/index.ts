@@ -475,6 +475,13 @@ Deno.serve(async (req) => {
         break
       }
       case 'add_batch_student': {
+        // Enforce max_students seat limit
+        const { data: batchInfo } = await supabase.from('batches').select('max_students').eq('id', params.batch_id).single()
+        if (!batchInfo) throw new Error('Batch not found')
+        const { count: currentCount } = await supabase.from('batch_students').select('id', { count: 'exact', head: true }).eq('batch_id', params.batch_id)
+        if ((currentCount ?? 0) >= batchInfo.max_students) {
+          throw new Error(`Batch is full (${batchInfo.max_students}/${batchInfo.max_students} seats taken)`)
+        }
         const { error } = await supabase.from('batch_students').insert({ batch_id: params.batch_id, student_id: params.student_id })
         if (error) throw error
         result = { success: true }
