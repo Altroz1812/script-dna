@@ -700,6 +700,14 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+      {/* Batch Picker Dialog */}
+      <BatchPickerDialog
+        open={!!batchPickerCourse}
+        onOpenChange={(open) => { if (!open) setBatchPickerCourse(null); }}
+        courseId={batchPickerCourse?.id ?? ''}
+        courseName={batchPickerCourse?.name ?? ''}
+        onSelect={handleBatchSelected}
+      />
     </div>
   );
 }
