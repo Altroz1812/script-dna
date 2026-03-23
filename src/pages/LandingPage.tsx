@@ -93,6 +93,7 @@ export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
   const [courses, setCourses] = useState<CourseDisplay[]>([]);
   const [carouselPaused, setCarouselPaused] = useState(false);
+  const [batchPickerCourse, setBatchPickerCourse] = useState<CourseDisplay | null>(null);
 
   // Parallax scroll
   const heroRef = useRef<HTMLElement>(null);
@@ -115,8 +116,19 @@ export default function LandingPage() {
   }, []);
 
   const toggleCart = (course: CourseDisplay) => {
-    if (isInCart(course.id)) removeItem(course.id);
-    else addItem(course);
+    if (isInCart(course.id)) {
+      removeItem(course.id);
+    } else {
+      // Open batch picker instead of directly adding
+      setBatchPickerCourse(course);
+    }
+  };
+
+  const handleBatchSelected = (batchId: string, batchName: string) => {
+    if (batchPickerCourse) {
+      addItem({ ...batchPickerCourse, batch_id: batchId, batch_name: batchName });
+      setBatchPickerCourse(null);
+    }
   };
 
   return (
