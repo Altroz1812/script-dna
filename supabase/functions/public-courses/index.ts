@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
 
     const { data, error } = await supabase
       .from("courses")
-      .select("id, name, description, fee, grade_level, duration_days, language, writing_style, total_hours")
+      .select("id, name, description, fee, grade_level, duration_days, language, writing_style, total_hours, delivery_mode, center")
       .order("fee", { ascending: true });
 
     if (error) throw error;
