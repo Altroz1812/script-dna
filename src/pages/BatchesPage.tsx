@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Trash2, Users, UserPlus, UserMinus, Layers, Wifi, Building2 } from 'lucide-react';
+import { Plus, Trash2, Users, UserPlus, UserMinus, Layers, Wifi, Building2, Pencil } from 'lucide-react';
 import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
 
 export default function BatchesPage() {
@@ -24,6 +24,11 @@ export default function BatchesPage() {
   const [batchName, setBatchName] = useState('');
   const [selectedCourse, setSelectedCourse] = useState('');
   const [maxStudents, setMaxStudents] = useState(25);
+
+  // edit batch dialog
+  const [editBatch, setEditBatch] = useState<Batch | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editMaxStudents, setEditMaxStudents] = useState(25);
 
   // assign teacher dialog
   const [teacherDialogBatch, setTeacherDialogBatch] = useState<string | null>(null);
@@ -69,6 +74,28 @@ export default function BatchesPage() {
     onSuccess: () => { toast.success('Batch deleted'); invalidate(); },
     onError: (e: any) => toast.error(e.message),
   });
+
+  const editMutation = useMutation({
+    mutationFn: () => batchService.updateBatch(editBatch!.id, editName.trim(), editMaxStudents),
+    onSuccess: () => {
+      toast.success('Batch updated');
+      setEditBatch(null);
+      invalidate();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const handleEditBatch = () => {
+    if (!editName.trim()) { toast.error('Batch name is required'); return; }
+    if (editMaxStudents < 1 || editMaxStudents > 100) { toast.error('Max students must be 1-100'); return; }
+    editMutation.mutate();
+  };
+
+  const openEditDialog = (batch: Batch) => {
+    setEditBatch(batch);
+    setEditName(batch.name);
+    setEditMaxStudents(batch.max_students);
+  };
 
   const assignTeacherMutation = useMutation({
     mutationFn: () => batchService.assignTeacher(teacherDialogBatch!, selectedTeacher === '__none__' ? null : selectedTeacher),
@@ -217,9 +244,14 @@ export default function BatchesPage() {
                     <CardDescription>{(b as any).courses?.name ?? 'Unknown course'}</CardDescription>
                   </div>
                   {isAdmin && (
-                    <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(b.id)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => openEditDialog(b)}>
+                        <Pencil className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(b.id)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
                   )}
                 </div>
               </CardHeader>
@@ -250,6 +282,26 @@ export default function BatchesPage() {
           ))}
         </div>
       )}
+
+      {/* Edit Batch Dialog */}
+      <Dialog open={!!editBatch} onOpenChange={v => { if (!v) setEditBatch(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit Batch</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Batch Name</Label>
+              <Input value={editName} onChange={e => setEditName(e.target.value)} maxLength={200} />
+            </div>
+            <div>
+              <Label>Max Students (1-100)</Label>
+              <Input type="number" min={1} max={100} value={editMaxStudents} onChange={e => setEditMaxStudents(Number(e.target.value))} />
+            </div>
+            <Button onClick={handleEditBatch} disabled={editMutation.isPending} className="w-full">
+              {editMutation.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Assign Teacher Dialog */}
       <Dialog open={!!teacherDialogBatch} onOpenChange={v => { if (!v) setTeacherDialogBatch(null); }}>
