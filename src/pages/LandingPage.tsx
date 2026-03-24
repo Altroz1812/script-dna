@@ -95,6 +95,7 @@ export default function LandingPage() {
   const [courses, setCourses] = useState<CourseDisplay[]>([]);
   const [carouselPaused, setCarouselPaused] = useState(false);
   const [batchPickerCourse, setBatchPickerCourse] = useState<CourseDisplay | null>(null);
+  const [courseFilter, setCourseFilter] = useState<'all' | 'online' | 'offline'>('all');
 
   // Parallax scroll
   const heroRef = useRef<HTMLElement>(null);
