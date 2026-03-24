@@ -527,11 +527,13 @@ export default function LandingPage() {
             <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none" />
 
             <motion.div
-              className="flex gap-6 px-8"
+              className="flex gap-6 px-8 touch-pan-y"
               animate={carouselPaused ? {} : { x: ['0%', `-${(courses.length / 2) * 100 / courses.length}%`] }}
-              transition={{ x: { duration: courses.length * 4, repeat: Infinity, ease: 'linear' } }}
+              transition={{ x: { duration: courses.length * 5, repeat: Infinity, ease: 'linear' } }}
               onHoverStart={() => setCarouselPaused(true)}
               onHoverEnd={() => setCarouselPaused(false)}
+              onTouchStart={() => setCarouselPaused(true)}
+              onTouchEnd={() => setTimeout(() => setCarouselPaused(false), 3000)}
               style={{ width: `${courses.length * 2 * 340 + (courses.length * 2 - 1) * 24}px` }}
             >
               {/* Duplicate for seamless loop */}
