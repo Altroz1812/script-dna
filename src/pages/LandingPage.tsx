@@ -5,7 +5,8 @@ import {
   PenTool, Play, ShoppingCart, Star, Users, BookOpen, BarChart3,
   Video, Globe, Award, ChevronRight, Check, ArrowRight, Menu, X,
   Sparkles, Zap, Shield, Clock, GraduationCap, CalendarDays,
-  CreditCard, Building2, UserCheck, FileText, BrainCircuit, Layers
+  CreditCard, Building2, UserCheck, FileText, BrainCircuit, Layers,
+  Wifi, MapPin
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
