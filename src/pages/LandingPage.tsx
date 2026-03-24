@@ -514,33 +514,60 @@ export default function LandingPage() {
 
       <AnimatedSection id="courses" className="py-24">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
+          <div className="text-center mb-10">
             <Badge variant="outline" className="border-primary/40 text-primary mb-4" id="pricing">Courses & Pricing</Badge>
             <h2 className="text-3xl md:text-5xl font-bold">Choose Your <span className="text-gradient">Learning Path</span></h2>
             <p className="text-muted-foreground mt-4 max-w-2xl mx-auto">From beginner to calligrapher — find the perfect course.</p>
           </div>
+
+          {/* Online / Offline filter */}
+          <div className="flex justify-center gap-2 mb-10">
+            {([['all', 'All Courses'], ['online', 'Online'], ['offline', 'Offline']] as const).map(([val, label]) => (
+              <Button
+                key={val}
+                variant={courseFilter === val ? 'default' : 'outline'}
+                size="sm"
+                className={courseFilter === val ? 'bg-gradient-to-r from-primary to-accent text-primary-foreground' : 'border-border/50'}
+                onClick={() => setCourseFilter(val)}
+              >
+                {val === 'online' && <Wifi className="w-3.5 h-3.5 mr-1.5" />}
+                {val === 'offline' && <Building2 className="w-3.5 h-3.5 mr-1.5" />}
+                {label} ({val === 'all' ? courses.length : courses.filter(c => (c.delivery_mode || 'online') === val).length})
+              </Button>
+            ))}
+          </div>
         </div>
 
         {/* Auto-scrolling course carousel */}
-        {courses.length > 0 ? (
+        {(() => {
+          const filtered = courseFilter === 'all' ? courses : courses.filter(c => (c.delivery_mode || 'online') === courseFilter);
+          if (filtered.length === 0) return (
+            <div className="container mx-auto px-4">
+              <div className="text-center py-12 text-muted-foreground">
+                <BookOpen className="w-12 h-12 mx-auto mb-4 opacity-30" />
+                <p>{courses.length === 0 ? 'Loading courses...' : 'No courses in this category.'}</p>
+              </div>
+            </div>
+          );
+          return (
           <div className="relative overflow-hidden">
-            {/* Fade edges */}
             <div className="absolute left-0 top-0 bottom-0 w-24 bg-gradient-to-r from-background to-transparent z-10 pointer-events-none" />
             <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none" />
 
             <motion.div
               className="flex gap-6 px-8 touch-pan-y"
-              animate={carouselPaused ? {} : { x: ['0%', `-${(courses.length / 2) * 100 / courses.length}%`] }}
-              transition={{ x: { duration: courses.length * 5, repeat: Infinity, ease: 'linear' } }}
+              animate={carouselPaused ? {} : { x: ['0%', `-${(filtered.length / 2) * 100 / filtered.length}%`] }}
+              transition={{ x: { duration: filtered.length * 5, repeat: Infinity, ease: 'linear' } }}
               onHoverStart={() => setCarouselPaused(true)}
               onHoverEnd={() => setCarouselPaused(false)}
               onTouchStart={() => setCarouselPaused(true)}
               onTouchEnd={() => setTimeout(() => setCarouselPaused(false), 3000)}
-              style={{ width: `${courses.length * 2 * 340 + (courses.length * 2 - 1) * 24}px` }}
+              style={{ width: `${filtered.length * 2 * 340 + (filtered.length * 2 - 1) * 24}px` }}
+              key={courseFilter}
             >
-              {/* Duplicate for seamless loop */}
-              {[...courses, ...courses].map((c, idx) => {
+              {[...filtered, ...filtered].map((c, idx) => {
                 const inCart = isInCart(c.id);
+                const isOffline = c.delivery_mode === 'offline';
                 const styleColors = [
                   'from-purple-500/20 to-purple-900/5',
                   'from-emerald-500/20 to-emerald-900/5',
@@ -562,10 +589,18 @@ export default function LandingPage() {
                     <div className="p-6 space-y-4">
                       <div className="flex items-start justify-between">
                         <Badge variant="secondary" className="text-xs">{c.language} · {c.writing_style}</Badge>
-                        <Badge variant="outline" className="text-xs">{c.grade_level}</Badge>
+                        <Badge variant={isOffline ? 'default' : 'outline'} className="text-xs gap-1">
+                          {isOffline ? <Building2 className="w-3 h-3" /> : <Wifi className="w-3 h-3" />}
+                          {isOffline ? 'Offline' : 'Online'}
+                        </Badge>
                       </div>
                       <h3 className="font-bold text-lg">{c.name}</h3>
                       <p className="text-sm text-muted-foreground leading-relaxed">{c.description}</p>
+                      {isOffline && c.center && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <MapPin className="w-3.5 h-3.5" /> {c.center}
+                        </div>
+                      )}
                       <div className="flex items-center gap-4 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {c.duration_days} days</span>
                         <span className="flex items-center gap-1"><BookOpen className="w-3.5 h-3.5" /> {c.total_hours} hrs</span>
@@ -590,14 +625,8 @@ export default function LandingPage() {
               })}
             </motion.div>
           </div>
-        ) : (
-          <div className="container mx-auto px-4">
-            <div className="text-center py-12 text-muted-foreground">
-              <BookOpen className="w-12 h-12 mx-auto mb-4 opacity-30" />
-              <p>Loading courses...</p>
-            </div>
-          </div>
-        )}
+          );
+        })()}
       </AnimatedSection>
 
       <AnimatedSection id="testimonials" className="py-24 bg-card/30">
