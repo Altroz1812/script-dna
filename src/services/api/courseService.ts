@@ -86,6 +86,10 @@ export const batchService = {
     await adminQuery('update_batch', { id: batchId, teacher_id: teacherId });
   },
 
+  async updateBatch(id: string, name: string, maxStudents: number): Promise<void> {
+    await adminQuery('update_batch', { id, name, max_students: maxStudents });
+  },
+
   async deleteBatch(id: string): Promise<void> {
     await adminQuery('delete_batch', { id });
   },
