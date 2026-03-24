@@ -15,7 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { BatchPickerDialog } from '@/components/courses/BatchPickerDialog';
 import heroVideo from '@/assets/hero-video.mp4';
 
-type CourseDisplay = CartItem & { language: string | null; writing_style: string | null; total_hours: number | null };
+type CourseDisplay = CartItem & { language: string | null; writing_style: string | null; total_hours: number | null; delivery_mode?: string; center?: string | null };
 
 const FEATURES = [
   { icon: BrainCircuit, title: 'AI Stroke Analysis', desc: 'Real-time pressure, slant & rhythm analysis that builds personalized improvement plans.', color: 'text-purple-400' },
