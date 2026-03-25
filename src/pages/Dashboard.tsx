@@ -14,6 +14,7 @@ import { EnrollmentTrendsChart } from '@/components/dashboard/EnrollmentTrendsCh
 import {
   Users, BookOpen, Layers, Building2, UserPlus,
   CreditCard, GraduationCap, UserCheck, ArrowRight, Sparkles,
+  ClipboardList, Video, FileText, Headphones,
 } from 'lucide-react';
 
 interface Stats {
