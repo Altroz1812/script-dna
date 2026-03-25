@@ -86,7 +86,7 @@ const App = () => (
                 <Route path="/notifications" element={<NotificationsPage />} />
                 <Route path="/organizations" element={<OrganizationsPage />} />
                 <Route path="/roles" element={<RolesPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/settings" element={<ProtectedRoute allowedRoles={['superadmin']}><SettingsPage /></ProtectedRoute>} />
                 <Route path="/profile" element={<SettingsPage />} />
                 <Route path="/activity-logs" element={<ActivityLogsPage />} />
                 <Route path="/subscriptions" element={<SubscriptionPlansPage />} />
