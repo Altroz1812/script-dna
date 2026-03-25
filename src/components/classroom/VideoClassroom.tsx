@@ -40,7 +40,7 @@ function wsPreCheck(url: string, timeoutMs = 5000): Promise<boolean> {
   });
 }
 
-export function VideoClassroom({ roomName, displayName, isTeacher, onClose }: VideoClassroomProps) {
+export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, classId, onClose, onClassStarted }: VideoClassroomProps) {
   const [fullscreen, setFullscreen] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [serverUrl, setServerUrl] = useState<string | null>(null);
@@ -49,7 +49,9 @@ export function VideoClassroom({ roomName, displayName, isTeacher, onClose }: Vi
   const [connectionState, setConnectionState] = useState<ConnectionState>('idle');
   const [chatOpen, setChatOpen] = useState(false);
   const [unread, setUnread] = useState(0);
+  const [waitingForTeacher, setWaitingForTeacher] = useState(!isTeacher && classStatus === 'scheduled');
   const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const waitingPollRef = useRef<ReturnType<typeof setInterval>>();
 
   const fetchToken = useCallback(async () => {
     setConnectionState('fetching');
@@ -86,7 +88,6 @@ export function VideoClassroom({ roomName, displayName, isTeacher, onClose }: Vi
 
       // Safety timeout — if LiveKitRoom doesn't connect within 15s, show error
       connectionTimeoutRef.current = setTimeout(() => {
-        // Only trigger if still in 'ready' (not yet connected inside LiveKitRoom)
         setErrorType('unreachable');
         setError('Connection timed out. The video server did not respond in time.');
         setConnectionState('failed');
@@ -102,10 +103,34 @@ export function VideoClassroom({ roomName, displayName, isTeacher, onClose }: Vi
     }
   }, [roomName, displayName, isTeacher]);
 
+  // Poll for class status change when student is in waiting room
   useEffect(() => {
-    fetchToken();
+    if (!waitingForTeacher || !classId) return;
+    
+    waitingPollRef.current = setInterval(async () => {
+      const { data } = await supabase
+        .from('live_classes')
+        .select('status, meeting_url')
+        .eq('id', classId)
+        .single();
+      
+      if (data && data.status === 'live') {
+        setWaitingForTeacher(false);
+        onClassStarted?.();
+        // Now connect
+        fetchToken();
+      }
+    }, 3000);
+
+    return () => { if (waitingPollRef.current) clearInterval(waitingPollRef.current); };
+  }, [waitingForTeacher, classId, fetchToken, onClassStarted]);
+
+  useEffect(() => {
+    if (!waitingForTeacher) {
+      fetchToken();
+    }
     return () => { if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current); };
-  }, [fetchToken]);
+  }, [fetchToken, waitingForTeacher]);
 
   const handleLiveKitConnected = useCallback(() => {
     if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
