@@ -196,7 +196,7 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
             </div>
           )}
 
-          {isFailed && (
+          {!waitingForTeacher && isFailed && (
             <div className="flex items-center justify-center h-full p-6">
               <Alert variant="destructive" className="max-w-md">
                 {errorType === 'unreachable' ? (
