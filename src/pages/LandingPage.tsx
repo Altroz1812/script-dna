@@ -164,11 +164,7 @@ export default function LandingPage() {
             <Link to="/login" className="hidden sm:block">
               <Button variant="ghost" size="sm">Log In</Button>
             </Link>
-            <Link to="/signup">
-              <Button size="sm" className="bg-gradient-to-r from-primary to-accent hover:opacity-90 text-primary-foreground">
-                Get Started
-              </Button>
-            </Link>
+            {/* Get Started button hidden for now */}
             <button className="md:hidden p-2" onClick={() => setMobileMenu(!mobileMenu)}>
               {mobileMenu ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
@@ -413,11 +409,7 @@ export default function LandingPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 1.6, duration: 0.5 }}
             >
-              <Link to="/signup">
-                <Button size="lg" className="bg-gradient-to-r from-primary to-accent hover:opacity-90 text-lg px-8 h-14 shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-shadow">
-                  Start Free Trial <ArrowRight className="w-5 h-5 ml-2" />
-                </Button>
-              </Link>
+              {/* Start Free Trial button hidden for now */}
               <a href="#courses" onClick={e => smoothScroll(e, 'courses')}>
                 <Button variant="outline" size="lg" className="border-border/50 text-lg px-8 h-14 hover:border-primary/40 transition-colors">
                   <Play className="w-5 h-5 mr-2" /> Explore Courses
@@ -675,11 +667,7 @@ export default function LandingPage() {
             <h2 className="text-3xl md:text-4xl font-bold mb-4">Ready to Transform Your Handwriting?</h2>
             <p className="text-muted-foreground mb-8 max-w-lg mx-auto">Join thousands of students improving their handwriting with AI-powered coaching.</p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link to="/signup">
-                <Button size="lg" className="bg-gradient-to-r from-primary to-accent hover:opacity-90 px-8 h-14 text-lg">
-                  Start Free Trial <ArrowRight className="w-5 h-5 ml-2" />
-                </Button>
-              </Link>
+              {/* Start Free Trial button hidden for now */}
               {count > 0 && (
                 <Button size="lg" variant="outline" className="px-8 h-14" onClick={() => setCartOpen(true)}>
                   <ShoppingCart className="w-5 h-5 mr-2" /> View Cart ({count})
