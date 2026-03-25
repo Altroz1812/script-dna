@@ -1,6 +1,7 @@
 import { LogOut, User, Settings, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRBAC } from '@/hooks/useRBAC';
 import { ROLE_LABELS } from '@/types/roles';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
@@ -17,6 +18,7 @@ import {
 export function AppHeader() {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
+  const { isSuperAdmin } = useRBAC();
 
   const initials = profile?.displayName
     ? profile.displayName
@@ -68,10 +70,12 @@ export function AppHeader() {
             <p className="text-xs text-muted-foreground">{profile?.email}</p>
           </DropdownMenuLabel>
           <DropdownMenuSeparator className="bg-white/[0.06]" />
-          <DropdownMenuItem onClick={() => navigate('/settings')}>
-            <Settings className="mr-2 h-4 w-4" />
-            Settings
-          </DropdownMenuItem>
+          {isSuperAdmin && (
+            <DropdownMenuItem onClick={() => navigate('/settings')}>
+              <Settings className="mr-2 h-4 w-4" />
+              Settings
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={() => navigate('/profile')}>
             <User className="mr-2 h-4 w-4" />
             Profile
