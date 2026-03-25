@@ -46,6 +46,7 @@ import StudentProgressPage from "@/pages/StudentProgressPage";
 import ParentChildrenPage from "@/pages/ParentChildrenPage";
 import ParentProgressPage from "@/pages/ParentProgressPage";
 import OrderHistoryPage from "@/pages/OrderHistoryPage";
+import ProfilePage from "@/pages/ProfilePage";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -87,7 +88,7 @@ const App = () => (
                 <Route path="/organizations" element={<OrganizationsPage />} />
                 <Route path="/roles" element={<RolesPage />} />
                 <Route path="/settings" element={<ProtectedRoute allowedRoles={['superadmin']}><SettingsPage /></ProtectedRoute>} />
-                <Route path="/profile" element={<SettingsPage />} />
+                <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/activity-logs" element={<ActivityLogsPage />} />
                 <Route path="/subscriptions" element={<SubscriptionPlansPage />} />
                 <Route path="/coupons" element={<CouponsPage />} />
