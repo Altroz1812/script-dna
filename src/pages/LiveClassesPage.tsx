@@ -242,7 +242,10 @@ export default function LiveClassesPage() {
           roomName={activeClass.meeting_url || `class-${activeClass.id.slice(0, 8)}`}
           displayName={profile?.displayName || (isStudent ? 'Student' : isAdmin ? 'Admin' : 'Teacher')}
           isTeacher={isTeacher || isAdmin}
+          classStatus={activeClass.status}
+          classId={activeClass.id}
           onClose={() => setActiveClassroom(null)}
+          onClassStarted={load}
         />
       )}
 

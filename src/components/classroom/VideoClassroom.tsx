@@ -18,7 +18,10 @@ interface VideoClassroomProps {
   roomName: string;
   displayName: string;
   isTeacher?: boolean;
+  classStatus?: string;
+  classId?: string;
   onClose: () => void;
+  onClassStarted?: () => void;
 }
 
 type ConnectionState = 'idle' | 'fetching' | 'checking' | 'ready' | 'failed';
