@@ -214,9 +214,9 @@ export default function LiveClassesPage() {
                         <Square className="h-3 w-3" /> End
                       </Button>
                     )}
-                    {isStudent && isLive && (
+                    {isStudent && (isLive || isScheduled) && (
                       <Button size="sm" className="h-7 gap-1" onClick={() => setActiveClassroom(cls.id)}>
-                        <Video className="h-3 w-3" /> Join
+                        <Video className="h-3 w-3" /> {isLive ? 'Join' : 'Join & Wait'}
                       </Button>
                     )}
                     {/* Reassign button for admins on scheduled classes */}
