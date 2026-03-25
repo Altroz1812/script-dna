@@ -90,6 +90,8 @@ export default function Dashboard() {
   const role = profile?.role;
   const isStudent = role === 'student';
   const isParent = role === 'parent';
+  const isTeacher = role === 'teacher';
+  const isSupport = role === 'support';
   const isSuperadmin = role === 'superadmin';
   const organizationId = profile?.organizationId ?? null;
 
