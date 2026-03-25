@@ -14,6 +14,7 @@ import { EnrollmentTrendsChart } from '@/components/dashboard/EnrollmentTrendsCh
 import {
   Users, BookOpen, Layers, Building2, UserPlus,
   CreditCard, GraduationCap, UserCheck, ArrowRight, Sparkles,
+  ClipboardList, Video, FileText, Headphones,
 } from 'lucide-react';
 
 interface Stats {
@@ -89,6 +90,8 @@ export default function Dashboard() {
   const role = profile?.role;
   const isStudent = role === 'student';
   const isParent = role === 'parent';
+  const isTeacher = role === 'teacher';
+  const isSupport = role === 'support';
   const isSuperadmin = role === 'superadmin';
   const organizationId = profile?.organizationId ?? null;
 
@@ -145,7 +148,54 @@ export default function Dashboard() {
       const org = await organizationService.getOrganization(organizationId);
       return org?.name ?? null;
     },
-    enabled: !!organizationId && !isStudent && !isParent,
+    enabled: !!organizationId && !isStudent && !isParent && !isTeacher && !isSupport,
+  });
+
+  // Teacher dashboard data
+  const { data: teacherData, isLoading: teacherLoading } = useQuery({
+    queryKey: ['teacher_dashboard', profile?.id],
+    queryFn: async () => {
+      const [batchRes, classRes, subRes] = await Promise.all([
+        supabase.from('batches').select('id, name, batch_students(id)').eq('teacher_id', profile!.id),
+        supabase.from('live_classes').select('id, title, scheduled_at, status, batch_id').in('status', ['scheduled', 'live']).order('scheduled_at', { ascending: true }).limit(10),
+        supabase.from('student_submissions').select('id, status').eq('status', 'pending'),
+      ]);
+      const batches = batchRes.data || [];
+      const batchIds = batches.map(b => b.id);
+      const studentCount = batches.reduce((sum: number, b: any) => sum + (b.batch_students?.length || 0), 0);
+      const upcomingClasses = (classRes.data || []).filter((c: any) => batchIds.includes(c.batch_id));
+      // For pending submissions, filter via practice_assignments
+      const { data: assignments } = await supabase.from('practice_assignments').select('id').eq('teacher_id', profile!.id);
+      const assignmentIds = (assignments || []).map(a => a.id);
+      const pendingSubs = (subRes.data || []).filter((s: any) => assignmentIds.includes(s.id)).length;
+      return {
+        batchCount: batches.length,
+        studentCount,
+        upcomingClassCount: upcomingClasses.length,
+        pendingSubmissions: pendingSubs,
+      };
+    },
+    enabled: !!profile && isTeacher,
+    staleTime: 1000 * 60 * 2,
+  });
+
+  // Support dashboard data
+  const { data: supportData, isLoading: supportLoading } = useQuery({
+    queryKey: ['support_dashboard', profile?.id],
+    queryFn: async () => {
+      const [leadRes, enrollRes, payRes] = await Promise.all([
+        supabase.from('leads').select('id', { count: 'exact', head: true }),
+        supabase.from('batch_students').select('id', { count: 'exact', head: true }),
+        supabase.from('payments').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+      ]);
+      return {
+        totalLeads: leadRes.count || 0,
+        totalEnrollments: enrollRes.count || 0,
+        openPayments: payRes.count || 0,
+      };
+    },
+    enabled: !!profile && isSupport,
+    staleTime: 1000 * 60 * 2,
   });
 
   const { data: stats, isLoading } = useQuery<Stats>({
@@ -153,7 +203,7 @@ export default function Dashboard() {
     queryFn: () => adminQuery('get_stats', { organizationId, isSuperadmin }) as Promise<Stats>,
     staleTime: 1000 * 60 * 5,
     retry: 2,
-    enabled: !!profile && !isStudent && !isParent,
+    enabled: !!profile && !isStudent && !isParent && !isTeacher && !isSupport,
   });
 
   const cards = useMemo(() => {
@@ -333,7 +383,143 @@ export default function Dashboard() {
     );
   }
 
-  // Admin/Teacher dashboard
+  // Teacher dashboard
+  if (isTeacher) {
+    return (
+      <div className="relative min-h-full">
+        <MorphingBlob className="w-[500px] h-[500px] -top-32 -right-32 opacity-40" color="hsl(265 90% 65% / 0.12)" />
+        <div className="relative z-10 space-y-6">
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-end justify-between">
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                <motion.div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary via-coral to-accent flex items-center justify-center shadow-lg shadow-primary/30"
+                  animate={{ rotate: [0, 5, -5, 0] }} transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}>
+                  <Sparkles className="w-5 h-5 text-white" />
+                </motion.div>
+                <h1 className="text-3xl font-bold font-display text-gradient">Teacher Dashboard</h1>
+              </div>
+              <p className="text-muted-foreground text-sm pl-[56px]">Your teaching overview</p>
+            </div>
+          </motion.div>
+
+          {teacherLoading ? <DashboardCardsSkeleton count={4} /> : (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                  { label: 'My Batches', value: teacherData?.batchCount || 0, icon: Layers, color: 'from-purple-300 to-purple-600' },
+                  { label: 'My Students', value: teacherData?.studentCount || 0, icon: GraduationCap, color: 'from-emerald-300 to-emerald-600' },
+                  { label: 'Upcoming Classes', value: teacherData?.upcomingClassCount || 0, icon: Video, color: 'from-orange-300 to-orange-600' },
+                  { label: 'Pending Reviews', value: teacherData?.pendingSubmissions || 0, icon: FileText, color: 'from-blue-300 to-blue-600' },
+                ].map((c, i) => (
+                  <TiltCard key={c.label} glowColor={GLOW_COLORS[i]} className="h-[140px]">
+                    <div className={`h-full p-5 bg-gradient-to-br ${GRADIENT_PAIRS[i]} flex flex-col justify-between`}>
+                      <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${c.color} flex items-center justify-center shadow-lg`}>
+                        <c.icon className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <span className="text-3xl font-bold font-display text-gradient tracking-tight block">{c.value}</span>
+                        <span className="text-sm text-muted-foreground">{c.label}</span>
+                      </div>
+                    </div>
+                  </TiltCard>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[
+                  { title: 'My Batches', desc: 'View assigned batches & students', path: '/batches', gradient: 'from-purple-500/30 via-purple-600/10 to-transparent', borderColor: 'border-l-purple-500' },
+                  { title: 'Attendance', desc: 'Mark & track attendance', path: '/attendance', gradient: 'from-emerald-500/30 via-emerald-600/10 to-transparent', borderColor: 'border-l-emerald-500' },
+                  { title: 'Live Classes', desc: 'Start or join sessions', path: '/live-classes', gradient: 'from-orange-500/30 via-orange-600/10 to-transparent', borderColor: 'border-l-orange-500' },
+                  { title: 'Assignments', desc: 'Create & manage practice work', path: '/practice', gradient: 'from-blue-500/30 via-blue-600/10 to-transparent', borderColor: 'border-l-blue-500' },
+                  { title: 'Submissions', desc: 'Review student submissions', path: '/submissions', gradient: 'from-cyan-500/30 via-cyan-600/10 to-transparent', borderColor: 'border-l-cyan-500' },
+                ].map(item => (
+                  <TiltCard key={item.title} className="cursor-pointer group" glowColor="hsl(265 90% 65%)">
+                    <div className={`p-5 bg-gradient-to-br ${item.gradient} flex items-center justify-between border-l-[3px] ${item.borderColor}`}
+                      onClick={() => navigate(item.path)}>
+                      <div>
+                        <h3 className="font-semibold text-foreground">{item.title}</h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                    </div>
+                  </TiltCard>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Support dashboard
+  if (isSupport) {
+    return (
+      <div className="relative min-h-full">
+        <MorphingBlob className="w-[500px] h-[500px] -top-32 -right-32 opacity-40" color="hsl(265 90% 65% / 0.12)" />
+        <div className="relative z-10 space-y-6">
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-end justify-between">
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                <motion.div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary via-coral to-accent flex items-center justify-center shadow-lg shadow-primary/30"
+                  animate={{ rotate: [0, 5, -5, 0] }} transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}>
+                  <Sparkles className="w-5 h-5 text-white" />
+                </motion.div>
+                <h1 className="text-3xl font-bold font-display text-gradient">Support Dashboard</h1>
+              </div>
+              <p className="text-muted-foreground text-sm pl-[56px]">Lead management & enrollment overview</p>
+            </div>
+          </motion.div>
+
+          {supportLoading ? <DashboardCardsSkeleton count={3} /> : (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {[
+                  { label: 'Total Leads', value: supportData?.totalLeads || 0, icon: UserPlus, color: 'from-purple-300 to-purple-600' },
+                  { label: 'Enrollments', value: supportData?.totalEnrollments || 0, icon: GraduationCap, color: 'from-emerald-300 to-emerald-600' },
+                  { label: 'Open Payments', value: supportData?.openPayments || 0, icon: CreditCard, color: 'from-orange-300 to-orange-600' },
+                ].map((c, i) => (
+                  <TiltCard key={c.label} glowColor={GLOW_COLORS[i]} className="h-[140px]">
+                    <div className={`h-full p-5 bg-gradient-to-br ${GRADIENT_PAIRS[i]} flex flex-col justify-between`}>
+                      <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${c.color} flex items-center justify-center shadow-lg`}>
+                        <c.icon className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <span className="text-3xl font-bold font-display text-gradient tracking-tight block">{c.value}</span>
+                        <span className="text-sm text-muted-foreground">{c.label}</span>
+                      </div>
+                    </div>
+                  </TiltCard>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[
+                  { title: 'Leads', desc: 'Manage & follow up on leads', path: '/leads', gradient: 'from-purple-500/30 via-purple-600/10 to-transparent', borderColor: 'border-l-purple-500' },
+                  { title: 'Enrollments', desc: 'View batch enrollments', path: '/enrollments', gradient: 'from-emerald-500/30 via-emerald-600/10 to-transparent', borderColor: 'border-l-emerald-500' },
+                  { title: 'Students', desc: 'Browse student records', path: '/students', gradient: 'from-orange-500/30 via-orange-600/10 to-transparent', borderColor: 'border-l-orange-500' },
+                  { title: 'Payments', desc: 'Track pending payments', path: '/payments', gradient: 'from-blue-500/30 via-blue-600/10 to-transparent', borderColor: 'border-l-blue-500' },
+                ].map(item => (
+                  <TiltCard key={item.title} className="cursor-pointer group" glowColor="hsl(265 90% 65%)">
+                    <div className={`p-5 bg-gradient-to-br ${item.gradient} flex items-center justify-between border-l-[3px] ${item.borderColor}`}
+                      onClick={() => navigate(item.path)}>
+                      <div>
+                        <h3 className="font-semibold text-foreground">{item.title}</h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                    </div>
+                  </TiltCard>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Admin/Superadmin dashboard
   const subtitle = isSuperadmin
     ? 'Platform Overview · All Organizations'
     : orgName
