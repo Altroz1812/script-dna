@@ -1,69 +1,55 @@
 
 
-## Show Batch/Slot Details on Courses Page with Seat Enforcement
+## Role-Based Dashboards (RBAC)
 
 ### Problem
-The Courses page currently shows only course cards without any batch/slot information. Users cannot see available batches, remaining seats, or select a batch before enrollment. There is no enforcement of the `max_students` limit on the UI side.
+The dashboard currently has three views: Student, Parent, and a shared Admin/Teacher view. Teachers see the same admin dashboard with stats cards (Total Users, Organizations, Leads, Payments) and quick-action buttons (New Course, New Lead, Add User) that are irrelevant to them. Support role also falls into this admin view.
 
-### What Changes
+### Changes
 
-**1. Fetch batch data with student counts per course**
-- For each course, query `batches` with their `max_students` and current enrolled count from `batch_students`
-- Display this as an expandable section within each course card
+**Update `src/pages/Dashboard.tsx`**
 
-**2. Show batch details on each course card**
-- Under each course card, list available batches with: batch name, teacher name, enrolled count / max capacity, and a visual seat indicator (progress bar)
-- Batches that are full show a "Full" badge and disable enrollment
+1. **Add a dedicated Teacher dashboard** (new `isTeacher` check before the admin fallback):
+   - Stats cards: My Batches count, My Students count, Upcoming Classes, Pending Submissions
+   - Query: fetch teacher's batches, count students across those batches, upcoming live classes for their batches, pending submissions for their assignments
+   - Quick links: My Batches, Attendance, Live Classes, Practice Assignments, Submissions
 
-**3. Batch selection before proceeding (for landing page cart flow)**
-- Update `CartItem` type to include `batch_id` and `batch_name`
-- On the landing page course carousel, clicking "Add to Cart" opens a batch picker dialog showing available batches with seat counts
-- Only batches with available seats are selectable
-- The selected batch is stored with the cart item
+2. **Add a dedicated Support dashboard**:
+   - Stats cards: Total Leads, Total Enrollments, Open Payments
+   - Query: count leads, batch_students, pending payments
+   - Quick links: Leads, Enrollments, Students, Payments
 
-**4. Enforce max_students on the backend**
-- Add a check in the `admin-query` edge function's `add_batch_student` action: count current students, reject if `>= max_students`
+3. **Refine Admin dashboard** (non-superadmin admin):
+   - Remove superadmin-only quick actions (Add User) -- already done
+   - Keep: Courses, Batches, Students, Teachers stats
+   - Show org-scoped data only (already working via organizationId filter)
 
-### Files to Change
+4. **Keep existing Student, Parent, and Superadmin dashboards** as they are
 
+### Flow Logic
+```text
+if (isStudent)    → Student dashboard
+if (isParent)     → Parent dashboard
+if (isTeacher)    → Teacher dashboard  ← NEW
+if (isSupport)    → Support dashboard  ← NEW
+else              → Admin/Superadmin dashboard (existing)
+```
+
+### Files
 | File | Action |
 |------|--------|
-| `src/pages/CoursesPage.tsx` | Add batch listing per course card with seat counts |
-| `src/contexts/CartContext.tsx` | Extend `CartItem` with `batch_id` and `batch_name` |
-| `src/pages/LandingPage.tsx` | Add batch selection dialog when adding to cart |
-| `src/components/courses/BatchPickerDialog.tsx` | **New** — dialog to select a batch with seat availability |
-| `supabase/functions/admin-query/index.ts` | Add seat limit check in `add_batch_student` |
+| `src/pages/Dashboard.tsx` | Add teacher and support dashboard sections with role-specific queries, stats, and quick links |
 
 ### Technical Details
 
-**CoursesPage batch display:**
-- Fetch batches per course using `supabase.from('batches').select('*, batch_students(count)').eq('course_id', courseId)`
-- For each batch, show: name, `enrolled / max_students` seats, teacher assignment
-- Progress bar: green when < 75% full, yellow 75-90%, red > 90%
+**Teacher dashboard queries:**
+- `batches` where `teacher_id = profile.id` → count
+- `batch_students` joined through teacher's batches → student count
+- `live_classes` for teacher's batches, status in ['scheduled','live'] → upcoming classes
+- `student_submissions` joined via `practice_assignments.teacher_id` → pending count
 
-**BatchPickerDialog:**
-- Receives `courseId`, fetches batches with counts
-- Renders radio-style batch cards showing name, teacher, seats remaining
-- Full batches are greyed out and unselectable
-- On confirm, adds the course + selected batch to cart
-
-**Backend enforcement (admin-query `add_batch_student`):**
-```sql
-SELECT COUNT(*) FROM batch_students WHERE batch_id = $1
--- compare against batches.max_students, throw error if full
-```
-
-**CartItem extension:**
-```typescript
-export interface CartItem {
-  id: string;          // course id
-  name: string;
-  description: string | null;
-  fee: number;
-  grade_level: string | null;
-  duration_days: number | null;
-  batch_id: string;    // NEW
-  batch_name: string;  // NEW
-}
-```
+**Support dashboard queries:**
+- `leads` count
+- `batch_students` count (enrollments)
+- `payments` where status = 'pending' → count
 
