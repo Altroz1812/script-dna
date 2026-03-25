@@ -148,7 +148,54 @@ export default function Dashboard() {
       const org = await organizationService.getOrganization(organizationId);
       return org?.name ?? null;
     },
-    enabled: !!organizationId && !isStudent && !isParent,
+    enabled: !!organizationId && !isStudent && !isParent && !isTeacher && !isSupport,
+  });
+
+  // Teacher dashboard data
+  const { data: teacherData, isLoading: teacherLoading } = useQuery({
+    queryKey: ['teacher_dashboard', profile?.id],
+    queryFn: async () => {
+      const [batchRes, classRes, subRes] = await Promise.all([
+        supabase.from('batches').select('id, name, batch_students(id)').eq('teacher_id', profile!.id),
+        supabase.from('live_classes').select('id, title, scheduled_at, status, batch_id').in('status', ['scheduled', 'live']).order('scheduled_at', { ascending: true }).limit(10),
+        supabase.from('student_submissions').select('id, status').eq('status', 'pending'),
+      ]);
+      const batches = batchRes.data || [];
+      const batchIds = batches.map(b => b.id);
+      const studentCount = batches.reduce((sum: number, b: any) => sum + (b.batch_students?.length || 0), 0);
+      const upcomingClasses = (classRes.data || []).filter((c: any) => batchIds.includes(c.batch_id));
+      // For pending submissions, filter via practice_assignments
+      const { data: assignments } = await supabase.from('practice_assignments').select('id').eq('teacher_id', profile!.id);
+      const assignmentIds = (assignments || []).map(a => a.id);
+      const pendingSubs = (subRes.data || []).filter((s: any) => assignmentIds.includes(s.id)).length;
+      return {
+        batchCount: batches.length,
+        studentCount,
+        upcomingClassCount: upcomingClasses.length,
+        pendingSubmissions: pendingSubs,
+      };
+    },
+    enabled: !!profile && isTeacher,
+    staleTime: 1000 * 60 * 2,
+  });
+
+  // Support dashboard data
+  const { data: supportData, isLoading: supportLoading } = useQuery({
+    queryKey: ['support_dashboard', profile?.id],
+    queryFn: async () => {
+      const [leadRes, enrollRes, payRes] = await Promise.all([
+        supabase.from('leads').select('id', { count: 'exact', head: true }),
+        supabase.from('batch_students').select('id', { count: 'exact', head: true }),
+        supabase.from('payments').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+      ]);
+      return {
+        totalLeads: leadRes.count || 0,
+        totalEnrollments: enrollRes.count || 0,
+        openPayments: payRes.count || 0,
+      };
+    },
+    enabled: !!profile && isSupport,
+    staleTime: 1000 * 60 * 2,
   });
 
   const { data: stats, isLoading } = useQuery<Stats>({
@@ -156,7 +203,7 @@ export default function Dashboard() {
     queryFn: () => adminQuery('get_stats', { organizationId, isSuperadmin }) as Promise<Stats>,
     staleTime: 1000 * 60 * 5,
     retry: 2,
-    enabled: !!profile && !isStudent && !isParent,
+    enabled: !!profile && !isStudent && !isParent && !isTeacher && !isSupport,
   });
 
   const cards = useMemo(() => {
