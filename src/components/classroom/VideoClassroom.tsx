@@ -174,7 +174,20 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
       {/* Content area */}
       <div className={`flex-1 flex ${fullscreen ? 'h-[calc(100vh-41px)]' : 'h-[500px]'}`}>
         <div className="flex-1 min-w-0">
-          {isLoading && (
+          {waitingForTeacher && (
+            <div className="flex flex-col items-center justify-center h-full gap-4">
+              <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+              <div className="text-center space-y-2">
+                <h3 className="text-lg font-semibold text-foreground">Waiting for teacher to start…</h3>
+                <p className="text-sm text-muted-foreground">You'll be connected automatically once the class begins.</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={onClose}>Leave Waiting Room</Button>
+            </div>
+          )}
+
+          {!waitingForTeacher && isLoading && (
             <div className="flex items-center justify-center h-full">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               <span className="ml-2 text-muted-foreground">
