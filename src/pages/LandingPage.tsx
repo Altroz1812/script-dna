@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion, useScroll, useTransform, useInView } from 'framer-motion';
 import {
   PenTool, Play, ShoppingCart, Star, Users, BookOpen, BarChart3,
-  Video, Globe, Award, ChevronRight, Check, ArrowRight, Menu, X,
+  Video, Globe, Award, ChevronRight, ChevronLeft, Check, ArrowRight, Menu, X,
   Sparkles, Zap, Shield, Clock, GraduationCap, CalendarDays,
   CreditCard, Building2, UserCheck, FileText, BrainCircuit, Layers,
   Wifi, MapPin
@@ -94,6 +94,14 @@ export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
   const [courses, setCourses] = useState<CourseDisplay[]>([]);
   const [carouselPaused, setCarouselPaused] = useState(false);
+  const courseScrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollCourses = (direction: 'left' | 'right') => {
+    const container = courseScrollRef.current;
+    if (!container) return;
+    const scrollAmount = 360;
+    container.scrollBy({ left: direction === 'left' ? -scrollAmount : scrollAmount, behavior: 'smooth' });
+  };
   const [batchPickerCourse, setBatchPickerCourse] = useState<CourseDisplay | null>(null);
   const [courseFilter, setCourseFilter] = useState<'all' | 'online' | 'offline'>('all');
 
@@ -542,22 +550,34 @@ export default function LandingPage() {
             </div>
           );
           return (
-          <div className="relative overflow-hidden">
-            <div className="absolute left-0 top-0 bottom-0 w-24 bg-gradient-to-r from-background to-transparent z-10 pointer-events-none" />
-            <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none" />
+          <div className="relative">
+            {/* Left arrow */}
+            <button
+              onClick={() => scrollCourses('left')}
+              className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-background/80 backdrop-blur border border-border/50 flex items-center justify-center text-foreground hover:bg-muted transition-colors shadow-lg"
+              aria-label="Scroll left"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            {/* Right arrow */}
+            <button
+              onClick={() => scrollCourses('right')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-background/80 backdrop-blur border border-border/50 flex items-center justify-center text-foreground hover:bg-muted transition-colors shadow-lg"
+              aria-label="Scroll right"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
 
-            <motion.div
-              className="flex gap-6 px-8 touch-pan-y"
-              animate={carouselPaused ? {} : { x: ['0%', `-${(filtered.length / 2) * 100 / filtered.length}%`] }}
-              transition={{ x: { duration: filtered.length * 5, repeat: Infinity, ease: 'linear' } }}
-              onHoverStart={() => setCarouselPaused(true)}
-              onHoverEnd={() => setCarouselPaused(false)}
-              onTouchStart={() => setCarouselPaused(true)}
-              onTouchEnd={() => setTimeout(() => setCarouselPaused(false), 3000)}
-              style={{ width: `${filtered.length * 2 * 340 + (filtered.length * 2 - 1) * 24}px` }}
+            <div className="absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-background to-transparent z-10 pointer-events-none" />
+            <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none" />
+
+            <div
+              ref={courseScrollRef}
+              className="flex gap-6 px-12 overflow-x-auto scrollbar-hide snap-x snap-mandatory py-4"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               key={courseFilter}
             >
-              {[...filtered, ...filtered].map((c, idx) => {
+              {filtered.map((c, idx) => {
                 const inCart = isInCart(c.id);
                 const isOffline = c.delivery_mode === 'offline';
                 const styleColors = [
@@ -573,8 +593,8 @@ export default function LandingPage() {
                 ];
                 return (
                   <motion.div
-                    key={`${c.id}-${idx}`}
-                    className={`flex-shrink-0 w-[300px] sm:w-[340px] rounded-xl border overflow-hidden transition-all duration-300 bg-gradient-to-br ${styleColors[idx % styleColors.length]} ${inCart ? 'border-accent/60 shadow-lg shadow-accent/10' : 'border-border/40 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10'}`}
+                    key={c.id}
+                    className={`flex-shrink-0 w-[300px] sm:w-[340px] rounded-xl border overflow-hidden transition-all duration-300 bg-gradient-to-br snap-start ${styleColors[idx % styleColors.length]} ${inCart ? 'border-accent/60 shadow-lg shadow-accent/10' : 'border-border/40 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10'}`}
                     whileHover={{ scale: 1.03, y: -8 }}
                     transition={{ type: 'spring', stiffness: 300, damping: 20 }}
                   >
@@ -615,7 +635,7 @@ export default function LandingPage() {
                   </motion.div>
                 );
               })}
-            </motion.div>
+            </div>
           </div>
           );
         })()}
