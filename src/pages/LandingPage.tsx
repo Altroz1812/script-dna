@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion, useScroll, useTransform, useInView } from 'framer-motion';
 import {
   PenTool, Play, ShoppingCart, Star, Users, BookOpen, BarChart3,
-  Video, Globe, Award, ChevronRight, Check, ArrowRight, Menu, X,
+  Video, Globe, Award, ChevronRight, ChevronLeft, Check, ArrowRight, Menu, X,
   Sparkles, Zap, Shield, Clock, GraduationCap, CalendarDays,
   CreditCard, Building2, UserCheck, FileText, BrainCircuit, Layers,
   Wifi, MapPin
@@ -94,6 +94,14 @@ export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
   const [courses, setCourses] = useState<CourseDisplay[]>([]);
   const [carouselPaused, setCarouselPaused] = useState(false);
+  const courseScrollRef = useRef<HTMLDivElement>(null);
+
+  const scrollCourses = (direction: 'left' | 'right') => {
+    const container = courseScrollRef.current;
+    if (!container) return;
+    const scrollAmount = 360;
+    container.scrollBy({ left: direction === 'left' ? -scrollAmount : scrollAmount, behavior: 'smooth' });
+  };
   const [batchPickerCourse, setBatchPickerCourse] = useState<CourseDisplay | null>(null);
   const [courseFilter, setCourseFilter] = useState<'all' | 'online' | 'offline'>('all');
 
