@@ -126,6 +126,7 @@ export default function ActivityLogsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead>User</TableHead>
                       <TableHead>Action</TableHead>
                       <TableHead>Entity</TableHead>
                       <TableHead>IP Address</TableHead>
@@ -135,11 +136,12 @@ export default function ActivityLogsPage() {
                   <TableBody>
                     {filteredActivity.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-center text-muted-foreground py-8">No activity logs yet</TableCell>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground py-8">No activity logs yet</TableCell>
                       </TableRow>
                     ) : (
                       filteredActivity.map((a) => (
                         <TableRow key={a.id}>
+                          <TableCell className="font-medium">{a.user_name || '—'}</TableCell>
                           <TableCell className="font-medium">{a.action}</TableCell>
                           <TableCell>
                             {a.entity_type && <Badge variant="secondary">{a.entity_type}</Badge>}
