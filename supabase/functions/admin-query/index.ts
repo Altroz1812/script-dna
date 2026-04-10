@@ -720,19 +720,20 @@ Deno.serve(async (req) => {
       // ===== ACTIVITY LOGS (extended) =====
       case 'list_activity_logs': {
         const [activityRes, loginRes] = await Promise.all([
-          supabase.from('activity_logs').select('*').order('created_at', { ascending: false }).limit(200),
+          supabase.from('activity_logs').select('*').not('user_id', 'is', null).order('created_at', { ascending: false }).limit(200),
           supabase.from('login_attempts').select('*').order('attempted_at', { ascending: false }).limit(200),
         ])
-        // enrich activity logs with user names
-        const userIds = [...new Set((activityRes.data ?? []).filter((a: any) => a.user_id).map((a: any) => a.user_id))]
-        let profileMap: Record<string, string> = {}
+        // enrich activity logs with user names and emails
+        const userIds = [...new Set((activityRes.data ?? []).map((a: any) => a.user_id))]
+        let profileMap: Record<string, { name: string; email: string }> = {}
         if (userIds.length) {
           const { data: profs } = await supabase.from('profiles').select('user_id, display_name, email').in('user_id', userIds)
-          for (const p of profs ?? []) profileMap[p.user_id] = p.display_name || p.email || 'Unknown'
+          for (const p of profs ?? []) profileMap[p.user_id] = { name: p.display_name || p.email || 'Unknown', email: p.email || '—' }
         }
         const enrichedLogs = (activityRes.data ?? []).map((a: any) => ({
           ...a,
-          user_name: a.user_id ? (profileMap[a.user_id] || 'System') : 'System',
+          user_name: profileMap[a.user_id]?.name || 'Unknown',
+          user_email: profileMap[a.user_id]?.email || '—',
         }))
         result = { activity_logs: enrichedLogs, login_attempts: loginRes.data ?? [] }
         break
