@@ -11,6 +11,7 @@ import { TableSkeleton } from '@/components/ui/loading-skeletons';
 interface ActivityLog {
   id: string;
   user_id: string | null;
+  user_name: string | null;
   action: string;
   entity_type: string | null;
   entity_id: string | null;
