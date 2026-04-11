@@ -165,12 +165,8 @@ export default function Login() {
                   <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Signing in…</span>
                 ) : 'Sign In'}
               </Button>
-              {/* Forgot password link hidden for now */}
-              {/*<div className="flex justify-between w-full text-sm">
+              <div className="flex justify-between w-full text-sm">
                 <Link to="/forgot-password" className="text-muted-foreground hover:text-primary transition-colors">Forgot password?</Link>
-                <Link to="/signup" className="text-muted-foreground hover:text-primary transition-colors">Create account</Link>
-              </div>*/}
-              <div className="flex justify-end w-full text-sm">
                 <Link to="/signup" className="text-muted-foreground hover:text-primary transition-colors">Create account</Link>
               </div>
             </CardFooter>
