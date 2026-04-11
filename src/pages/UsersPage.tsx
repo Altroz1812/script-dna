@@ -13,6 +13,8 @@ import { Pencil, Trash2, Search, Users, Plus, UserX, UserCheck, KeyRound, Link2 
 import { ROLE_LABELS, type AppRole } from '@/types/roles';
 import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { ParentChildLinkDialog } from '@/components/admin/ParentChildLinkDialog';
+import { PasswordStrengthMeter } from '@/components/auth/PasswordStrengthMeter';
+import { checkPasswordStrength } from '@/lib/security';
 
 interface UserRow {
   user_id: string;
@@ -39,6 +41,12 @@ export default function UsersPage() {
   const [newName, setNewName] = useState('');
   const [newRole, setNewRole] = useState<string>('student');
   const [creating, setCreating] = useState(false);
+
+  // Admin reset password state
+  const [resetUser, setResetUser] = useState<UserRow | null>(null);
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetConfirm, setResetConfirm] = useState('');
+  const [resetting, setResetting] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -88,11 +96,34 @@ export default function UsersPage() {
     } catch (e: any) { toast.error(e.message); }
   };
 
-  const handleResetPassword = async (email: string) => {
+  const handleResetPassword = async () => {
+    if (!resetUser) return;
+    if (!resetPassword) {
+      toast.error('Please enter a new password');
+      return;
+    }
+    if (resetPassword.length < 8) {
+      toast.error('Password must be at least 8 characters');
+      return;
+    }
+    if (resetPassword !== resetConfirm) {
+      toast.error('Passwords do not match');
+      return;
+    }
+    const strength = checkPasswordStrength(resetPassword);
+    if (strength.score < 2) {
+      toast.error('Password is too weak. Please use a stronger password.');
+      return;
+    }
+    setResetting(true);
     try {
-      await adminQuery('admin_reset_password', { email });
-      toast.success(`Password reset link generated for ${email}`);
+      await adminQuery('admin_reset_password', { user_id: resetUser.user_id, new_password: resetPassword });
+      toast.success(`Password reset successfully for ${resetUser.display_name || resetUser.email}`);
+      setResetUser(null);
+      setResetPassword('');
+      setResetConfirm('');
     } catch (e: any) { toast.error(e.message); }
+    finally { setResetting(false); }
   };
 
   const handleCreateUser = async () => {
@@ -209,19 +240,17 @@ export default function UsersPage() {
                         <Button variant="ghost" size="icon" title={u.is_active !== false ? 'Deactivate' : 'Reactivate'} onClick={() => handleToggleActive(u)}>
                           {u.is_active !== false ? <UserX className="h-4 w-4 text-amber-500" /> : <UserCheck className="h-4 w-4 text-emerald-500" />}
                         </Button>
-                         {u.email && (
-                           <Button variant="ghost" size="icon" title="Reset Password" onClick={() => handleResetPassword(u.email!)}>
-                             <KeyRound className="h-4 w-4" />
-                           </Button>
-                         )}
-                         {u.role === 'parent' && (
-                           <Button variant="ghost" size="icon" title="Link Children" onClick={() => setLinkParent(u)}>
-                             <Link2 className="h-4 w-4 text-primary" />
-                           </Button>
-                         )}
-                         <Button variant="ghost" size="icon" title="Delete" onClick={() => handleDelete(u.user_id)}>
-                           <Trash2 className="h-4 w-4 text-destructive" />
-                         </Button>
+                        <Button variant="ghost" size="icon" title="Reset Password" onClick={() => { setResetUser(u); setResetPassword(''); setResetConfirm(''); }}>
+                          <KeyRound className="h-4 w-4" />
+                        </Button>
+                        {u.role === 'parent' && (
+                          <Button variant="ghost" size="icon" title="Link Children" onClick={() => setLinkParent(u)}>
+                            <Link2 className="h-4 w-4 text-primary" />
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="icon" title="Delete" onClick={() => handleDelete(u.user_id)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -238,6 +267,36 @@ export default function UsersPage() {
           <div className="space-y-4">
             <div><Label>Display Name</Label><Input value={editName} onChange={e => setEditName(e.target.value)} /></div>
             <Button onClick={handleUpdate} className="w-full">Save</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Admin Reset Password Dialog */}
+      <Dialog open={!!resetUser} onOpenChange={v => { if (!v) { setResetUser(null); setResetPassword(''); setResetConfirm(''); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset Password for {resetUser?.display_name || resetUser?.email}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>New Password</Label>
+              <Input type="password" value={resetPassword} onChange={e => setResetPassword(e.target.value)} placeholder="Min 8 characters" />
+              <PasswordStrengthMeter password={resetPassword} />
+            </div>
+            <div>
+              <Label>Confirm Password</Label>
+              <Input type="password" value={resetConfirm} onChange={e => setResetConfirm(e.target.value)} placeholder="Re-enter password" />
+              {resetConfirm && resetPassword !== resetConfirm && (
+                <p className="text-xs text-destructive mt-1">Passwords do not match</p>
+              )}
+            </div>
+            <Button
+              onClick={handleResetPassword}
+              className="w-full"
+              disabled={resetting || !resetPassword || !resetConfirm}
+            >
+              {resetting ? 'Resetting…' : 'Reset Password'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
