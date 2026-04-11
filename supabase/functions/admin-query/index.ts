@@ -853,6 +853,19 @@ Deno.serve(async (req) => {
         break
       }
 
+      // ===== PUBLIC: CHECK EMAIL EXISTS (for forgot password) =====
+      case 'check_email_exists': {
+        const { email } = params
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', email)
+          .maybeSingle()
+        if (error) throw error
+        result = { exists: !!data }
+        break
+      }
+
       default:
         return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
           status: 400,

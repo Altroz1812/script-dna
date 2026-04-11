@@ -19,17 +19,15 @@ export default function ForgotPassword() {
     setLoading(true);
     setFound(null);
     try {
-      // Check if a profile exists with this email
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', email.trim().toLowerCase())
-        .maybeSingle();
+      const { data, error } = await supabase.functions.invoke('admin-query', {
+        body: { action: 'check_email_exists', params: { email: email.trim().toLowerCase() } },
+      });
 
       if (error) throw error;
 
-      setFound(!!data);
-      if (!data) {
+      const exists = data?.exists ?? false;
+      setFound(exists);
+      if (!exists) {
         toast({ title: 'Not found', description: 'No account found with this email address.', variant: 'destructive' });
       }
     } catch (err: any) {
@@ -38,7 +36,6 @@ export default function ForgotPassword() {
       setLoading(false);
     }
   };
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md border-border/50">
