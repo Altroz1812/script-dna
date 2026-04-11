@@ -20,7 +20,7 @@ export default function ForgotPassword() {
     setFound(null);
     try {
       const { data, error } = await supabase.functions.invoke('admin-query', {
-        body: { type: 'check_email_exists', email: email.trim().toLowerCase() },
+        body: { action: 'check_email_exists', params: { email: email.trim().toLowerCase() } },
       });
 
       if (error) throw error;
