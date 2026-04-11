@@ -571,10 +571,11 @@ Deno.serve(async (req) => {
 
       // ===== ADMIN PASSWORD RESET =====
       case 'admin_reset_password': {
-        const { email } = params
-        const { error: resetError } = await supabase.auth.admin.generateLink({
-          type: 'recovery',
-          email,
+        const { user_id, new_password } = params
+        if (!user_id || !new_password) throw new Error('user_id and new_password are required')
+        if (new_password.length < 8) throw new Error('Password must be at least 8 characters')
+        const { error: resetError } = await supabase.auth.admin.updateUserById(user_id, {
+          password: new_password,
         })
         if (resetError) throw resetError
         result = { success: true }
