@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { Plus, Trash2, UserPlus, UserMinus, Building2, Palette, Upload, Loader2 } from 'lucide-react';
+import { Plus, Trash2, UserPlus, UserMinus, Building2, Palette, Upload, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Input as ColorInput } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -30,14 +30,22 @@ export default function OrganizationsPage() {
   const [brandPrimaryColor, setBrandPrimaryColor] = useState('#6366f1');
   const [brandLogoUrl, setBrandLogoUrl] = useState('');
   const [logoUploading, setLogoUploading] = useState(false);
+  const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
+  const [logoUploadedAt, setLogoUploadedAt] = useState<number | null>(null);
+  const [savingBranding, setSavingBranding] = useState(false);
   const logoInputRef = useRef<HTMLInputElement | null>(null);
+
+  const formatBytes = (n: number) => n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(2)} MB`;
 
   const handleLogoUpload = async (file: File) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) { toast.error('Please choose an image file'); return; }
     if (file.size > 2 * 1024 * 1024) { toast.error('Logo must be under 2 MB'); return; }
     if (!brandingOrg) return;
+    const toastId = `logo-upload-${brandingOrg.id}`;
     setLogoUploading(true);
+    setLogoUploadError(null);
+    toast.loading('Uploading logo to storage…', { id: toastId });
     try {
       const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
       const path = `${brandingOrg.id}/logo-${Date.now()}.${ext}`;
@@ -47,13 +55,62 @@ export default function OrganizationsPage() {
       if (upErr) throw upErr;
       const { data: pub } = supabase.storage.from('org-logos').getPublicUrl(path);
       if (!pub?.publicUrl) throw new Error('Could not resolve public URL');
+      // Verify the file is actually reachable (catches bucket-not-public misconfig)
+      try {
+        const head = await fetch(pub.publicUrl, { method: 'HEAD', cache: 'no-store' });
+        if (!head.ok) throw new Error(`Storage returned HTTP ${head.status}`);
+      } catch (verifyErr: any) {
+        throw new Error(`Uploaded but not reachable: ${verifyErr?.message || 'unknown error'}`);
+      }
       setBrandLogoUrl(pub.publicUrl);
-      toast.success('Logo uploaded — remember to Save Branding');
+      setLogoUploadedAt(Date.now());
+      toast.success('Logo uploaded to storage', {
+        id: toastId,
+        description: `${formatBytes(file.size)} · org-logos/${path} — click Save Branding to apply.`,
+        icon: <CheckCircle2 className="h-4 w-4" />,
+      });
     } catch (e: any) {
-      toast.error(e?.message || 'Upload failed');
+      const msg = e?.message || 'Upload failed';
+      setLogoUploadError(msg);
+      toast.error('Logo upload failed', { id: toastId, description: msg, icon: <AlertCircle className="h-4 w-4" /> });
     } finally {
       setLogoUploading(false);
       if (logoInputRef.current) logoInputRef.current.value = '';
+    }
+  };
+
+  const handleSaveBranding = async () => {
+    if (!brandingOrg) return;
+    setSavingBranding(true);
+    const submittedLogo = brandLogoUrl || null;
+    try {
+      await adminQuery('update_org_branding', {
+        id: brandingOrg.id,
+        branding: { display_name: brandName || null, logo_url: submittedLogo, primary_color: brandPrimaryColor },
+      });
+      // Verify persistence by reloading orgs and checking the logo_url
+      const fresh: any[] = await adminQuery('list_organizations');
+      const updated = fresh.find((o: any) => o.id === brandingOrg.id);
+      const savedLogo = updated?.logo_url || updated?.branding?.logo_url || null;
+      setOrgs(fresh);
+      if ((submittedLogo || null) !== (savedLogo || null)) {
+        toast.error('Branding partially saved', {
+          description: `Logo URL did not persist (sent ${submittedLogo ? 'a URL' : 'empty'}, stored ${savedLogo ? 'different value' : 'empty'}). Please try again.`,
+          icon: <AlertCircle className="h-4 w-4" />,
+        });
+        return;
+      }
+      toast.success('Branding saved', {
+        description: submittedLogo ? 'Logo is now live on the organization card.' : 'Branding updated successfully.',
+        icon: <CheckCircle2 className="h-4 w-4" />,
+      });
+      setBrandingOrg(null);
+      setLogoUploadError(null);
+      setLogoUploadedAt(null);
+    } catch (e: any) {
+      toast.error('Failed to save branding', { description: e?.message || 'Unknown error' });
+    } finally {
+      setSavingBranding(false);
     }
   };
 
@@ -121,25 +178,19 @@ export default function OrganizationsPage() {
             <Card key={o.id} className={!o.is_active ? 'opacity-60' : ''}>
               <CardHeader>
                 <div className="flex justify-between items-start">
-                  <div className="flex items-center gap-3">
-                    {(o.logo_url || o.branding?.logo_url) ? (
-                      <img
-                        src={o.logo_url || o.branding?.logo_url}
-                        alt={`${o.name} logo`}
-                        className="h-10 w-10 rounded-md object-contain bg-muted border border-border"
-                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }}
-                      />
-                    ) : (
-                      <div className="h-10 w-10 rounded-md bg-muted border border-border flex items-center justify-center text-muted-foreground">
-                        <Building2 className="h-5 w-5" />
-                      </div>
-                    )}
-                    <div>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <OrgLogo
+                      src={o.logo_url || o.branding?.logo_url}
+                      name={o.name}
+                      tint={o.branding?.primary_color}
+                      size="card"
+                    />
+                    <div className="min-w-0">
                       <CardTitle className="flex items-center gap-2">
-                        {o.name}
+                        <span className="truncate">{o.name}</span>
                         {!o.is_active && <Badge variant="destructive" className="text-xs">Disabled</Badge>}
                       </CardTitle>
-                      <p className="text-sm text-muted-foreground mt-1">/{o.slug}</p>
+                      <p className="text-sm text-muted-foreground mt-1 truncate">/{o.slug}</p>
                     </div>
                   </div>
                   <Button variant="ghost" size="icon" onClick={() => handleDelete(o.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
@@ -193,7 +244,7 @@ export default function OrganizationsPage() {
       </Dialog>
 
       {/* Branding Dialog */}
-      <Dialog open={!!brandingOrg} onOpenChange={v => { if (!v) setBrandingOrg(null); }}>
+      <Dialog open={!!brandingOrg} onOpenChange={v => { if (!v) { setBrandingOrg(null); setLogoUploadError(null); setLogoUploadedAt(null); } }}>
         <DialogContent>
           <DialogHeader><DialogTitle>White-Label Branding: {brandingOrg?.name}</DialogTitle></DialogHeader>
           <div className="space-y-4">
@@ -201,18 +252,20 @@ export default function OrganizationsPage() {
             <div className="space-y-2">
               <Label>Logo</Label>
               <div className="flex items-center gap-3">
-                {brandLogoUrl ? (
-                  <img
+                <div className="relative">
+                  <OrgLogo
                     src={brandLogoUrl}
-                    alt="Logo"
-                    className="h-14 w-14 rounded-md object-contain border border-border bg-muted"
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }}
+                    name={brandingOrg?.name || 'Logo'}
+                    tint={brandPrimaryColor}
+                    size="editor"
+                    dashed={!brandLogoUrl}
                   />
-                ) : (
-                  <div className="h-14 w-14 rounded-md border border-dashed border-border flex items-center justify-center text-muted-foreground">
-                    <Building2 className="h-5 w-5" />
-                  </div>
-                )}
+                  {logoUploading && (
+                    <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-background/70 backdrop-blur-sm">
+                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                    </div>
+                  )}
+                </div>
                 <input
                   ref={logoInputRef}
                   type="file"
@@ -225,11 +278,21 @@ export default function OrganizationsPage() {
                   {brandLogoUrl ? 'Replace' : 'Upload'}
                 </Button>
                 {brandLogoUrl && (
-                  <Button type="button" variant="ghost" size="sm" onClick={() => setBrandLogoUrl('')}>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => { setBrandLogoUrl(''); setLogoUploadedAt(null); }}>
                     Remove
                   </Button>
                 )}
               </div>
+              {logoUploadError && (
+                <p className="text-xs text-destructive flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3" /> {logoUploadError}
+                </p>
+              )}
+              {!logoUploadError && logoUploadedAt && (
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                  <CheckCircle2 className="h-3 w-3" /> Uploaded to storage. Click Save Branding to apply.
+                </p>
+              )}
               <Input
                 value={brandLogoUrl}
                 onChange={e => setBrandLogoUrl(e.target.value)}
@@ -246,24 +309,56 @@ export default function OrganizationsPage() {
             </div>
             {brandLogoUrl && (
               <div className="border rounded-md p-4 flex items-center gap-3">
-                <img src={brandLogoUrl} alt="Logo preview" className="h-10 w-10 object-contain" onError={(e) => (e.currentTarget as HTMLImageElement).style.display = 'none'} />
+                <OrgLogo src={brandLogoUrl} name={brandingOrg?.name || 'Logo'} tint={brandPrimaryColor} size="card" />
                 <span className="font-medium" style={{ color: brandPrimaryColor }}>{brandName || brandingOrg?.name}</span>
               </div>
             )}
-            <Button className="w-full" onClick={async () => {
-              try {
-                await adminQuery('update_org_branding', {
-                  id: brandingOrg.id,
-                  branding: { display_name: brandName || null, logo_url: brandLogoUrl || null, primary_color: brandPrimaryColor },
-                });
-                toast.success('Branding updated');
-                setBrandingOrg(null);
-                load();
-              } catch (e: any) { toast.error(e.message); }
-            }}>Save Branding</Button>
+            <Button className="w-full" disabled={savingBranding || logoUploading} onClick={handleSaveBranding}>
+              {savingBranding ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : 'Save Branding'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+/* ---------- Reusable logo display ---------- */
+function OrgLogo({
+  src,
+  name,
+  tint,
+  size = 'card',
+  dashed = false,
+}: {
+  src?: string | null;
+  name: string;
+  tint?: string | null;
+  size?: 'card' | 'editor';
+  dashed?: boolean;
+}) {
+  const [errored, setErrored] = useState(false);
+  const dim = size === 'editor' ? 'w-16' : 'w-12 sm:w-14';
+  const iconSize = size === 'editor' ? 'h-6 w-6' : 'h-5 w-5';
+  const tintStyle = tint ? { backgroundColor: `${tint}1A` } : undefined; // 10% alpha
+  const showImage = src && !errored;
+  return (
+    <div
+      className={`${dim} aspect-square shrink-0 rounded-lg overflow-hidden border ${dashed ? 'border-dashed' : 'border-border'} bg-gradient-to-br from-muted to-muted/40 flex items-center justify-center`}
+      style={!showImage ? tintStyle : undefined}
+    >
+      {showImage ? (
+        <img
+          src={src as string}
+          alt={`${name} logo`}
+          loading="lazy"
+          decoding="async"
+          className="h-full w-full object-cover object-center"
+          onError={() => setErrored(true)}
+        />
+      ) : (
+        <Building2 className={`${iconSize} text-muted-foreground`} />
+      )}
     </div>
   );
 }
