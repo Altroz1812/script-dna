@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Plus, Trash2, Wand2 } from 'lucide-react';
+import { Plus, Trash2, Wand2, AlertCircle } from 'lucide-react';
 import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { format, addDays, getDay } from 'date-fns';
 
@@ -29,10 +29,20 @@ export default function SchedulePage() {
   const queryClient = useQueryClient();
   const [filterBatch, setFilterBatch] = useState('all');
   const [open, setOpen] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
   const [autoForm, setAutoForm] = useState({
     batch_id: '',
     start_date: '',
     working_days: [1, 2, 3, 4, 5] as number[],
+    start_time: '09:00',
+    end_time: '10:00',
+    room: '',
+  });
+  const [manualForm, setManualForm] = useState({
+    batch_id: '',
+    title: '',
+    date: '',
+    day_of_week: 1,
     start_time: '09:00',
     end_time: '10:00',
     room: '',
@@ -86,7 +96,29 @@ export default function SchedulePage() {
       setAutoForm({ batch_id: '', start_date: '', working_days: [1, 2, 3, 4, 5], start_time: '09:00', end_time: '10:00', room: '' });
       queryClient.invalidateQueries({ queryKey: ['schedules'] });
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(e?.message || 'Failed to create schedule entries'),
+  });
+
+  const manualMutation = useMutation({
+    mutationFn: async () => {
+      const payload = {
+        batch_id: manualForm.batch_id,
+        title: manualForm.title.trim(),
+        day_of_week: manualForm.day_of_week,
+        start_time: manualForm.start_time,
+        end_time: manualForm.end_time,
+        room: manualForm.room.trim() || null,
+        date: manualForm.date || null,
+      };
+      return adminQuery('create_schedule', payload);
+    },
+    onSuccess: () => {
+      toast.success('Schedule entry created');
+      setManualOpen(false);
+      setManualForm({ batch_id: '', title: '', date: '', day_of_week: 1, start_time: '09:00', end_time: '10:00', room: '' });
+      queryClient.invalidateQueries({ queryKey: ['schedules'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to create schedule'),
   });
 
   const deleteMutation = useMutation({
@@ -107,6 +139,23 @@ export default function SchedulePage() {
     }));
   };
 
+  // Surface why Auto-Schedule may be blocked
+  const autoBlockers: string[] = [];
+  if (!autoForm.batch_id) autoBlockers.push('Select a batch.');
+  else if (!courseDays) autoBlockers.push('Selected batch\'s course has no duration (days). Edit the course to set Duration (days).');
+  if (!autoForm.start_date) autoBlockers.push('Pick a start date.');
+  if (!autoForm.working_days.length) autoBlockers.push('Choose at least one working day.');
+  if (autoForm.start_time >= autoForm.end_time) autoBlockers.push('End time must be after start time.');
+
+  // Auto-derive day_of_week from manual date
+  const manualDateDow = manualForm.date ? getDay(new Date(manualForm.date)) : null;
+  const manualValid =
+    !!manualForm.batch_id &&
+    !!manualForm.title.trim() &&
+    !!manualForm.start_time &&
+    !!manualForm.end_time &&
+    manualForm.start_time < manualForm.end_time;
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -119,6 +168,64 @@ export default function SchedulePage() {
               {batches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Dialog open={manualOpen} onOpenChange={setManualOpen}>
+            <DialogTrigger asChild><Button variant="outline"><Plus className="mr-2 h-4 w-4" />Add Manually</Button></DialogTrigger>
+            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+              <DialogHeader><DialogTitle>Add Schedule Entry</DialogTitle></DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>Batch</Label>
+                  <Select value={manualForm.batch_id} onValueChange={v => {
+                    const b = batches.find(x => x.id === v);
+                    setManualForm(f => ({ ...f, batch_id: v, title: f.title || (b?.courses?.name ?? '') }));
+                  }}>
+                    <SelectTrigger><SelectValue placeholder="Select batch" /></SelectTrigger>
+                    <SelectContent>{batches.map(b => <SelectItem key={b.id} value={b.id}>{b.name} — {b.courses?.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Session Title</Label>
+                  <Input value={manualForm.title} onChange={e => setManualForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Session 1: Introduction" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Date (optional)</Label>
+                    <Input type="date" value={manualForm.date} onChange={e => setManualForm(f => ({ ...f, date: e.target.value, day_of_week: e.target.value ? getDay(new Date(e.target.value)) : f.day_of_week }))} />
+                  </div>
+                  <div>
+                    <Label>Day of Week</Label>
+                    <Select
+                      value={String(manualDateDow ?? manualForm.day_of_week)}
+                      onValueChange={v => setManualForm(f => ({ ...f, day_of_week: parseInt(v, 10) }))}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {DAYS.map((d, i) => <SelectItem key={i} value={String(i)}>{d}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label>Start Time</Label><Input type="time" value={manualForm.start_time} onChange={e => setManualForm(f => ({ ...f, start_time: e.target.value }))} /></div>
+                  <div><Label>End Time</Label><Input type="time" value={manualForm.end_time} onChange={e => setManualForm(f => ({ ...f, end_time: e.target.value }))} /></div>
+                </div>
+                <div><Label>Room (optional)</Label><Input value={manualForm.room} onChange={e => setManualForm(f => ({ ...f, room: e.target.value }))} placeholder="e.g. Room A or Online" /></div>
+                {!manualValid && (manualForm.batch_id || manualForm.title) && (
+                  <p className="text-xs text-muted-foreground flex items-start gap-1.5">
+                    <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                    Batch, title, and a valid time range (end after start) are required.
+                  </p>
+                )}
+                <Button
+                  onClick={() => manualMutation.mutate()}
+                  disabled={manualMutation.isPending || !manualValid}
+                  className="w-full"
+                >
+                  {manualMutation.isPending ? 'Creating...' : 'Create Schedule Entry'}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild><Button><Wand2 className="mr-2 h-4 w-4" />Auto-Schedule</Button></DialogTrigger>
             <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
@@ -174,9 +281,25 @@ export default function SchedulePage() {
                   </div>
                 )}
 
+                {autoBlockers.length > 0 && (
+                  <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm space-y-1">
+                    <p className="font-medium text-destructive flex items-center gap-1.5">
+                      <AlertCircle className="h-4 w-4" /> Cannot generate yet
+                    </p>
+                    <ul className="list-disc list-inside text-xs text-muted-foreground space-y-0.5">
+                      {autoBlockers.map((b, i) => <li key={i}>{b}</li>)}
+                    </ul>
+                    {autoBlockers.some(b => b.includes('duration')) && (
+                      <p className="text-xs text-muted-foreground pt-1">
+                        Tip: Use <span className="font-medium text-foreground">Add Manually</span> to create individual entries while you fix the course duration.
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 <Button
                   onClick={() => bulkMutation.mutate()}
-                  disabled={bulkMutation.isPending || generatedEntries.length === 0}
+                  disabled={bulkMutation.isPending || generatedEntries.length === 0 || autoBlockers.length > 0}
                   className="w-full"
                 >
                   {bulkMutation.isPending ? 'Creating...' : `Generate ${generatedEntries.length} Schedule Entries`}
