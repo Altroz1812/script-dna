@@ -308,12 +308,15 @@ export default function SchedulePage() {
                   </div>
                 </div>
                 <div><Label>Room (optional)</Label><Input value={manualForm.room} onChange={e => setManualForm(f => ({ ...f, room: e.target.value }))} placeholder="e.g. Room A or Online" /></div>
+                {manualConflicts.length > 0 && (
+                  <ConflictPanel conflicts={manualConflicts} batches={batches} />
+                )}
                 <Button
                   onClick={() => manualMutation.mutate()}
-                  disabled={manualMutation.isPending || !manualValid}
+                  disabled={manualMutation.isPending || !manualValid || manualConflicts.length > 0}
                   className="w-full"
                 >
-                  {manualMutation.isPending ? 'Creating...' : 'Create Schedule Entry'}
+                  {manualMutation.isPending ? 'Creating...' : manualConflicts.length > 0 ? 'Resolve conflicts to continue' : 'Create Schedule Entry'}
                 </Button>
               </div>
             </DialogContent>
@@ -373,6 +376,10 @@ export default function SchedulePage() {
                   </div>
                 )}
 
+                {autoConflicts.length > 0 && (
+                  <ConflictPanel conflicts={autoConflicts} batches={batches} />
+                )}
+
                 {autoBlockers.length > 0 && (
                   <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm space-y-1">
                     <p className="font-medium text-destructive flex items-center gap-1.5">
@@ -391,10 +398,14 @@ export default function SchedulePage() {
 
                 <Button
                   onClick={() => bulkMutation.mutate()}
-                  disabled={bulkMutation.isPending || generatedEntries.length === 0 || autoBlockers.length > 0}
+                  disabled={bulkMutation.isPending || generatedEntries.length === 0 || autoBlockers.length > 0 || autoConflicts.length > 0}
                   className="w-full"
                 >
-                  {bulkMutation.isPending ? 'Creating...' : `Generate ${generatedEntries.length} Schedule Entries`}
+                  {bulkMutation.isPending
+                    ? 'Creating...'
+                    : autoConflicts.length > 0
+                      ? `Resolve ${autoConflicts.length} conflict(s) to continue`
+                      : `Generate ${generatedEntries.length} Schedule Entries`}
                 </Button>
               </div>
             </DialogContent>
