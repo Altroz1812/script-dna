@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { adminQuery } from '@/services/api/adminService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,8 +9,9 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { Plus, Trash2, UserPlus, UserMinus, Building2, Palette } from 'lucide-react';
+import { Plus, Trash2, UserPlus, UserMinus, Building2, Palette, Upload, Loader2 } from 'lucide-react';
 import { Input as ColorInput } from '@/components/ui/input';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function OrganizationsPage() {
   const [orgs, setOrgs] = useState<any[]>([]);
@@ -28,6 +29,33 @@ export default function OrganizationsPage() {
   const [brandName, setBrandName] = useState('');
   const [brandPrimaryColor, setBrandPrimaryColor] = useState('#6366f1');
   const [brandLogoUrl, setBrandLogoUrl] = useState('');
+  const [logoUploading, setLogoUploading] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleLogoUpload = async (file: File) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { toast.error('Please choose an image file'); return; }
+    if (file.size > 2 * 1024 * 1024) { toast.error('Logo must be under 2 MB'); return; }
+    if (!brandingOrg) return;
+    setLogoUploading(true);
+    try {
+      const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
+      const path = `${brandingOrg.id}/logo-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('org-logos').upload(path, file, {
+        cacheControl: '3600', upsert: true, contentType: file.type,
+      });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from('org-logos').getPublicUrl(path);
+      if (!pub?.publicUrl) throw new Error('Could not resolve public URL');
+      setBrandLogoUrl(pub.publicUrl);
+      toast.success('Logo uploaded — remember to Save Branding');
+    } catch (e: any) {
+      toast.error(e?.message || 'Upload failed');
+    } finally {
+      setLogoUploading(false);
+      if (logoInputRef.current) logoInputRef.current.value = '';
+    }
+  };
 
   const load = () => { setLoading(true); adminQuery('list_organizations').then(setOrgs).catch(e => toast.error(e.message)).finally(() => setLoading(false)); };
   useEffect(() => { load(); }, []);
@@ -93,12 +121,26 @@ export default function OrganizationsPage() {
             <Card key={o.id} className={!o.is_active ? 'opacity-60' : ''}>
               <CardHeader>
                 <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      {o.name}
-                      {!o.is_active && <Badge variant="destructive" className="text-xs">Disabled</Badge>}
-                    </CardTitle>
-                    <p className="text-sm text-muted-foreground mt-1">/{o.slug}</p>
+                  <div className="flex items-center gap-3">
+                    {(o.logo_url || o.branding?.logo_url) ? (
+                      <img
+                        src={o.logo_url || o.branding?.logo_url}
+                        alt={`${o.name} logo`}
+                        className="h-10 w-10 rounded-md object-contain bg-muted border border-border"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }}
+                      />
+                    ) : (
+                      <div className="h-10 w-10 rounded-md bg-muted border border-border flex items-center justify-center text-muted-foreground">
+                        <Building2 className="h-5 w-5" />
+                      </div>
+                    )}
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        {o.name}
+                        {!o.is_active && <Badge variant="destructive" className="text-xs">Disabled</Badge>}
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground mt-1">/{o.slug}</p>
+                    </div>
                   </div>
                   <Button variant="ghost" size="icon" onClick={() => handleDelete(o.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                 </div>
@@ -156,7 +198,45 @@ export default function OrganizationsPage() {
           <DialogHeader><DialogTitle>White-Label Branding: {brandingOrg?.name}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div><Label>Display Name</Label><Input value={brandName} onChange={e => setBrandName(e.target.value)} placeholder="Custom brand name" /></div>
-            <div><Label>Logo URL</Label><Input value={brandLogoUrl} onChange={e => setBrandLogoUrl(e.target.value)} placeholder="https://..." /></div>
+            <div className="space-y-2">
+              <Label>Logo</Label>
+              <div className="flex items-center gap-3">
+                {brandLogoUrl ? (
+                  <img
+                    src={brandLogoUrl}
+                    alt="Logo"
+                    className="h-14 w-14 rounded-md object-contain border border-border bg-muted"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }}
+                  />
+                ) : (
+                  <div className="h-14 w-14 rounded-md border border-dashed border-border flex items-center justify-center text-muted-foreground">
+                    <Building2 className="h-5 w-5" />
+                  </div>
+                )}
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                  className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleLogoUpload(f); }}
+                />
+                <Button type="button" variant="outline" size="sm" disabled={logoUploading} onClick={() => logoInputRef.current?.click()}>
+                  {logoUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                  {brandLogoUrl ? 'Replace' : 'Upload'}
+                </Button>
+                {brandLogoUrl && (
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setBrandLogoUrl('')}>
+                    Remove
+                  </Button>
+                )}
+              </div>
+              <Input
+                value={brandLogoUrl}
+                onChange={e => setBrandLogoUrl(e.target.value)}
+                placeholder="…or paste an https:// image URL"
+              />
+              <p className="text-xs text-muted-foreground">PNG, JPG, WebP, or SVG. Max 2 MB.</p>
+            </div>
             <div>
               <Label>Primary Color</Label>
               <div className="flex gap-2 items-center">
@@ -166,7 +246,7 @@ export default function OrganizationsPage() {
             </div>
             {brandLogoUrl && (
               <div className="border rounded-md p-4 flex items-center gap-3">
-                <img src={brandLogoUrl} alt="Logo preview" className="h-10 w-10 object-contain" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                <img src={brandLogoUrl} alt="Logo preview" className="h-10 w-10 object-contain" onError={(e) => (e.currentTarget as HTMLImageElement).style.display = 'none'} />
                 <span className="font-medium" style={{ color: brandPrimaryColor }}>{brandName || brandingOrg?.name}</span>
               </div>
             )}

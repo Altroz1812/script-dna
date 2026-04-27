@@ -664,7 +664,13 @@ Deno.serve(async (req) => {
       // ===== WHITE-LABEL BRANDING =====
       case 'update_org_branding': {
         const { id, branding } = params
-        const { error } = await supabase.from('organizations').update({ branding }).eq('id', id)
+        // Mirror the branding logo into the dedicated logo_url column so listing
+        // endpoints and white-label headers can rely on a single source.
+        const updates: Record<string, unknown> = { branding }
+        if (branding && typeof branding === 'object' && 'logo_url' in branding) {
+          updates.logo_url = (branding as any).logo_url || null
+        }
+        const { error } = await supabase.from('organizations').update(updates).eq('id', id)
         if (error) throw error
         result = { success: true }
         break
