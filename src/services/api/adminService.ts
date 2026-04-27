@@ -537,13 +537,6 @@ async function listCourses() {
   return data ?? [];
 }
 
-async function createCourse(params: any) {
-  const { name, description, created_by } = params;
-  const { data, error } = await (supabase.from('courses' as any).insert({ name, description, created_by }).select().single() as any);
-  if (error) throw error;
-  return data;
-}
-
 async function deleteCourse(params: any) {
   const { error } = await (supabase.from('courses' as any).delete().eq('id', params.id) as any);
   if (error) throw error;
