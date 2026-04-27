@@ -13,6 +13,8 @@ interface CourseFormProps {
   onSubmit: (values: Partial<CreateCourseParams>) => void;
   isPending: boolean;
   submitLabel: string;
+  /** Field-level error messages keyed by form field name (e.g. { fee: 'Did not save' }) */
+  fieldErrors?: Partial<Record<keyof CreateCourseParams, string>>;
 }
 
 const DEFAULT_VALUES: Partial<CreateCourseParams> = {
@@ -21,8 +23,13 @@ const DEFAULT_VALUES: Partial<CreateCourseParams> = {
   delivery_mode: 'online', center: '',
 };
 
-export function CourseForm({ initialValues, onSubmit, isPending, submitLabel }: CourseFormProps) {
+export function CourseForm({ initialValues, onSubmit, isPending, submitLabel, fieldErrors }: CourseFormProps) {
   const [form, setForm] = useState<Partial<CreateCourseParams>>({ ...DEFAULT_VALUES, ...initialValues });
+  const errFor = (k: keyof CreateCourseParams) => fieldErrors?.[k];
+  const ErrorText = ({ k }: { k: keyof CreateCourseParams }) =>
+    errFor(k) ? <p className="text-xs text-destructive mt-1">{errFor(k)}</p> : null;
+  const errClass = (k: keyof CreateCourseParams) =>
+    errFor(k) ? 'border-destructive focus-visible:ring-destructive' : '';
 
   const parseIntSafe = (raw: string, fallback: number): number => {
     const trimmed = raw.trim();
@@ -75,34 +82,38 @@ export function CourseForm({ initialValues, onSubmit, isPending, submitLabel }: 
       {form.delivery_mode === 'offline' && (
         <div>
           <Label>Center / Location</Label>
-          <Input value={form.center || ''} onChange={e => setForm(f => ({ ...f, center: e.target.value }))} placeholder="e.g. Kudlu Gate, HSR Layout" />
+          <Input className={errClass('center')} value={form.center || ''} onChange={e => setForm(f => ({ ...f, center: e.target.value }))} placeholder="e.g. Kudlu Gate, HSR Layout" />
+          <ErrorText k="center" />
         </div>
       )}
 
       <div>
         <Label>Name</Label>
-        <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} maxLength={200} placeholder="e.g. English Cursive Handwriting" />
+        <Input className={errClass('name')} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} maxLength={200} placeholder="e.g. English Cursive Handwriting" />
+        <ErrorText k="name" />
       </div>
       <div>
         <Label>Description</Label>
-        <Textarea value={form.description ?? ''} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} maxLength={1000} placeholder="Optional description" />
+        <Textarea className={errClass('description')} value={form.description ?? ''} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} maxLength={1000} placeholder="Optional description" />
+        <ErrorText k="description" />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <Label>Language</Label>
           <Select value={form.language} onValueChange={v => setForm(f => ({ ...f, language: v }))}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger className={errClass('language')}><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="English">English</SelectItem>
               <SelectItem value="Hindi">Hindi</SelectItem>
               <SelectItem value="Kannada">Kannada</SelectItem>
             </SelectContent>
           </Select>
+          <ErrorText k="language" />
         </div>
         <div>
           <Label>Writing Style</Label>
           <Select value={form.writing_style} onValueChange={v => setForm(f => ({ ...f, writing_style: v }))}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger className={errClass('writing_style')}><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="Cursive">Cursive</SelectItem>
               <SelectItem value="Split">Split</SelectItem>
@@ -112,11 +123,13 @@ export function CourseForm({ initialValues, onSubmit, isPending, submitLabel }: 
               <SelectItem value="Calligraphy">Calligraphy</SelectItem>
             </SelectContent>
           </Select>
+          <ErrorText k="writing_style" />
         </div>
       </div>
       <div>
         <Label>Grade Level</Label>
-        <Input value={form.grade_level} onChange={e => setForm(f => ({ ...f, grade_level: e.target.value }))} placeholder="e.g. UKG, 1st, 2nd" />
+        <Input className={errClass('grade_level')} value={form.grade_level} onChange={e => setForm(f => ({ ...f, grade_level: e.target.value }))} placeholder="e.g. UKG, 1st, 2nd" />
+        <ErrorText k="grade_level" />
       </div>
       <div className="grid grid-cols-3 gap-3">
         <div>
@@ -124,18 +137,22 @@ export function CourseForm({ initialValues, onSubmit, isPending, submitLabel }: 
           <Input
             type="number"
             min="0"
+            className={errClass('duration_days')}
             value={form.duration_days ?? 0}
             onChange={e => setForm(f => ({ ...f, duration_days: parseIntSafe(e.target.value, 0) }))}
           />
+          <ErrorText k="duration_days" />
         </div>
         <div>
           <Label>Total Hours</Label>
           <Input
             type="number"
             min="0"
+            className={errClass('total_hours')}
             value={form.total_hours ?? 0}
             onChange={e => setForm(f => ({ ...f, total_hours: parseIntSafe(e.target.value, 0) }))}
           />
+          <ErrorText k="total_hours" />
         </div>
         <div>
           <Label>Daily Hours</Label>
@@ -143,9 +160,11 @@ export function CourseForm({ initialValues, onSubmit, isPending, submitLabel }: 
             type="number"
             min="0"
             step="0.5"
+            className={errClass('daily_hours')}
             value={form.daily_hours ?? 0}
             onChange={e => setForm(f => ({ ...f, daily_hours: parseFloatSafe(e.target.value, 0) }))}
           />
+          <ErrorText k="daily_hours" />
         </div>
       </div>
       <div>
@@ -153,10 +172,12 @@ export function CourseForm({ initialValues, onSubmit, isPending, submitLabel }: 
         <Input
           type="number"
           min="0"
+          className={errClass('fee')}
           value={form.fee ?? 0}
           onChange={e => setForm(f => ({ ...f, fee: parseFloatSafe(e.target.value, 0) }))}
           placeholder="e.g. 5000"
         />
+        <ErrorText k="fee" />
       </div>
       <div className="flex items-center gap-2">
         <Switch checked={form.includes_speed} onCheckedChange={v => setForm(f => ({ ...f, includes_speed: v }))} />
