@@ -25,7 +25,45 @@ const DEFAULT_VALUES: Partial<CreateCourseParams> = {
 
 export function CourseForm({ initialValues, onSubmit, isPending, submitLabel, fieldErrors }: CourseFormProps) {
   const [form, setForm] = useState<Partial<CreateCourseParams>>({ ...DEFAULT_VALUES, ...initialValues });
-  const errFor = (k: keyof CreateCourseParams) => fieldErrors?.[k];
+  const [showValidation, setShowValidation] = useState(false);
+
+  // ----- Validation rules -----
+  const NUMERIC_LIMITS: Record<string, { min: number; max: number; integer?: boolean; label: string }> = {
+    duration_days: { min: 1, max: 3650, integer: true, label: 'Duration (days)' },
+    total_hours:   { min: 1, max: 10000, integer: true, label: 'Total Hours' },
+    daily_hours:   { min: 0.25, max: 24, label: 'Daily Hours' },
+    fee:           { min: 0, max: 10_000_000, label: 'Course Fee' },
+  };
+
+  const validate = (f: Partial<CreateCourseParams>): Partial<Record<keyof CreateCourseParams, string>> => {
+    const errs: Partial<Record<keyof CreateCourseParams, string>> = {};
+    if (!f.name?.trim()) errs.name = 'Name is required';
+    for (const key of Object.keys(NUMERIC_LIMITS) as (keyof CreateCourseParams)[]) {
+      const cfg = NUMERIC_LIMITS[key as string];
+      const v = f[key];
+      if (v === undefined || v === null || (typeof v === 'string' && (v as string).trim() === '')) {
+        errs[key] = `${cfg.label} is required`;
+        continue;
+      }
+      const n = Number(v);
+      if (!Number.isFinite(n)) { errs[key] = `${cfg.label} must be a number`; continue; }
+      if (cfg.integer && !Number.isInteger(n)) { errs[key] = `${cfg.label} must be a whole number`; continue; }
+      if (n < cfg.min) { errs[key] = `${cfg.label} must be ≥ ${cfg.min}`; continue; }
+      if (n > cfg.max) { errs[key] = `${cfg.label} must be ≤ ${cfg.max}`; continue; }
+    }
+    return errs;
+  };
+
+  const validationErrors = validate(form);
+  const isInvalid = Object.keys(validationErrors).length > 0;
+
+  // Validation errors shown only after first submit attempt; persistence errors always shown.
+  const visibleErrors: Partial<Record<keyof CreateCourseParams, string>> = {
+    ...(showValidation ? validationErrors : {}),
+    ...(fieldErrors ?? {}),
+  };
+
+  const errFor = (k: keyof CreateCourseParams) => visibleErrors[k];
   const ErrorText = ({ k }: { k: keyof CreateCourseParams }) =>
     errFor(k) ? <p className="text-xs text-destructive mt-1">{errFor(k)}</p> : null;
   const errClass = (k: keyof CreateCourseParams) =>
@@ -46,7 +84,8 @@ export function CourseForm({ initialValues, onSubmit, isPending, submitLabel, fi
   };
 
   const handleSubmit = () => {
-    if (!form.name?.trim()) return;
+    setShowValidation(true);
+    if (Object.keys(validationErrors).length > 0) return;
     // Coerce numerics one final time so typed "0" / "30" / "2499" survive intact.
     onSubmit({
       ...form,
@@ -183,7 +222,11 @@ export function CourseForm({ initialValues, onSubmit, isPending, submitLabel, fi
         <Switch checked={form.includes_speed} onCheckedChange={v => setForm(f => ({ ...f, includes_speed: v }))} />
         <Label>Includes Speedwriting</Label>
       </div>
-      <Button onClick={handleSubmit} disabled={isPending || !form.name?.trim()} className="w-full">
+      <Button
+        onClick={handleSubmit}
+        disabled={isPending || (showValidation && isInvalid)}
+        className="w-full"
+      >
         {isPending ? 'Saving...' : submitLabel}
       </Button>
     </div>
