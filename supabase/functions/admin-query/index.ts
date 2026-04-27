@@ -420,9 +420,9 @@ Deno.serve(async (req) => {
       }
       case 'update_course': {
         const { id, ...updates } = params
-        const { error } = await supabase.from('courses').update(updates).eq('id', id)
+        const { data, error } = await supabase.from('courses').update(updates).eq('id', id).select().single()
         if (error) throw error
-        result = { success: true }
+        result = data
         break
       }
       case 'delete_course': {
