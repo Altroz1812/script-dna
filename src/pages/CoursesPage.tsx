@@ -342,7 +342,7 @@ export default function CoursesPage() {
           </p>
         </div>
         {isAdmin && (
-          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          <Dialog open={createOpen} onOpenChange={(v) => { setCreateOpen(v); if (!v) setCreateFieldErrors({}); }}>
             <DialogTrigger asChild>
               <Button><Plus className="mr-2 h-4 w-4" /> New Course</Button>
             </DialogTrigger>
@@ -352,6 +352,7 @@ export default function CoursesPage() {
                 onSubmit={values => createMutation.mutate(values)}
                 isPending={createMutation.isPending}
                 submitLabel="Create Course"
+                fieldErrors={createFieldErrors}
               />
             </DialogContent>
           </Dialog>
@@ -390,7 +391,7 @@ export default function CoursesPage() {
       </Tabs>
 
       {/* Edit Course Dialog */}
-      <Dialog open={!!editCourse} onOpenChange={v => { if (!v) setEditCourse(null); }}>
+      <Dialog open={!!editCourse} onOpenChange={v => { if (!v) { setEditCourse(null); setEditFieldErrors({}); } }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Edit Course</DialogTitle></DialogHeader>
           {editCourse && (
@@ -412,6 +413,7 @@ export default function CoursesPage() {
               onSubmit={values => updateMutation.mutate({ id: editCourse.id, ...values })}
               isPending={updateMutation.isPending}
               submitLabel="Save Changes"
+              fieldErrors={editFieldErrors}
             />
           )}
         </DialogContent>
