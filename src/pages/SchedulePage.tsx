@@ -149,12 +149,27 @@ export default function SchedulePage() {
 
   // Auto-derive day_of_week from manual date
   const manualDateDow = manualForm.date ? getDay(new Date(manualForm.date)) : null;
-  const manualValid =
-    !!manualForm.batch_id &&
-    !!manualForm.title.trim() &&
-    !!manualForm.start_time &&
-    !!manualForm.end_time &&
-    manualForm.start_time < manualForm.end_time;
+  const manualBatch = batches.find(b => b.id === manualForm.batch_id);
+  const manualCourseDays = manualBatch?.courses?.duration_days ?? 0;
+
+  const manualErrors: { batch_id?: string; title?: string; start_time?: string; end_time?: string; course?: string } = {};
+  if (!manualForm.batch_id) manualErrors.batch_id = 'Select a batch.';
+  else if (!manualCourseDays) manualErrors.course = "This batch's course has no duration set. You can still add this entry, but please set Duration (days) on the course for accurate progress tracking.";
+  if (!manualForm.title.trim()) manualErrors.title = 'Session title is required.';
+  else if (manualForm.title.trim().length > 200) manualErrors.title = 'Title must be 200 characters or less.';
+  if (!manualForm.start_time) manualErrors.start_time = 'Start time is required.';
+  if (!manualForm.end_time) manualErrors.end_time = 'End time is required.';
+  if (manualForm.start_time && manualForm.end_time && manualForm.start_time >= manualForm.end_time) {
+    manualErrors.end_time = 'End time must be after start time.';
+  }
+  // Course-missing-duration is a warning, not a blocker
+  const manualBlockingErrors = { ...manualErrors };
+  delete manualBlockingErrors.course;
+  const manualValid = Object.keys(manualBlockingErrors).length === 0;
+  const errClass = (k: keyof typeof manualErrors) => manualErrors[k] && k !== 'course' ? 'border-destructive focus-visible:ring-destructive' : '';
+  const FieldError = ({ msg }: { msg?: string }) => msg ? (
+    <p className="text-xs text-destructive flex items-center gap-1 mt-1"><AlertCircle className="h-3 w-3" />{msg}</p>
+  ) : null;
 
   return (
     <div className="p-6 space-y-6">
@@ -179,13 +194,20 @@ export default function SchedulePage() {
                     const b = batches.find(x => x.id === v);
                     setManualForm(f => ({ ...f, batch_id: v, title: f.title || (b?.courses?.name ?? '') }));
                   }}>
-                    <SelectTrigger><SelectValue placeholder="Select batch" /></SelectTrigger>
+                    <SelectTrigger className={errClass('batch_id')}><SelectValue placeholder="Select batch" /></SelectTrigger>
                     <SelectContent>{batches.map(b => <SelectItem key={b.id} value={b.id}>{b.name} — {b.courses?.name}</SelectItem>)}</SelectContent>
                   </Select>
+                  <FieldError msg={manualErrors.batch_id} />
+                  {manualErrors.course && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400 flex items-start gap-1 mt-1">
+                      <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />{manualErrors.course}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label>Session Title</Label>
-                  <Input value={manualForm.title} onChange={e => setManualForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Session 1: Introduction" />
+                  <Input className={errClass('title')} value={manualForm.title} onChange={e => setManualForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Session 1: Introduction" maxLength={200} />
+                  <FieldError msg={manualErrors.title} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -206,16 +228,18 @@ export default function SchedulePage() {
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div><Label>Start Time</Label><Input type="time" value={manualForm.start_time} onChange={e => setManualForm(f => ({ ...f, start_time: e.target.value }))} /></div>
-                  <div><Label>End Time</Label><Input type="time" value={manualForm.end_time} onChange={e => setManualForm(f => ({ ...f, end_time: e.target.value }))} /></div>
+                  <div>
+                    <Label>Start Time</Label>
+                    <Input className={errClass('start_time')} type="time" value={manualForm.start_time} onChange={e => setManualForm(f => ({ ...f, start_time: e.target.value }))} />
+                    <FieldError msg={manualErrors.start_time} />
+                  </div>
+                  <div>
+                    <Label>End Time</Label>
+                    <Input className={errClass('end_time')} type="time" value={manualForm.end_time} onChange={e => setManualForm(f => ({ ...f, end_time: e.target.value }))} />
+                    <FieldError msg={manualErrors.end_time} />
+                  </div>
                 </div>
                 <div><Label>Room (optional)</Label><Input value={manualForm.room} onChange={e => setManualForm(f => ({ ...f, room: e.target.value }))} placeholder="e.g. Room A or Online" /></div>
-                {!manualValid && (manualForm.batch_id || manualForm.title) && (
-                  <p className="text-xs text-muted-foreground flex items-start gap-1.5">
-                    <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                    Batch, title, and a valid time range (end after start) are required.
-                  </p>
-                )}
                 <Button
                   onClick={() => manualMutation.mutate()}
                   disabled={manualMutation.isPending || !manualValid}
