@@ -33,6 +33,8 @@ export default function OrganizationsPage() {
   const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
   const [logoUploadedAt, setLogoUploadedAt] = useState<number | null>(null);
   const [savingBranding, setSavingBranding] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragDepthRef = useRef(0);
   const logoInputRef = useRef<HTMLInputElement | null>(null);
 
   const formatBytes = (n: number) => n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(2)} MB`;
@@ -251,8 +253,44 @@ export default function OrganizationsPage() {
             <div><Label>Display Name</Label><Input value={brandName} onChange={e => setBrandName(e.target.value)} placeholder="Custom brand name" /></div>
             <div className="space-y-2">
               <Label>Logo</Label>
-              <div className="flex items-center gap-3">
-                <div className="relative">
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label="Upload logo — click or drop image here"
+                onClick={() => { if (!logoUploading) logoInputRef.current?.click(); }}
+                onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !logoUploading) { e.preventDefault(); logoInputRef.current?.click(); } }}
+                onDragEnter={(e) => {
+                  e.preventDefault(); e.stopPropagation();
+                  if (logoUploading) return;
+                  dragDepthRef.current += 1;
+                  if (e.dataTransfer?.types?.includes('Files')) setIsDragging(true);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault(); e.stopPropagation();
+                  if (e.dataTransfer) e.dataTransfer.dropEffect = logoUploading ? 'none' : 'copy';
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault(); e.stopPropagation();
+                  dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+                  if (dragDepthRef.current === 0) setIsDragging(false);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault(); e.stopPropagation();
+                  dragDepthRef.current = 0;
+                  setIsDragging(false);
+                  if (logoUploading) return;
+                  const files = Array.from(e.dataTransfer?.files || []);
+                  const file = files.find(f => f.type.startsWith('image/')) || files[0];
+                  if (!file) { toast.error('No file detected in the drop'); return; }
+                  void handleLogoUpload(file);
+                }}
+                className={`relative flex items-center gap-3 rounded-lg border-2 border-dashed p-3 transition-all cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                  isDragging
+                    ? 'border-primary bg-primary/10 scale-[1.01] shadow-lg shadow-primary/20'
+                    : 'border-border hover:border-primary/50 hover:bg-muted/40'
+                } ${logoUploading ? 'opacity-70 cursor-wait' : ''}`}
+              >
+                <div className="relative pointer-events-none">
                   <OrgLogo
                     src={brandLogoUrl}
                     name={brandingOrg?.name || 'Logo'}
@@ -266,6 +304,14 @@ export default function OrganizationsPage() {
                     </div>
                   )}
                 </div>
+                <div className="flex-1 min-w-0 pointer-events-none">
+                  <p className="text-sm font-medium text-foreground">
+                    {isDragging ? 'Drop image to upload' : brandLogoUrl ? 'Drop or click to replace logo' : 'Drop or click to upload logo'}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    PNG, JPG, WebP, SVG · up to 2 MB
+                  </p>
+                </div>
                 <input
                   ref={logoInputRef}
                   type="file"
@@ -273,14 +319,19 @@ export default function OrganizationsPage() {
                   className="hidden"
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleLogoUpload(f); }}
                 />
-                <Button type="button" variant="outline" size="sm" disabled={logoUploading} onClick={() => logoInputRef.current?.click()}>
-                  {logoUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                  {brandLogoUrl ? 'Replace' : 'Upload'}
-                </Button>
-                {brandLogoUrl && (
-                  <Button type="button" variant="ghost" size="sm" onClick={() => { setBrandLogoUrl(''); setLogoUploadedAt(null); }}>
-                    Remove
+                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                  <Button type="button" variant="outline" size="sm" disabled={logoUploading} onClick={() => logoInputRef.current?.click()}>
+                    {logoUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                    {brandLogoUrl ? 'Replace' : 'Browse'}
                   </Button>
+                  {brandLogoUrl && (
+                    <Button type="button" variant="ghost" size="sm" onClick={() => { setBrandLogoUrl(''); setLogoUploadedAt(null); }}>
+                      Remove
+                    </Button>
+                  )}
+                </div>
+                {isDragging && (
+                  <div className="pointer-events-none absolute inset-0 rounded-lg ring-2 ring-primary ring-offset-2 ring-offset-background animate-pulse" />
                 )}
               </div>
               {logoUploadError && (
