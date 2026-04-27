@@ -24,9 +24,30 @@ const DEFAULT_VALUES: Partial<CreateCourseParams> = {
 export function CourseForm({ initialValues, onSubmit, isPending, submitLabel }: CourseFormProps) {
   const [form, setForm] = useState<Partial<CreateCourseParams>>({ ...DEFAULT_VALUES, ...initialValues });
 
+  const parseIntSafe = (raw: string, fallback: number): number => {
+    const trimmed = raw.trim();
+    if (trimmed === '') return fallback;
+    const n = parseInt(trimmed, 10);
+    return Number.isFinite(n) && n >= 0 ? n : fallback;
+  };
+
+  const parseFloatSafe = (raw: string, fallback: number): number => {
+    const trimmed = raw.trim();
+    if (trimmed === '') return fallback;
+    const n = parseFloat(trimmed);
+    return Number.isFinite(n) && n >= 0 ? n : fallback;
+  };
+
   const handleSubmit = () => {
     if (!form.name?.trim()) return;
-    onSubmit(form);
+    // Coerce numerics one final time so typed "0" / "30" / "2499" survive intact.
+    onSubmit({
+      ...form,
+      duration_days: Number.isFinite(form.duration_days as number) ? (form.duration_days as number) : 0,
+      total_hours: Number.isFinite(form.total_hours as number) ? (form.total_hours as number) : 0,
+      daily_hours: Number.isFinite(form.daily_hours as number) ? (form.daily_hours as number) : 0,
+      fee: Number.isFinite(form.fee as number) ? (form.fee as number) : 0,
+    });
   };
 
   return (
@@ -100,20 +121,42 @@ export function CourseForm({ initialValues, onSubmit, isPending, submitLabel }: 
       <div className="grid grid-cols-3 gap-3">
         <div>
           <Label>Duration (days)</Label>
-          <Input type="number" value={form.duration_days} onChange={e => setForm(f => ({ ...f, duration_days: parseInt(e.target.value) || 0 }))} />
+          <Input
+            type="number"
+            min="0"
+            value={form.duration_days ?? 0}
+            onChange={e => setForm(f => ({ ...f, duration_days: parseIntSafe(e.target.value, 0) }))}
+          />
         </div>
         <div>
           <Label>Total Hours</Label>
-          <Input type="number" value={form.total_hours} onChange={e => setForm(f => ({ ...f, total_hours: parseInt(e.target.value) || 0 }))} />
+          <Input
+            type="number"
+            min="0"
+            value={form.total_hours ?? 0}
+            onChange={e => setForm(f => ({ ...f, total_hours: parseIntSafe(e.target.value, 0) }))}
+          />
         </div>
         <div>
           <Label>Daily Hours</Label>
-          <Input type="number" step="0.5" value={form.daily_hours} onChange={e => setForm(f => ({ ...f, daily_hours: parseFloat(e.target.value) || 1 }))} />
+          <Input
+            type="number"
+            min="0"
+            step="0.5"
+            value={form.daily_hours ?? 0}
+            onChange={e => setForm(f => ({ ...f, daily_hours: parseFloatSafe(e.target.value, 0) }))}
+          />
         </div>
       </div>
       <div>
         <Label>Course Fee (₹)</Label>
-        <Input type="number" min="0" value={form.fee} onChange={e => setForm(f => ({ ...f, fee: parseFloat(e.target.value) || 0 }))} placeholder="e.g. 5000" />
+        <Input
+          type="number"
+          min="0"
+          value={form.fee ?? 0}
+          onChange={e => setForm(f => ({ ...f, fee: parseFloatSafe(e.target.value, 0) }))}
+          placeholder="e.g. 5000"
+        />
       </div>
       <div className="flex items-center gap-2">
         <Switch checked={form.includes_speed} onCheckedChange={v => setForm(f => ({ ...f, includes_speed: v }))} />
