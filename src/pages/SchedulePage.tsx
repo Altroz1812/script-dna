@@ -60,6 +60,14 @@ export default function SchedulePage() {
     staleTime: 1000 * 60 * 2,
   });
 
+  // Always fetch the full schedule list (unfiltered) for conflict detection,
+  // independent of the table's batch filter.
+  const { data: allSchedules = [] } = useQuery({
+    queryKey: ['schedules', 'all-for-conflicts'],
+    queryFn: () => adminQuery('list_schedules', {}),
+    staleTime: 1000 * 60 * 2,
+  });
+
   const selectedBatch = useMemo(() => batches.find(b => b.id === autoForm.batch_id), [batches, autoForm.batch_id]);
   const courseDays = selectedBatch?.courses?.duration_days ?? 0;
   const courseName = selectedBatch?.courses?.name ?? '';
@@ -88,8 +96,67 @@ export default function SchedulePage() {
     return entries;
   }, [autoForm, courseDays, courseName]);
 
+  // ---------- Conflict detection ----------
+  type Entry = { batch_id: string; date?: string | null; day_of_week: number; start_time: string; end_time: string; room?: string | null };
+  type Conflict = { entry: Entry; with: any; reason: 'batch' | 'room'; when: string };
+
+  const norm = (t?: string | null) => (t || '').slice(0, 5); // HH:MM
+  const overlaps = (aStart: string, aEnd: string, bStart: string, bEnd: string) =>
+    norm(aStart) < norm(bEnd) && norm(bStart) < norm(aEnd);
+  const sameRoom = (a?: string | null, b?: string | null) =>
+    !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
+
+  const findConflicts = (candidates: Entry[], existing: any[], excludeId?: string): Conflict[] => {
+    const conflicts: Conflict[] = [];
+    for (const cand of candidates) {
+      for (const ex of existing) {
+        if (excludeId && ex.id === excludeId) continue;
+        // Compare same calendar date when both have it; otherwise fall back to day_of_week
+        const sameWhen = cand.date && ex.date
+          ? cand.date === ex.date
+          : cand.day_of_week === ex.day_of_week;
+        if (!sameWhen) continue;
+        if (!overlaps(cand.start_time, cand.end_time, ex.start_time, ex.end_time)) continue;
+        const when = cand.date && ex.date
+          ? format(new Date(cand.date), 'MMM d, yyyy')
+          : DAYS[cand.day_of_week];
+        if (ex.batch_id === cand.batch_id) {
+          conflicts.push({ entry: cand, with: ex, reason: 'batch', when });
+        } else if (sameRoom(cand.room, ex.room)) {
+          conflicts.push({ entry: cand, with: ex, reason: 'room', when });
+        }
+      }
+    }
+    return conflicts;
+  };
+
+  // Auto-schedule conflicts (vs all existing schedules)
+  const autoConflicts = useMemo(
+    () => generatedEntries.length > 0 ? findConflicts(generatedEntries, allSchedules) : [],
+    [generatedEntries, allSchedules]
+  );
+
+  // Manual schedule conflict for the single in-progress entry
+  const manualCandidate: Entry | null = manualForm.batch_id && manualForm.start_time && manualForm.end_time && manualForm.start_time < manualForm.end_time
+    ? {
+        batch_id: manualForm.batch_id,
+        date: manualForm.date || null,
+        day_of_week: manualForm.date ? getDay(new Date(manualForm.date)) : manualForm.day_of_week,
+        start_time: manualForm.start_time,
+        end_time: manualForm.end_time,
+        room: manualForm.room.trim() || null,
+      }
+    : null;
+  const manualConflicts = useMemo(
+    () => manualCandidate ? findConflicts([manualCandidate], allSchedules) : [],
+    [manualCandidate, allSchedules]
+  );
+
   const bulkMutation = useMutation({
-    mutationFn: () => scheduleService.bulkCreateSchedules(generatedEntries),
+    mutationFn: () => {
+      if (autoConflicts.length > 0) throw new Error(`Cannot generate: ${autoConflicts.length} conflict(s) detected.`);
+      return scheduleService.bulkCreateSchedules(generatedEntries);
+    },
     onSuccess: () => {
       toast.success(`${generatedEntries.length} schedule entries created`);
       setOpen(false);
@@ -101,6 +168,7 @@ export default function SchedulePage() {
 
   const manualMutation = useMutation({
     mutationFn: async () => {
+      if (manualConflicts.length > 0) throw new Error(`Cannot create: ${manualConflicts.length} conflict(s) detected.`);
       const payload = {
         batch_id: manualForm.batch_id,
         title: manualForm.title.trim(),
