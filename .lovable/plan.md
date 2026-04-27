@@ -1,55 +1,38 @@
+## Problem
 
+When a course is created, only the `name` is saved. Fee, duration, hours, language, writing style, grade level, delivery mode, and center are all lost. Editing a course also fails silently.
 
-## Role-Based Dashboards (RBAC)
+Confirmed against the database — the most recent course "Brush Pen Calligraphy" was saved with `fee=0` and all other fields `NULL`, even though the form had defaults and (presumably) values entered.
 
-### Problem
-The dashboard currently has three views: Student, Parent, and a shared Admin/Teacher view. Teachers see the same admin dashboard with stats cards (Total Users, Organizations, Leads, Payments) and quick-action buttons (New Course, New Lead, Add User) that are irrelevant to them. Support role also falls into this admin view.
+## Root cause
 
-### Changes
+`src/services/api/adminService.ts` intercepts `create_course` (line 75) and routes it to a local function (line 539) that **only inserts `name`, `description`, `created_by`** — ignoring every other field:
 
-**Update `src/pages/Dashboard.tsx`**
-
-1. **Add a dedicated Teacher dashboard** (new `isTeacher` check before the admin fallback):
-   - Stats cards: My Batches count, My Students count, Upcoming Classes, Pending Submissions
-   - Query: fetch teacher's batches, count students across those batches, upcoming live classes for their batches, pending submissions for their assignments
-   - Quick links: My Batches, Attendance, Live Classes, Practice Assignments, Submissions
-
-2. **Add a dedicated Support dashboard**:
-   - Stats cards: Total Leads, Total Enrollments, Open Payments
-   - Query: count leads, batch_students, pending payments
-   - Quick links: Leads, Enrollments, Students, Payments
-
-3. **Refine Admin dashboard** (non-superadmin admin):
-   - Remove superadmin-only quick actions (Add User) -- already done
-   - Keep: Courses, Batches, Students, Teachers stats
-   - Show org-scoped data only (already working via organizationId filter)
-
-4. **Keep existing Student, Parent, and Superadmin dashboards** as they are
-
-### Flow Logic
-```text
-if (isStudent)    → Student dashboard
-if (isParent)     → Parent dashboard
-if (isTeacher)    → Teacher dashboard  ← NEW
-if (isSupport)    → Support dashboard  ← NEW
-else              → Admin/Superadmin dashboard (existing)
+```ts
+async function createCourse(params: any) {
+  const { name, description, created_by } = params;
+  const { data, error } = await supabase.from('courses').insert({ name, description, created_by })...
+}
 ```
 
-### Files
-| File | Action |
-|------|--------|
-| `src/pages/Dashboard.tsx` | Add teacher and support dashboard sections with role-specific queries, stats, and quick links |
+The full-featured `create_course` handler in the `admin-query` edge function (which correctly handles fee, duration, etc.) is never reached because the local handler short-circuits it.
 
-### Technical Details
+Additionally, `update_course` is **not registered at all** in `adminService.ts`, so editing a course throws "Unknown action: update_course" — which is why edits also don't persist.
 
-**Teacher dashboard queries:**
-- `batches` where `teacher_id = profile.id` → count
-- `batch_students` joined through teacher's batches → student count
-- `live_classes` for teacher's batches, status in ['scheduled','live'] → upcoming classes
-- `student_submissions` joined via `practice_assignments.teacher_id` → pending count
+## Fix
 
-**Support dashboard queries:**
-- `leads` count
-- `batch_students` count (enrollments)
-- `payments` where status = 'pending' → count
+In `src/services/api/adminService.ts`:
 
+1. **Remove** the local `createCourse` function and the `case 'create_course'` line from the switch — let it fall through to the `edgeFunctionAction` block so the edge function (which already has the complete insert logic) handles it.
+2. **Add** `'update_course'` to the list of cases routed to `edgeFunctionAction`.
+3. Leave `list_courses` and `delete_course` as they are (they work fine).
+
+No edge function changes needed — `supabase/functions/admin-query/index.ts` already inserts all fields correctly (verified at lines 402–426).
+
+No database changes, no frontend form changes.
+
+## Verification
+
+After the fix:
+- Create a course with fee 2499, duration 30 days, language English, writing style Cursive, offline at HSR Layout → all fields persist.
+- Edit an existing course's fee → update succeeds and reflects in the list.
