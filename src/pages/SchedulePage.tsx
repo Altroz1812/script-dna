@@ -450,3 +450,40 @@ export default function SchedulePage() {
     </div>
   );
 }
+
+function ConflictPanel({
+  conflicts,
+  batches,
+}: {
+  conflicts: Array<{ entry: any; with: any; reason: 'batch' | 'room'; when: string }>;
+  batches: Array<{ id: string; name: string }>;
+}) {
+  const batchName = (id: string) => batches.find(b => b.id === id)?.name || 'Unknown batch';
+  const shown = conflicts.slice(0, 5);
+  const extra = conflicts.length - shown.length;
+  return (
+    <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm space-y-2">
+      <p className="font-medium text-destructive flex items-center gap-1.5">
+        <AlertCircle className="h-4 w-4" /> {conflicts.length} schedule conflict{conflicts.length === 1 ? '' : 's'} detected
+      </p>
+      <ul className="text-xs space-y-1.5">
+        {shown.map((c, i) => (
+          <li key={i} className="text-muted-foreground">
+            <span className="font-medium text-foreground">{c.when}</span>{' '}
+            {c.entry.start_time?.slice(0, 5)}–{c.entry.end_time?.slice(0, 5)} clashes with{' '}
+            <span className="font-medium text-foreground">{c.with.title}</span>{' '}
+            ({batchName(c.with.batch_id)}, {c.with.start_time?.slice(0, 5)}–{c.with.end_time?.slice(0, 5)})
+            {' — '}
+            {c.reason === 'batch'
+              ? <span className="text-destructive">same batch double-booked</span>
+              : <span className="text-destructive">room "{c.with.room}" already booked</span>}
+          </li>
+        ))}
+        {extra > 0 && <li className="text-muted-foreground italic">…and {extra} more</li>}
+      </ul>
+      <p className="text-xs text-muted-foreground">
+        Change time, room, or date to resolve conflicts.
+      </p>
+    </div>
+  );
+}
