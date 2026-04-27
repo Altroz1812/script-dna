@@ -26,6 +26,8 @@ export default function CoursesPage() {
   const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
   const [editCourse, setEditCourse] = useState<Course | null>(null);
+  const [createFieldErrors, setCreateFieldErrors] = useState<Partial<Record<keyof CreateCourseParams, string>>>({});
+  const [editFieldErrors, setEditFieldErrors] = useState<Partial<Record<keyof CreateCourseParams, string>>>({});
   const [selectedCenter, setSelectedCenter] = useState<string>('all');
   const [activeTab, setActiveTab] = useState('all');
 
@@ -49,6 +51,40 @@ export default function CoursesPage() {
     enabled: !!profile,
   });
 
+  /**
+   * Compare what we submitted against what the server returned and surface any
+   * field that didn't persist as expected. Returns a map of field -> message.
+   */
+  const diffPersisted = (
+    submitted: Partial<CreateCourseParams>,
+    saved: Course | null | undefined,
+  ): Partial<Record<keyof CreateCourseParams, string>> => {
+    if (!saved) return {};
+    const errs: Partial<Record<keyof CreateCourseParams, string>> = {};
+    const numericFields: (keyof CreateCourseParams)[] = ['duration_days', 'total_hours', 'daily_hours', 'fee'];
+    const stringFields: (keyof CreateCourseParams)[] = ['name', 'description', 'grade_level', 'language', 'writing_style', 'delivery_mode', 'center'];
+    for (const k of numericFields) {
+      const sent = submitted[k];
+      if (sent === undefined || sent === null) continue;
+      const got = (saved as any)[k];
+      if (Number(got ?? 0) !== Number(sent)) {
+        errs[k] = `Did not save (sent ${sent}, stored ${got ?? 'empty'})`;
+      }
+    }
+    for (const k of stringFields) {
+      const sent = submitted[k];
+      if (sent === undefined || sent === null || sent === '') continue;
+      const got = (saved as any)[k];
+      if ((got ?? '') !== sent) {
+        errs[k] = `Did not save (sent "${sent}", stored "${got ?? 'empty'}")`;
+      }
+    }
+    if (submitted.includes_speed !== undefined && Boolean((saved as any).includes_speed) !== Boolean(submitted.includes_speed)) {
+      errs.includes_speed = 'Did not save';
+    }
+    return errs;
+  };
+
   const createMutation = useMutation({
     mutationFn: (values: Partial<CreateCourseParams>) => courseService.createCourse({
       name: values.name!.trim(),
@@ -65,26 +101,51 @@ export default function CoursesPage() {
       delivery_mode: values.delivery_mode || 'online',
       center: values.center?.trim() || undefined,
     }),
-    onSuccess: () => {
-      toast.success('Course created');
-      setCreateOpen(false);
+    onSuccess: (saved, submitted) => {
+      const errs = diffPersisted(submitted, saved as Course);
       queryClient.invalidateQueries({ queryKey: ['courses'] });
       queryClient.invalidateQueries({ queryKey: ['admin_stats'] });
+      if (Object.keys(errs).length > 0) {
+        setCreateFieldErrors(errs);
+        toast.error('Course created, but some details did not save', {
+          description: Object.entries(errs).map(([k, v]) => `${k}: ${v}`).join('\n'),
+        });
+        return;
+      }
+      setCreateFieldErrors({});
+      toast.success('Course created');
+      setCreateOpen(false);
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => {
+      setCreateFieldErrors({});
+      toast.error(e?.message || 'Failed to create course');
+    },
   });
 
   const updateMutation = useMutation({
-    mutationFn: (values: Partial<CreateCourseParams> & { id: string }) => {
+    mutationFn: async (values: Partial<CreateCourseParams> & { id: string }) => {
       const { id, ...updates } = values;
-      return courseService.updateCourse(id, updates);
+      const saved = await courseService.updateCourse(id, updates);
+      return { saved, submitted: updates as Partial<CreateCourseParams> };
     },
-    onSuccess: () => {
+    onSuccess: ({ saved, submitted }) => {
+      const errs = diffPersisted(submitted, saved as Course);
+      queryClient.invalidateQueries({ queryKey: ['courses'] });
+      if (Object.keys(errs).length > 0) {
+        setEditFieldErrors(errs);
+        toast.error('Course saved, but some details did not persist', {
+          description: Object.entries(errs).map(([k, v]) => `${k}: ${v}`).join('\n'),
+        });
+        return;
+      }
+      setEditFieldErrors({});
       toast.success('Course updated');
       setEditCourse(null);
-      queryClient.invalidateQueries({ queryKey: ['courses'] });
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => {
+      setEditFieldErrors({});
+      toast.error(e?.message || 'Failed to update course');
+    },
   });
 
   const deleteMutation = useMutation({
