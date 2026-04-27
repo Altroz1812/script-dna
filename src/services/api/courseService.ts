@@ -64,8 +64,8 @@ export const courseService = {
     return await adminQuery('create_course', params);
   },
 
-  async updateCourse(id: string, updates: Partial<CreateCourseParams>): Promise<void> {
-    await adminQuery('update_course', { id, ...updates });
+  async updateCourse(id: string, updates: Partial<CreateCourseParams>): Promise<Course> {
+    return await adminQuery('update_course', { id, ...updates });
   },
 
   async deleteCourse(id: string): Promise<void> {
