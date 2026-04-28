@@ -983,8 +983,44 @@ Deno.serve(async (req) => {
           await assertBatchInScope(id)
           // Prevent admins from re-homing a batch to another org
           if (!isSuperadmin) delete (updates as any).organization_id
+          // Capture previous teacher to detect reassignment
+          let previousTeacherId: string | null = null
+          let batchName = ''
+          if (Object.prototype.hasOwnProperty.call(updates, 'teacher_id')) {
+            const { data: prev } = await supabase
+              .from('batches')
+              .select('teacher_id, name')
+              .eq('id', id)
+              .maybeSingle()
+            previousTeacherId = prev?.teacher_id ?? null
+            batchName = prev?.name ?? ''
+          }
           const { error } = await supabase.from('batches').update(updates).eq('id', id)
           if (error) throw error
+          // Notify on teacher reassignment (only when teacher_id actually changes)
+          if (Object.prototype.hasOwnProperty.call(updates, 'teacher_id')) {
+            const newTeacherId = (updates as any).teacher_id ?? null
+            if (newTeacherId !== previousTeacherId) {
+              const notifications: any[] = []
+              if (newTeacherId) {
+                notifications.push({
+                  user_id: newTeacherId,
+                  title: 'New batch assigned',
+                  message: `You have been assigned to batch "${batchName}".`,
+                })
+              }
+              if (previousTeacherId) {
+                notifications.push({
+                  user_id: previousTeacherId,
+                  title: 'Batch reassigned',
+                  message: `You are no longer assigned to batch "${batchName}".`,
+                })
+              }
+              if (notifications.length > 0) {
+                await supabase.from('notifications').insert(notifications)
+              }
+            }
+          }
           result = { success: true }
           break
         }
