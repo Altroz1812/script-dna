@@ -75,14 +75,16 @@ export async function adminQuery(action: string, params: any = {}): Promise<any>
     case 'delete_course': return deleteCourse(params);
 
     // ===== BATCHES =====
-    case 'list_batches': return listBatches(params);
-    case 'create_batch': return createBatch(params);
-    case 'update_batch': return updateBatch(params);
-    case 'delete_batch': return deleteBatch(params);
-    case 'list_batch_students': return listBatchStudents(params);
-    case 'add_batch_student': return addBatchStudent(params);
-    case 'remove_batch_student': return removeBatchStudent(params);
-    case 'batch_student_count': return batchStudentCount(params);
+    // Routed through edge function (service role + admin org scoping)
+    case 'list_batches':
+    case 'create_batch':
+    case 'update_batch':
+    case 'delete_batch':
+    case 'list_batch_students':
+    case 'add_batch_student':
+    case 'remove_batch_student':
+    case 'batch_student_count':
+      return edgeFunctionAction(action, params);
 
     // ===== EDGE FUNCTION ACTIONS (require service role) =====
     case 'toggle_org_active':
@@ -544,65 +546,6 @@ async function deleteCourse(params: any) {
 }
 
 // ===== BATCHES =====
-async function listBatches(params: any) {
-  let query = supabase.from('batches' as any).select('*, courses(name, duration_days, daily_hours, total_hours)') as any;
-  if (params?.course_id) query = query.eq('course_id', params.course_id);
-  const { data } = await query.order('created_at', { ascending: false });
-  return data ?? [];
-}
-
-async function createBatch(params: any) {
-  const { course_id, name, max_students } = params;
-  const { data, error } = await (supabase.from('batches' as any).insert({ course_id, name, max_students: max_students ?? 25 }).select().single() as any);
-  if (error) throw error;
-  return data;
-}
-
-async function updateBatch(params: any) {
-  const { id, ...updates } = params;
-  const { error } = await (supabase.from('batches' as any).update(updates).eq('id', id) as any);
-  if (error) throw error;
-  return { success: true };
-}
-
-async function deleteBatch(params: any) {
-  await (supabase.from('batch_students' as any).delete().eq('batch_id', params.id) as any);
-  const { error } = await (supabase.from('batches' as any).delete().eq('id', params.id) as any);
-  if (error) throw error;
-  return { success: true };
-}
-
-async function listBatchStudents(params: any) {
-  const { data } = await (supabase.from('batch_students' as any).select('*').eq('batch_id', params.batch_id) as any);
-  const sIds = (data ?? []).map((d: any) => d.student_id);
-  let profs: any[] = [];
-  if (sIds.length) {
-    const { data: p } = await (supabase.from('profiles' as any).select('user_id, display_name, email').in('user_id', sIds) as any);
-    profs = p ?? [];
-  }
-  const pm: Record<string, any> = {};
-  for (const p of profs) pm[p.user_id] = p;
-  return (data ?? []).map((d: any) => ({ ...d, profile: pm[d.student_id] || null }));
-}
-
-async function addBatchStudent(params: any) {
-  const { error } = await (supabase.from('batch_students' as any).insert({ batch_id: params.batch_id, student_id: params.student_id }) as any);
-  if (error) throw error;
-  return { success: true };
-}
-
-async function removeBatchStudent(params: any) {
-  const { error } = await (supabase.from('batch_students' as any).delete().eq('batch_id', params.batch_id).eq('student_id', params.student_id) as any);
-  if (error) throw error;
-  return { success: true };
-}
-
-async function batchStudentCount(params: any) {
-  const { count, error } = await (supabase.from('batch_students' as any).select('id', { count: 'exact', head: true }).eq('batch_id', params.batch_id) as any);
-  if (error) throw error;
-  return count ?? 0;
-}
-
 async function edgeFunctionAction(action: string, params: any) {
   const { data, error } = await supabase.functions.invoke('admin-query', {
     body: { action, params },
