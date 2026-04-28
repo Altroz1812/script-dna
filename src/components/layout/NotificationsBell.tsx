@@ -39,7 +39,7 @@ export function NotificationsBell() {
   const [items, setItems] = useState<NotificationRow[]>([]);
   const [open, setOpen] = useState(false);
 
-  const userId = profile?.userId;
+  const userId = profile?.id;
 
   const load = useCallback(async () => {
     if (!userId) return;
