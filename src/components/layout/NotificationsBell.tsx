@@ -127,20 +127,26 @@ export function NotificationsBell() {
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 p-0 glass-panel">
+      <PopoverContent align="end" className="w-96 p-0 glass-panel">
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.06]">
-          <p className="text-sm font-semibold">Notifications</p>
-          {unread > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={markAllRead}
-            >
-              <Check className="h-3 w-3 mr-1" />
-              Mark all read
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold">Notifications</p>
+            {unread > 0 && (
+              <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
+                {unread} new
+              </Badge>
+            )}
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={markAllRead}
+            disabled={unread === 0}
+          >
+            <CheckCheck className="h-3 w-3 mr-1" />
+            Mark all read
+          </Button>
         </div>
         <ScrollArea className="max-h-96">
           {items.length === 0 ? (
@@ -151,28 +157,53 @@ export function NotificationsBell() {
           ) : (
             <div className="divide-y divide-white/[0.04]">
               {items.map((n) => (
-                <button
+                <div
                   key={n.id}
-                  onClick={() => markRead(n.id)}
-                  className={`w-full text-left px-4 py-3 hover:bg-white/[0.04] transition-colors ${
-                    !n.read ? 'bg-primary/5' : ''
+                  className={`group relative px-4 py-3 transition-colors ${
+                    !n.read ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-white/[0.04]'
                   }`}
                 >
-                  <div className="flex items-start gap-2">
-                    {!n.read && (
-                      <span className="mt-1.5 h-2 w-2 rounded-full bg-primary shrink-0" />
-                    )}
+                  <div className="flex items-start gap-2.5">
+                    <span
+                      aria-hidden
+                      className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${
+                        !n.read ? 'bg-primary shadow-[0_0_6px_hsl(var(--primary))]' : 'bg-muted-foreground/30'
+                      }`}
+                    />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium leading-tight">{n.title}</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium leading-tight truncate">{n.title}</p>
+                        <Badge
+                          variant={n.read ? 'outline' : 'default'}
+                          className="h-4 px-1.5 text-[9px] uppercase tracking-wide shrink-0"
+                        >
+                          {n.read ? 'Read' : 'Unread'}
+                        </Badge>
+                      </div>
                       <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                         {n.message}
                       </p>
-                      <p className="text-[10px] text-muted-foreground/70 mt-1">
-                        {timeAgo(n.created_at)}
-                      </p>
+                      <div className="flex items-center justify-between gap-2 mt-1.5">
+                        <p className="text-[10px] text-muted-foreground/70">
+                          {timeAgo(n.created_at)}
+                        </p>
+                        {!n.read && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              markRead(n.id);
+                            }}
+                            className="text-[10px] text-primary hover:underline inline-flex items-center gap-1"
+                            aria-label="Mark as read"
+                          >
+                            <Check className="h-3 w-3" />
+                            Mark read
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           )}
