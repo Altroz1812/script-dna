@@ -872,6 +872,186 @@ Deno.serve(async (req) => {
         break
       }
 
+      // ===== BATCHES (admin-aware, service role bypasses RLS but enforces org scoping in code) =====
+      case 'list_batches':
+      case 'create_batch':
+      case 'update_batch':
+      case 'delete_batch':
+      case 'list_batch_students':
+      case 'add_batch_student':
+      case 'remove_batch_student':
+      case 'batch_student_count': {
+        // Resolve caller from JWT
+        const authHeader = req.headers.get('Authorization') || ''
+        const jwt = authHeader.replace('Bearer ', '').trim()
+        let callerId: string | null = null
+        if (jwt) {
+          const { data: userData } = await supabase.auth.getUser(jwt)
+          callerId = userData?.user?.id ?? null
+        }
+        if (!callerId) {
+          return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+            status: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+
+        const { data: rolesData } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', callerId)
+        const roleSet = new Set((rolesData ?? []).map((r: any) => r.role))
+        const isSuperadmin = roleSet.has('superadmin')
+        const isAdmin = roleSet.has('admin')
+        if (!isSuperadmin && !isAdmin) {
+          return new Response(JSON.stringify({ error: 'Forbidden' }), {
+            status: 403,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+
+        // Resolve admin's org (first org membership). Null for superadmin (no scoping).
+        let callerOrgId: string | null = null
+        if (!isSuperadmin) {
+          const { data: memberRow } = await supabase
+            .from('organization_members')
+            .select('organization_id, joined_at')
+            .eq('user_id', callerId)
+            .order('joined_at', { ascending: true })
+            .limit(1)
+            .maybeSingle()
+          callerOrgId = memberRow?.organization_id ?? null
+        }
+
+        // Helper: ensure a batch belongs to the admin's org
+        const assertBatchInScope = async (batchId: string) => {
+          if (isSuperadmin) return true
+          if (!callerOrgId) throw new Error('Admin is not assigned to any organization')
+          const { data: b } = await supabase
+            .from('batches')
+            .select('organization_id')
+            .eq('id', batchId)
+            .maybeSingle()
+          if (!b) throw new Error('Batch not found')
+          if (b.organization_id !== callerOrgId) throw new Error('Batch is outside your organization')
+          return true
+        }
+
+        if (action === 'list_batches') {
+          let q = supabase
+            .from('batches')
+            .select('*, courses(name, duration_days, daily_hours, total_hours)')
+            .order('created_at', { ascending: false }) as any
+          if (params?.course_id) q = q.eq('course_id', params.course_id)
+          if (!isSuperadmin) {
+            if (!callerOrgId) { result = []; break }
+            q = q.eq('organization_id', callerOrgId)
+          }
+          const { data, error } = await q
+          if (error) throw error
+          result = data ?? []
+          break
+        }
+
+        if (action === 'create_batch') {
+          const { course_id, name, max_students } = params
+          let organization_id = params?.organization_id ?? null
+          if (!isSuperadmin) {
+            if (!callerOrgId) throw new Error('Admin is not assigned to any organization')
+            organization_id = callerOrgId
+          } else if (!organization_id) {
+            // Superadmin creating without org: inherit from course
+            const { data: course } = await supabase
+              .from('courses')
+              .select('organization_id')
+              .eq('id', course_id)
+              .maybeSingle()
+            organization_id = course?.organization_id ?? null
+          }
+          const { data, error } = await supabase
+            .from('batches')
+            .insert({ course_id, name, max_students: max_students ?? 25, organization_id })
+            .select()
+            .single()
+          if (error) throw error
+          result = data
+          break
+        }
+
+        if (action === 'update_batch') {
+          const { id, ...updates } = params
+          await assertBatchInScope(id)
+          // Prevent admins from re-homing a batch to another org
+          if (!isSuperadmin) delete (updates as any).organization_id
+          const { error } = await supabase.from('batches').update(updates).eq('id', id)
+          if (error) throw error
+          result = { success: true }
+          break
+        }
+
+        if (action === 'delete_batch') {
+          await assertBatchInScope(params.id)
+          await supabase.from('batch_students').delete().eq('batch_id', params.id)
+          const { error } = await supabase.from('batches').delete().eq('id', params.id)
+          if (error) throw error
+          result = { success: true }
+          break
+        }
+
+        if (action === 'list_batch_students') {
+          await assertBatchInScope(params.batch_id)
+          const { data } = await supabase.from('batch_students').select('*').eq('batch_id', params.batch_id)
+          const sIds = (data ?? []).map((d: any) => d.student_id)
+          let profs: any[] = []
+          if (sIds.length) {
+            const { data: p } = await supabase
+              .from('profiles')
+              .select('user_id, display_name, email')
+              .in('user_id', sIds)
+            profs = p ?? []
+          }
+          const pm: Record<string, any> = {}
+          for (const p of profs) pm[p.user_id] = p
+          result = (data ?? []).map((d: any) => ({ ...d, profile: pm[d.student_id] || null }))
+          break
+        }
+
+        if (action === 'add_batch_student') {
+          await assertBatchInScope(params.batch_id)
+          const { error } = await supabase
+            .from('batch_students')
+            .insert({ batch_id: params.batch_id, student_id: params.student_id })
+          if (error) throw error
+          result = { success: true }
+          break
+        }
+
+        if (action === 'remove_batch_student') {
+          await assertBatchInScope(params.batch_id)
+          const { error } = await supabase
+            .from('batch_students')
+            .delete()
+            .eq('batch_id', params.batch_id)
+            .eq('student_id', params.student_id)
+          if (error) throw error
+          result = { success: true }
+          break
+        }
+
+        if (action === 'batch_student_count') {
+          await assertBatchInScope(params.batch_id)
+          const { count, error } = await supabase
+            .from('batch_students')
+            .select('id', { count: 'exact', head: true })
+            .eq('batch_id', params.batch_id)
+          if (error) throw error
+          result = count ?? 0
+          break
+        }
+
+        break
+      }
+
       default:
         return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
           status: 400,
