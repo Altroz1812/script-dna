@@ -66,9 +66,10 @@ export async function adminQuery(action: string, params: any = {}): Promise<any>
     case 'delete_notification': return deleteNotification(params);
 
     // ===== STUDENTS =====
-    case 'list_students_with_batches': return listStudentsWithBatches();
-    case 'list_teachers': return listTeachers();
-    case 'list_all_students': return listAllStudents();
+    case 'list_students_with_batches':
+    case 'list_teachers':
+    case 'list_all_students':
+      return edgeFunctionAction(action, params);
 
     // ===== COURSES =====
     case 'list_courses': return listCourses();
