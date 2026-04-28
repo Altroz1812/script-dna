@@ -378,14 +378,128 @@ Deno.serve(async (req) => {
       }
 
       // ===== BATCH STUDENTS (for students page) =====
-      case 'list_students_with_batches': {
-        const { data: roles } = await supabase.from('user_roles').select('user_id').eq('role', 'student')
-        const studentIds = (roles ?? []).map((r: any) => r.user_id)
-        if (studentIds.length === 0) { result = []; break }
-        const { data: profiles } = await supabase.from('profiles').select('*').in('user_id', studentIds)
-        const { data: enrollments } = await supabase.from('batch_students').select('student_id, batch_id, batches(name, courses(name))').in('student_id', studentIds)
+      case 'list_students_with_batches':
+      case 'list_all_students':
+      case 'list_teachers': {
+        // Resolve caller from JWT
+        const authHeader = req.headers.get('Authorization') || ''
+        const jwt = authHeader.replace('Bearer ', '').trim()
+        let callerId: string | null = null
+        if (jwt) {
+          const { data: userData } = await supabase.auth.getUser(jwt)
+          callerId = userData?.user?.id ?? null
+        }
+        if (!callerId) {
+          return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+            status: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+
+        const { data: rolesData } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', callerId)
+        const roleSet = new Set((rolesData ?? []).map((r: any) => r.role))
+        const isSuperadmin = roleSet.has('superadmin')
+        const isAdmin = roleSet.has('admin')
+        if (!isSuperadmin && !isAdmin) {
+          return new Response(JSON.stringify({ error: 'Forbidden' }), {
+            status: 403,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+
+        // Resolve admin's org (first org membership). Null for superadmin (no scoping).
+        let callerOrgId: string | null = null
+        if (!isSuperadmin) {
+          const { data: memberRow } = await supabase
+            .from('organization_members')
+            .select('organization_id, joined_at')
+            .eq('user_id', callerId)
+            .order('joined_at', { ascending: true })
+            .limit(1)
+            .maybeSingle()
+          callerOrgId = memberRow?.organization_id ?? null
+        }
+
+        // Determine candidate user_ids based on role + org scope
+        const wantTeachers = action === 'list_teachers'
+        const targetRole = wantTeachers ? 'teacher' : 'student'
+
+        // Base: all users with the target role
+        const { data: roleRows } = await supabase
+          .from('user_roles')
+          .select('user_id')
+          .eq('role', targetRole)
+        let candidateIds = new Set<string>((roleRows ?? []).map((r: any) => r.user_id))
+
+        if (!isSuperadmin) {
+          if (!callerOrgId) { result = []; break }
+
+          if (wantTeachers) {
+            // Teachers in org: members of the org + teachers assigned to any batch in the org
+            const orgIds = new Set<string>()
+            const { data: members } = await supabase
+              .from('organization_members')
+              .select('user_id')
+              .eq('organization_id', callerOrgId)
+            for (const m of members ?? []) orgIds.add(m.user_id)
+            const { data: orgBatches } = await supabase
+              .from('batches')
+              .select('teacher_id')
+              .eq('organization_id', callerOrgId)
+            for (const b of orgBatches ?? []) if (b.teacher_id) orgIds.add(b.teacher_id)
+            candidateIds = new Set([...candidateIds].filter((id) => orgIds.has(id)))
+          } else {
+            // Students in org: anyone enrolled in any batch belonging to the org
+            const { data: orgBatches } = await supabase
+              .from('batches')
+              .select('id')
+              .eq('organization_id', callerOrgId)
+            const batchIds = (orgBatches ?? []).map((b: any) => b.id)
+            const orgStudentIds = new Set<string>()
+            if (batchIds.length > 0) {
+              const { data: enrollRows } = await supabase
+                .from('batch_students')
+                .select('student_id')
+                .in('batch_id', batchIds)
+              for (const r of enrollRows ?? []) orgStudentIds.add(r.student_id)
+            }
+            // Also include students who are explicit org members (e.g. created in org but not yet enrolled)
+            const { data: members } = await supabase
+              .from('organization_members')
+              .select('user_id')
+              .eq('organization_id', callerOrgId)
+            for (const m of members ?? []) {
+              if (candidateIds.has(m.user_id)) orgStudentIds.add(m.user_id)
+            }
+            candidateIds = new Set([...candidateIds].filter((id) => orgStudentIds.has(id)))
+          }
+        }
+
+        const ids = [...candidateIds]
+        if (ids.length === 0) { result = []; break }
+
+        if (action === 'list_teachers' || action === 'list_all_students') {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('user_id, display_name, email')
+            .in('user_id', ids)
+          result = profiles ?? []
+          break
+        }
+
+        // list_students_with_batches
+        const { data: profiles } = await supabase.from('profiles').select('*').in('user_id', ids)
+        const { data: enrollments } = await supabase
+          .from('batch_students')
+          .select('student_id, batch_id, batches(name, organization_id, courses(name))')
+          .in('student_id', ids)
         const enrollMap: Record<string, any[]> = {}
         for (const e of enrollments ?? []) {
+          // For admins, only include enrollments within their org
+          if (!isSuperadmin && callerOrgId && e.batches?.organization_id !== callerOrgId) continue
           if (!enrollMap[e.student_id]) enrollMap[e.student_id] = []
           enrollMap[e.student_id].push(e)
         }
