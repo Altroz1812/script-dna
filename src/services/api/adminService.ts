@@ -75,14 +75,16 @@ export async function adminQuery(action: string, params: any = {}): Promise<any>
     case 'delete_course': return deleteCourse(params);
 
     // ===== BATCHES =====
-    case 'list_batches': return listBatches(params);
-    case 'create_batch': return createBatch(params);
-    case 'update_batch': return updateBatch(params);
-    case 'delete_batch': return deleteBatch(params);
-    case 'list_batch_students': return listBatchStudents(params);
-    case 'add_batch_student': return addBatchStudent(params);
-    case 'remove_batch_student': return removeBatchStudent(params);
-    case 'batch_student_count': return batchStudentCount(params);
+    // Routed through edge function (service role + admin org scoping)
+    case 'list_batches':
+    case 'create_batch':
+    case 'update_batch':
+    case 'delete_batch':
+    case 'list_batch_students':
+    case 'add_batch_student':
+    case 'remove_batch_student':
+    case 'batch_student_count':
+      return edgeFunctionAction(action, params);
 
     // ===== EDGE FUNCTION ACTIONS (require service role) =====
     case 'toggle_org_active':
