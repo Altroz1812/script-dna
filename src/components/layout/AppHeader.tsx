@@ -6,6 +6,7 @@ import { ROLE_LABELS } from '@/types/roles';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { NotificationsBell } from '@/components/layout/NotificationsBell';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,7 +44,9 @@ export function AppHeader() {
         <SidebarTrigger />
       </div>
 
-      <DropdownMenu>
+      <div className="flex items-center gap-1">
+        <NotificationsBell />
+        <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="flex items-center gap-2 h-9 px-2 hover:bg-white/[0.04] group">
             <Avatar className="h-7 w-7 ring-2 ring-primary/20 group-hover:ring-primary/50 transition-all duration-300">
@@ -87,6 +90,7 @@ export function AppHeader() {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      </div>
     </header>
   );
 }
