@@ -66,9 +66,10 @@ export async function adminQuery(action: string, params: any = {}): Promise<any>
     case 'delete_notification': return deleteNotification(params);
 
     // ===== STUDENTS =====
-    case 'list_students_with_batches': return listStudentsWithBatches();
-    case 'list_teachers': return listTeachers();
-    case 'list_all_students': return listAllStudents();
+    case 'list_students_with_batches':
+    case 'list_teachers':
+    case 'list_all_students':
+      return edgeFunctionAction(action, params);
 
     // ===== COURSES =====
     case 'list_courses': return listCourses();
@@ -499,37 +500,6 @@ async function deleteNotification(params: any) {
   const { error } = await (supabase.from('notifications').delete().eq('id', params.id) as any);
   if (error) throw error;
   return { success: true };
-}
-
-// ===== STUDENTS =====
-async function listStudentsWithBatches() {
-  const { data: roles } = await (supabase.from('user_roles' as any).select('user_id').eq('role', 'student') as any);
-  const studentIds = (roles ?? []).map((r: any) => r.user_id);
-  if (studentIds.length === 0) return [];
-  const { data: profiles } = await (supabase.from('profiles' as any).select('*').in('user_id', studentIds) as any);
-  const { data: enrollments } = await (supabase.from('batch_students' as any).select('student_id, batch_id, batches(name, courses(name))').in('student_id', studentIds) as any);
-  const enrollMap: Record<string, any[]> = {};
-  for (const e of enrollments ?? []) {
-    if (!enrollMap[e.student_id]) enrollMap[e.student_id] = [];
-    enrollMap[e.student_id].push(e);
-  }
-  return (profiles ?? []).map((p: any) => ({ ...p, enrollments: enrollMap[p.user_id] || [] }));
-}
-
-async function listTeachers() {
-  const { data: roles } = await (supabase.from('user_roles' as any).select('user_id').eq('role', 'teacher') as any);
-  if (!roles?.length) return [];
-  const ids = roles.map((r: any) => r.user_id);
-  const { data: profiles } = await (supabase.from('profiles' as any).select('user_id, display_name, email').in('user_id', ids) as any);
-  return profiles ?? [];
-}
-
-async function listAllStudents() {
-  const { data: roles } = await (supabase.from('user_roles' as any).select('user_id').eq('role', 'student') as any);
-  if (!roles?.length) return [];
-  const ids = roles.map((r: any) => r.user_id);
-  const { data: profiles } = await (supabase.from('profiles' as any).select('user_id, display_name, email').in('user_id', ids) as any);
-  return profiles ?? [];
 }
 
 // ===== COURSES =====
