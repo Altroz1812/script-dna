@@ -1218,25 +1218,43 @@ Deno.serve(async (req) => {
 
         if (action === "create_batch") {
           const { course_id, name, max_students } = params;
+
           let organization_id = params?.organization_id ?? null;
+
           if (!isSuperadmin) {
-            if (!callerOrgId) throw new Error("Admin is not assigned to any organization");
+            if (!callerOrgId) {
+              throw new Error("Admin is not assigned to any organization");
+            }
+
             organization_id = callerOrgId;
           } else if (!organization_id) {
-            // Superadmin creating without org: inherit from course
             const { data: course } = await supabase
               .from("courses")
               .select("organization_id")
               .eq("id", course_id)
               .maybeSingle();
+
             organization_id = course?.organization_id ?? null;
           }
+
+          // FINAL VALIDATION
+          if (!organization_id) {
+            throw new Error("Organization ID is required before creating batch");
+          }
+
           const { data, error } = await supabase
             .from("batches")
-            .insert({ course_id, name, max_students: max_students ?? 25, organization_id })
+            .insert({
+              course_id,
+              name,
+              max_students: max_students ?? 25,
+              organization_id,
+            })
             .select()
             .single();
+
           if (error) throw error;
+
           result = data;
           break;
         }
