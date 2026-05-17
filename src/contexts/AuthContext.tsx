@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { Session } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
-import type { UserProfile, AppRole } from "@/types/roles";
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { Session } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
+import type { UserProfile, AppRole } from '@/types/roles';
 
 interface DashboardContext {
   stats: Record<string, number>;
@@ -18,7 +18,7 @@ interface AuthContextValue {
   refreshProfile: () => Promise<void>;
 }
 
-const AUTH_CTX_KEY = "__auth_context__";
+const AUTH_CTX_KEY = '__auth_context__';
 if (!(window as any)[AUTH_CTX_KEY]) {
   (window as any)[AUTH_CTX_KEY] = createContext<AuthContextValue | null>(null);
 }
@@ -26,29 +26,26 @@ const AuthContext = (window as any)[AUTH_CTX_KEY] as React.Context<AuthContextVa
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
 }
 
 async function fetchProfile(userId: string): Promise<UserProfile | null> {
   const [profileRes, roleRes] = await Promise.all([
-    supabase.from("profiles").select("*").eq("user_id", userId).single(),
-    supabase.from("user_roles").select("role").eq("user_id", userId).single(),
+    supabase.from('profiles').select('*').eq('user_id', userId).single(),
+    supabase.from('user_roles').select('role').eq('user_id', userId).single(),
   ]);
-
-  console.log("Profile response from DB:", profileRes.data); // Add this log
-  console.log("organization_id from DB:", profileRes.data?.organization_id); // Add this log
 
   if (profileRes.error || !profileRes.data) return null;
 
   const p = profileRes.data;
   return {
     id: p.user_id,
-    email: p.email ?? "",
-    displayName: p.display_name ?? p.email ?? "",
+    email: p.email ?? '',
+    displayName: p.display_name ?? p.email ?? '',
     avatarUrl: p.avatar_url ?? undefined,
-    organizationId: p.organization_id ?? undefined, // This should map correctly
-    role: (roleRes.data?.role as AppRole) ?? "student",
+    organizationId: p.organization_id ?? undefined,
+    role: (roleRes.data?.role as AppRole) ?? 'student',
   };
 }
 
@@ -65,9 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Set up listener FIRST
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, sess) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, sess) => {
       setSession(sess);
       if (sess?.user) {
         // Use setTimeout to avoid Supabase deadlock
@@ -116,9 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider
-      value={{ session, profile, dashboardContext, loading, signIn, signUp, signOut, refreshProfile }}
-    >
+    <AuthContext.Provider value={{ session, profile, dashboardContext, loading, signIn, signUp, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
