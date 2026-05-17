@@ -113,21 +113,15 @@ export default function BatchesPage() {
 
   // ---------------- CREATE ----------------
 
-  const createMutation = useMutation({
-    mutationFn: async () => {
-      if (!profile?.organizationId) {
-        // ← Changed from organization_id
-        throw new Error("Organization ID missing");
-      }
+const createMutation = useMutation({
+  mutationFn: async () => {
+    if (!profile?.organizationId) {  // ← USE camelCase
+      throw new Error("Organization ID missing");
+    }
 
-      return await batchService.createBatch(
-        profile.organizationId, // ← Changed from organization_id
-        selectedCourse,
-        batchName.trim(),
-        maxStudents,
-      );
-    },
-    onSuccess: async () => {
+    return await batchService.createBatch(profile.organizationId, ...); // ← USE camelCase
+  },
+  onSuccess: async () => {
       toast.success("Batch created");
       setBatchName("");
       setSelectedCourse("");
