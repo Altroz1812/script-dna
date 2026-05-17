@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
+import { createContext, createElement, useContext, useEffect, useState, useCallback, useMemo, type ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -162,9 +162,9 @@ function useNotificationsSource(options: UseNotificationsOptions = {}): Notifica
   };
 }
 
-export function NotificationsProvider({ children }: { children: React.ReactNode }) {
+export function NotificationsProvider({ children }: { children: ReactNode }) {
   const value = useNotificationsSource({ limit: 100, toastOnInsert: true });
-  return <NotificationsContext.Provider value={value}>{children}</NotificationsContext.Provider>;
+  return createElement(NotificationsContext.Provider, { value }, children);
 }
 
 export function useNotifications() {
