@@ -41,26 +41,42 @@ export function useAuth() {
 }
 
 // 1. Clean data fetcher wrapping profile details, application roles, and multi-tenant links
-async function fetchProfileAndTenants(userId: string): Promise<{
-  profile: UserProfile | null;
+async function fetchProfileAndTenants(userId: string): Promise<{ 
+  profile: UserProfile | null; 
   orgs: TenantOrg[];
 } | null> {
   const [profileRes, roleRes, membershipsRes] = await Promise.all([
-    supabase.from("profiles").select("*").eq("user_id", userId).single(),
-    supabase.from("user_roles").select("role").eq("user_id", userId).single(),
-    supabase.from("organization_members").select("organization_id, organizations(id, name)").eq("user_id", userId),
+    supabase.from('profiles').select('*').eq('user_id', userId).single(),
+    supabase.from('user_roles').select('role').eq('user_id', userId).single(),
+    supabase
+      .from('organization_members')
+      .select(`
+        organization_id,
+        organizations:organization_id (
+          id,
+          name
+        )
+      `)
+      .eq('user_id', userId)
   ]);
 
   if (profileRes.error || !profileRes.data) return null;
 
-  // Format array maps safely from joining organization entries
+  // Format array maps with extensive fallbacks to avoid blank elements
   const orgs: TenantOrg[] = [];
   if (membershipsRes.data) {
     membershipsRes.data.forEach((row: any) => {
       if (row.organizations) {
+        // Handle single object return
         orgs.push({
           id: row.organizations.id,
-          name: row.organizations.name,
+          name: row.organizations.name || 'Unnamed Organization'
+        });
+      } else if (Array.isArray(row.organizations) && row.organizations.length > 0) {
+        // Handle array variant return nested by client libraries
+        orgs.push({
+          id: row.organizations[0].id,
+          name: row.organizations[0].name || 'Unnamed Organization'
         });
       }
     });
@@ -69,12 +85,15 @@ async function fetchProfileAndTenants(userId: string): Promise<{
   const p = profileRes.data;
   const userProfile: UserProfile = {
     id: p.user_id,
-    email: p.email ?? "",
-    displayName: p.display_name ?? p.email ?? "",
+    email: p.email ?? '',
+    displayName: p.display_name ?? p.email ?? '',
     avatarUrl: p.avatar_url ?? undefined,
-    organizationId: p.organization_id ?? undefined, // Preserved for backwards compatibility
-    role: (roleRes.data?.role as AppRole) ?? "student",
+    organizationId: p.organization_id ?? undefined,
+    role: (roleRes.data?.role as AppRole) ?? 'student',
   };
+
+  return { profile: userProfile, orgs };
+}  };
 
   return { profile: userProfile, orgs };
 }
