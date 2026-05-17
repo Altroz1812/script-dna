@@ -55,11 +55,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [dashboardContext] = useState<DashboardContext | null>({ stats: {} });
   const currentProfileRequest = useRef(0);
+  const loadedProfileUserId = useRef<string | null>(null);
 
   const loadProfile = useCallback(async (userId: string) => {
     const requestId = ++currentProfileRequest.current;
     const p = await fetchProfile(userId);
     if (requestId !== currentProfileRequest.current) return;
+    loadedProfileUserId.current = userId;
     setProfile(p);
   }, []);
 
@@ -68,11 +70,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const applySession = async (sess: Session | null) => {
       if (!mounted) return;
-      setSession(sess);
+      setSession((prev) => (prev?.access_token === sess?.access_token ? prev : sess));
       if (sess?.user) {
-        await loadProfile(sess.user.id);
+        if (loadedProfileUserId.current !== sess.user.id) {
+          await loadProfile(sess.user.id);
+        }
       } else {
         currentProfileRequest.current += 1;
+        loadedProfileUserId.current = null;
         setProfile(null);
       }
       if (mounted) setLoading(false);
@@ -110,6 +115,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+    currentProfileRequest.current += 1;
+    loadedProfileUserId.current = null;
     setSession(null);
     setProfile(null);
   };
