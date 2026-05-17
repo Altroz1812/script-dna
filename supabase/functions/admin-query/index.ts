@@ -1209,13 +1209,13 @@ Deno.serve(async (req) => {
         if (action === "create_batch") {
           const { course_id, name, max_students } = params;
 
-          let organization_id = params?.organization_id ?? null;
+          // Accept both camelCase and snake_case
+          let organization_id = params?.organization_id ?? params?.organizationId ?? null;
 
           if (!isSuperadmin) {
             if (!callerOrgId) {
               throw new Error("Admin is not assigned to any organization");
             }
-
             organization_id = callerOrgId;
           } else if (!organization_id) {
             const { data: course } = await supabase
@@ -1223,7 +1223,6 @@ Deno.serve(async (req) => {
               .select("organization_id")
               .eq("id", course_id)
               .maybeSingle();
-
             organization_id = course?.organization_id ?? null;
           }
 
