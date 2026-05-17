@@ -119,7 +119,7 @@ export default function BatchesPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      if (!profile?.organization_id) {
+      if (!profile?.organizationId) {
         throw new Error("Organization ID missing");
       }
 
