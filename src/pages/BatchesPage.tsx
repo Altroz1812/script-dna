@@ -52,9 +52,10 @@ export default function BatchesPage() {
   const { profile } = useAuth();
 
   // Add this debug log
-  console.log("Full profile object:", profile);
-  console.log("organizationId:", profile?.organizationId);
-  console.log("organization_id:", (profile as any)?.organization_id);
+console.log("Profile object keys:", Object.keys(profile || {}));
+console.log("organizationId value:", profile?.organizationId);
+console.log("organization_id value:", (profile as any)?.organization_id);
+  
   const { profile } = useAuth();
   const { isAdmin } = useRBAC();
 
