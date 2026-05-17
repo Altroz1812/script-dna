@@ -16,7 +16,8 @@ import { MarkAllReadButton } from '@/components/notifications/MarkAllReadButton'
 export function NotificationsBell() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const { items, unreadCount, markRead, markUnread } = useNotifications({ limit: 20 });
+  const { items, unreadCount, markRead, markUnread, markAllRead } = useNotifications();
+  const previewItems = items.slice(0, 20);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -48,17 +49,21 @@ export function NotificationsBell() {
               </Badge>
             )}
           </div>
-          <MarkAllReadButton className="h-7" />
+          <MarkAllReadButton
+            className="h-7"
+            unreadCount={unreadCount}
+            onMarkAllRead={markAllRead}
+          />
         </div>
         <ScrollArea className="max-h-96">
-          {items.length === 0 ? (
+          {previewItems.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground text-sm">
               <Bell className="mx-auto h-8 w-8 mb-2 opacity-40" />
               No notifications yet
             </div>
           ) : (
             <div className="divide-y divide-white/[0.04]">
-              {items.map((n) => (
+              {previewItems.map((n) => (
                 <NotificationItem
                   key={n.id}
                   notification={n}

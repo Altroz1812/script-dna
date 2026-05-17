@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import type { UserProfile, AppRole } from '@/types/roles';
@@ -54,35 +54,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [dashboardContext] = useState<DashboardContext | null>({ stats: {} });
+  const currentProfileRequest = useRef(0);
+  const loadedProfileUserId = useRef<string | null>(null);
 
   const loadProfile = useCallback(async (userId: string) => {
+    const requestId = ++currentProfileRequest.current;
     const p = await fetchProfile(userId);
+    if (requestId !== currentProfileRequest.current) return;
+    loadedProfileUserId.current = userId;
     setProfile(p);
   }, []);
 
   useEffect(() => {
-    // Set up listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, sess) => {
-      setSession(sess);
+    let mounted = true;
+
+    const applySession = async (sess: Session | null) => {
+      if (!mounted) return;
+      setSession((prev) => (prev?.access_token === sess?.access_token ? prev : sess));
       if (sess?.user) {
-        // Use setTimeout to avoid Supabase deadlock
-        setTimeout(() => loadProfile(sess.user.id), 0);
+        if (loadedProfileUserId.current !== sess.user.id) {
+          await loadProfile(sess.user.id);
+        }
       } else {
+        currentProfileRequest.current += 1;
+        loadedProfileUserId.current = null;
         setProfile(null);
       }
-      setLoading(false);
-    });
+      if (mounted) setLoading(false);
+    };
 
-    // Then check existing session
     supabase.auth.getSession().then(({ data: { session: sess } }) => {
-      setSession(sess);
-      if (sess?.user) {
-        loadProfile(sess.user.id);
-      }
-      setLoading(false);
+      applySession(sess);
     });
 
-    return () => subscription.unsubscribe();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, sess) => {
+      if (event === 'INITIAL_SESSION') return;
+      setTimeout(() => applySession(sess), 0);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, [loadProfile]);
 
   const signIn = async (email: string, password: string) => {
@@ -102,6 +115,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+    currentProfileRequest.current += 1;
+    loadedProfileUserId.current = null;
     setSession(null);
     setProfile(null);
   };
