@@ -162,6 +162,19 @@ function useNotificationsSource(options: UseNotificationsOptions = {}): Notifica
   };
 }
 
+export function NotificationsProvider({ children }: { children: React.ReactNode }) {
+  const value = useNotificationsSource({ limit: 100, toastOnInsert: true });
+  return <NotificationsContext.Provider value={value}>{children}</NotificationsContext.Provider>;
+}
+
+export function useNotifications() {
+  const context = useContext(NotificationsContext);
+  if (!context) {
+    throw new Error('useNotifications must be used within NotificationsProvider');
+  }
+  return context;
+}
+
 export function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diff / 60000);
