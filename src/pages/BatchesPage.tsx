@@ -59,7 +59,6 @@ export default function BatchesPage() {
   console.log("All profile keys:", profile ? Object.keys(profile) : "no profile");
   console.log("=========================");
 
-  const { profile } = useAuth();
   const { isAdmin } = useRBAC();
 
   const queryClient = useQueryClient();
