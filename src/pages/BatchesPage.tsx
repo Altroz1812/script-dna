@@ -334,5 +334,253 @@ export default function BatchesPage() {
 
   const availableStudents = students.filter((s) => !enrolledIds.has(s.user_id));
 
-  return <div className="p-6">{/* YOUR EXISTING JSX UI REMAINS SAME */}</div>;
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Batches</h1>
+          <p className="text-muted-foreground text-sm">
+            {isAdmin ? "Manage batches, assign teachers & students" : "Your assigned batches"}
+          </p>
+        </div>
+        {isAdmin && (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" /> New Batch
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create Batch</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>Course</Label>
+                  <Select value={selectedCourse} onValueChange={setSelectedCourse}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select course" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {courses.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Batch Name</Label>
+                  <Input
+                    value={batchName}
+                    onChange={(e) => setBatchName(e.target.value)}
+                    maxLength={200}
+                    placeholder="e.g. Batch A - Morning"
+                  />
+                </div>
+                <div>
+                  <Label>Max Students (1-100)</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={maxStudents}
+                    onChange={(e) => setMaxStudents(Number(e.target.value))}
+                  />
+                </div>
+                <Button onClick={handleCreateBatch} disabled={createMutation.isPending} className="w-full">
+                  {createMutation.isPending ? "Creating..." : "Create Batch"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
+      </div>
+
+      {batches.length === 0 ? (
+        <Card>
+          <CardContent className="p-12 text-center text-muted-foreground">
+            <Layers className="mx-auto h-12 w-12 mb-4 opacity-50" />
+            <p>No batches yet.{isAdmin ? " Create one to get started." : ""}</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {batches.map((b) => (
+            <Card key={b.id}>
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-lg">{b.name}</CardTitle>
+                    <CardDescription>{(b as any).courses?.name ?? "Unknown course"}</CardDescription>
+                  </div>
+                  {isAdmin && (
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => openEditDialog(b)}>
+                        <Pencil className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(b.id)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center gap-2 text-sm flex-wrap">
+                  <Badge variant="secondary">Max {b.max_students}</Badge>
+                  {(b as any).courses?.delivery_mode === "offline" ? (
+                    <Badge variant="outline" className="gap-1">
+                      <Building2 className="h-3 w-3" /> Offline
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="gap-1">
+                      <Wifi className="h-3 w-3" /> Online
+                    </Badge>
+                  )}
+                  <span className="text-muted-foreground">Teacher: {b.teacher_id ? "Assigned" : "None"}</span>
+                </div>
+                {isAdmin && (
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => openTeacherDialog(b.id)}>
+                      <UserPlus className="mr-1 h-3 w-3" /> Teacher
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => openStudentDialog(b)}>
+                      <Users className="mr-1 h-3 w-3" /> Students
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Edit Batch Dialog */}
+      <Dialog
+        open={!!editBatch}
+        onOpenChange={(v) => {
+          if (!v) setEditBatch(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Batch</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Batch Name</Label>
+              <Input value={editName} onChange={(e) => setEditName(e.target.value)} maxLength={200} />
+            </div>
+            <div>
+              <Label>Max Students (1-100)</Label>
+              <Input
+                type="number"
+                min={1}
+                max={100}
+                value={editMaxStudents}
+                onChange={(e) => setEditMaxStudents(Number(e.target.value))}
+              />
+            </div>
+            <Button onClick={handleEditBatch} disabled={editMutation.isPending} className="w-full">
+              {editMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Assign Teacher Dialog */}
+      <Dialog
+        open={!!teacherDialogBatch}
+        onOpenChange={(v) => {
+          if (!v) setTeacherDialogBatch(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign Teacher</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Select value={selectedTeacher} onValueChange={setSelectedTeacher}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select teacher" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">No teacher</SelectItem>
+                {teachers.map((t) => (
+                  <SelectItem key={t.user_id} value={t.user_id}>
+                    {t.display_name || t.email || t.user_id}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              onClick={() => assignTeacherMutation.mutate()}
+              disabled={assignTeacherMutation.isPending}
+              className="w-full"
+            >
+              {assignTeacherMutation.isPending ? "Saving..." : "Save"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manage Students Dialog */}
+      <Dialog
+        open={!!studentDialogBatch}
+        onOpenChange={(v) => {
+          if (!v) setStudentDialogBatch(null);
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              Manage Students
+              <Badge variant="outline" className="ml-2">
+                {studentCount}/{studentDialogBatch?.max_students ?? 25}
+              </Badge>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <Select value={selectedStudent} onValueChange={setSelectedStudent}>
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="Select student to add" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableStudents.map((s) => (
+                    <SelectItem key={s.user_id} value={s.user_id}>
+                      {s.display_name || s.email || s.user_id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                onClick={handleAddStudent}
+                disabled={!selectedStudent || studentCount >= (studentDialogBatch?.max_students ?? 25)}
+              >
+                <UserPlus className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {enrolledStudents.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">No students enrolled</p>
+              ) : (
+                enrolledStudents.map((e) => (
+                  <div key={e.student_id} className="flex items-center justify-between rounded-md border p-2">
+                    <span className="text-sm">{e.display_name || e.email || e.student_id}</span>
+                    <Button variant="ghost" size="icon" onClick={() => handleRemoveStudent(e.student_id)}>
+                      <UserMinus className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
 }
