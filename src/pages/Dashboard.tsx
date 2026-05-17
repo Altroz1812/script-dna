@@ -115,31 +115,6 @@ export default function Dashboard() {
   // Multi-tenant check: Roles that require an active organization context selection
   const needsOrgSelection = !isSuperadmin && !isStudent && !isParent;
 
-  // 1. Fetch authorized organization memberships if selection context is missing
-  const { data: userOrgs, isLoading: orgsLoading } = useQuery({
-    queryKey: ["user_organizations", profile?.id],
-    queryFn: async () => {
-      if (!profile?.id) return [];
-      const { data, error } = await supabase
-        .from("organization_members")
-        .select(
-          `
-          organization_id,
-          organizations (
-            id,
-            name,
-            description
-          )
-        `,
-        )
-        .eq("user_id", profile.id);
-
-      if (error) throw error;
-      return (data || []).map((item: any) => item.organizations).filter(Boolean);
-    },
-    enabled: !!profile && needsOrgSelection && !organizationId,
-  });
-
   // Student dashboard data
   const { data: studentData, isLoading: studentLoading } = useQuery({
     queryKey: ["student_dashboard", profile?.id],
