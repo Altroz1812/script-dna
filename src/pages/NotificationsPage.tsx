@@ -16,7 +16,7 @@ import { MarkAllReadButton } from '@/components/notifications/MarkAllReadButton'
 
 export default function NotificationsPage() {
   const { isAdmin } = useRBAC();
-  const { items, loading, markRead, markUnread, remove, refresh } = useNotifications({
+  const { items, loading, unreadCount, markRead, markUnread, markAllRead, remove, refresh } = useNotifications({
     limit: 100,
     toastOnInsert: false,
   });
@@ -47,7 +47,11 @@ export default function NotificationsPage() {
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h1 className="text-2xl font-bold text-foreground">Notifications</h1>
         <div className="flex items-center gap-2">
-          <MarkAllReadButton variant="outline" />
+          <MarkAllReadButton
+            variant="outline"
+            unreadCount={unreadCount}
+            onMarkAllRead={markAllRead}
+          />
           {isAdmin && (
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
