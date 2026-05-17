@@ -16,10 +16,7 @@ import { MarkAllReadButton } from '@/components/notifications/MarkAllReadButton'
 
 export default function NotificationsPage() {
   const { isAdmin } = useRBAC();
-  const { items, loading, unreadCount, markRead, markUnread, markAllRead, remove, refresh } = useNotifications({
-    limit: 100,
-    toastOnInsert: false,
-  });
+  const { items, loading, unreadCount, markRead, markUnread, markAllRead, remove, refresh } = useNotifications();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title: '', message: '' });
 
