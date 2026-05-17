@@ -113,7 +113,7 @@ export default function Dashboard() {
   const organizationId = profile?.organizationId ?? null;
 
   // Multi-tenant check: Roles that require an active organization context selection
-  const needsOrgSelection = !isSuperadmin && !isStudent && !isParent;
+  const needsOrgSelection = !isStudent && !isParent;
 
   // Student dashboard data
   const { data: studentData, isLoading: studentLoading } = useQuery({
