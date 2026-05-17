@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -19,11 +19,24 @@ interface UseNotificationsOptions {
   toastOnInsert?: boolean;
 }
 
+interface NotificationsState {
+  items: NotificationRow[];
+  loading: boolean;
+  unreadCount: number;
+  refresh: () => Promise<void>;
+  markRead: (id: string) => Promise<void>;
+  markUnread: (id: string) => Promise<void>;
+  markAllRead: () => Promise<void>;
+  remove: (id: string) => Promise<void>;
+}
+
+const NotificationsContext = createContext<NotificationsState | null>(null);
+
 /**
  * Universal per-user notifications hook. Provides realtime feed,
  * unread count, and shared mark/bulk actions for any role/component.
  */
-export function useNotifications(options: UseNotificationsOptions = {}) {
+function useNotificationsSource(options: UseNotificationsOptions = {}): NotificationsState {
   const { limit = 50, toastOnInsert = true } = options;
   const { profile } = useAuth();
   const userId = profile?.id;
