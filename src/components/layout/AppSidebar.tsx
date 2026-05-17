@@ -22,7 +22,7 @@ import {
 import { ROLE_LABELS } from "@/types/roles";
 
 export function AppSidebar() {
-  const { profile, loading, activeOrgId, availableOrgs, setActiveOrgId } = useAuth(); // Assuming these are in useAuth or useTenant
+  const { profile, loading, availableOrgs, activeOrgId, setActiveOrgId } = useAuth();
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
