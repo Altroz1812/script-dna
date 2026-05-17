@@ -1209,7 +1209,7 @@ Deno.serve(async (req) => {
         if (action === "create_batch") {
           const { course_id, name, max_students } = params;
 
-          // Accept both camelCase and snake_case
+          // ✅ Accept both camelCase and snake_case
           let organization_id = params?.organization_id ?? params?.organizationId ?? null;
 
           if (!isSuperadmin) {
@@ -1243,7 +1243,6 @@ Deno.serve(async (req) => {
             .single();
 
           if (error) throw error;
-
           result = data;
           break;
         }
