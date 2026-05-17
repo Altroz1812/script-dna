@@ -16,7 +16,7 @@ import { MarkAllReadButton } from '@/components/notifications/MarkAllReadButton'
 export function NotificationsBell() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const { items, unreadCount, markRead, markUnread } = useNotifications({ limit: 20 });
+  const { items, unreadCount, markRead, markUnread, markAllRead } = useNotifications({ limit: 20 });
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -48,7 +48,11 @@ export function NotificationsBell() {
               </Badge>
             )}
           </div>
-          <MarkAllReadButton className="h-7" />
+          <MarkAllReadButton
+            className="h-7"
+            unreadCount={unreadCount}
+            onMarkAllRead={markAllRead}
+          />
         </div>
         <ScrollArea className="max-h-96">
           {items.length === 0 ? (
