@@ -115,24 +115,26 @@ export default function BatchesPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      if (!profile?.organization_id) {
+      if (!profile?.organizationId) {
+        // ← Changed from organization_id
         throw new Error("Organization ID missing");
       }
 
-      return await batchService.createBatch(profile.organization_id, selectedCourse, batchName.trim(), maxStudents);
+      return await batchService.createBatch(
+        profile.organizationId, // ← Changed from organization_id
+        selectedCourse,
+        batchName.trim(),
+        maxStudents,
+      );
     },
-
     onSuccess: async () => {
       toast.success("Batch created");
-
       setBatchName("");
       setSelectedCourse("");
       setMaxStudents(25);
       setOpen(false);
-
       await invalidate();
     },
-
     onError: (error: any) => {
       toast.error(getErrorMessage(error));
     },
