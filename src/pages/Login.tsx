@@ -1,65 +1,58 @@
-import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { motion } from "framer-motion";
-import { useAuth } from "@/contexts/AuthContext";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { GraduationCap, Loader2, User, ShieldAlert } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { ROLE_LABELS, type AppRole } from "@/types/roles";
-import { checkRateLimit, resetRateLimit, formatRetryTime, sanitizeEmail } from "@/lib/security";
-import { MorphingBlob } from "@/components/ui/morphing-blob";
+import { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { GraduationCap, Loader2, User, ShieldAlert } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { ROLE_LABELS, type AppRole } from '@/types/roles';
+import { checkRateLimit, resetRateLimit, formatRetryTime, sanitizeEmail } from '@/lib/security';
+import { MorphingBlob } from '@/components/ui/morphing-blob';
 
 const DEMO_ACCOUNTS: { email: string; password: string; role: AppRole; name: string; org?: string }[] = [
-  { email: "superadmin@demo.com", password: "Demo1234!", role: "superadmin", name: "Super Admin", org: "Platform" },
-  { email: "admin@demo.com", password: "Demo1234!", role: "admin", name: "Admin", org: "Sunrise Academy" },
-  { email: "teacher@demo.com", password: "Demo1234!", role: "teacher", name: "Teacher", org: "Sunrise Academy" },
-  { email: "student@demo.com", password: "Demo1234!", role: "student", name: "Student", org: "Sunrise Academy" },
-  { email: "support@demo.com", password: "Demo1234!", role: "support", name: "Support", org: "Bright Future" },
-  { email: "parent@demo.com", password: "Demo1234!", role: "parent", name: "Parent", org: "Sunrise Academy" },
+  { email: 'superadmin@demo.com', password: 'Demo1234!', role: 'superadmin', name: 'Super Admin', org: 'Platform' },
+  { email: 'admin@demo.com', password: 'Demo1234!', role: 'admin', name: 'Admin', org: 'Sunrise Academy' },
+  { email: 'teacher@demo.com', password: 'Demo1234!', role: 'teacher', name: 'Teacher', org: 'Sunrise Academy' },
+  { email: 'student@demo.com', password: 'Demo1234!', role: 'student', name: 'Student', org: 'Sunrise Academy' },
+  { email: 'support@demo.com', password: 'Demo1234!', role: 'support', name: 'Support', org: 'Bright Future' },
+  { email: 'parent@demo.com', password: 'Demo1234!', role: 'parent', name: 'Parent', org: 'Sunrise Academy' },
 ];
 
 const ROLE_BORDER_COLORS: Record<AppRole, string> = {
-  superadmin: "border-l-purple-500",
-  admin: "border-l-blue-500",
-  teacher: "border-l-emerald-500",
-  student: "border-l-orange-500",
-  support: "border-l-cyan-500",
-  parent: "border-l-pink-500",
+  superadmin: 'border-l-purple-500',
+  admin: 'border-l-blue-500',
+  teacher: 'border-l-emerald-500',
+  student: 'border-l-orange-500',
+  support: 'border-l-cyan-500',
+  parent: 'border-l-pink-500',
 };
 
 function getErrorMessage(err: any): string {
-  const msg = err?.message ?? "";
-  if (msg.includes("Failed to fetch") || msg.includes("NetworkError") || msg.includes("Load failed")) {
-    return "Network error — please check your connection and try again.";
+  const msg = err?.message ?? '';
+  if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Load failed')) {
+    return 'Network error — please check your connection and try again.';
   }
-  if (msg.includes("Invalid login")) return "Invalid email or password.";
-  return msg || "Sign in failed. Please try again.";
+  if (msg.includes('Invalid login')) return 'Invalid email or password.';
+  return msg || 'Sign in failed. Please try again.';
 }
 
 export default function Login() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [demoLoading, setDemoLoading] = useState<string | null>(null);
-  // Inside your Login component, make sure you pull availableOrgs from useAuth():
-  const { signIn, session, loading: authLoading, availableOrgs } = useAuth();
+  const { signIn, session, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
     if (!authLoading && session) {
-      // If they belong to multiple organizations, route them to your selector screen
-      if (availableOrgs && availableOrgs.length > 1) {
-        navigate("/select-organization", { replace: true });
-      } else {
-        // If they belong to 1 or 0 orgs, proceed directly to the default workspace
-        navigate("/dashboard", { replace: true });
-      }
+      navigate('/dashboard', { replace: true });
     }
-  }, [session, authLoading, availableOrgs, navigate]);
+  }, [session, authLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,16 +60,16 @@ export default function Login() {
 
     const cleanEmail = sanitizeEmail(email);
     if (!cleanEmail) {
-      toast({ title: "Invalid email", description: "Please enter a valid email address.", variant: "destructive" });
+      toast({ title: 'Invalid email', description: 'Please enter a valid email address.', variant: 'destructive' });
       return;
     }
 
     const rateCheck = checkRateLimit(`login:${cleanEmail}`);
     if (!rateCheck.allowed) {
       toast({
-        title: "Too many attempts",
+        title: 'Too many attempts',
         description: `Account temporarily locked. Try again in ${formatRetryTime(rateCheck.retryAfterMs)}.`,
-        variant: "destructive",
+        variant: 'destructive',
       });
       return;
     }
@@ -86,19 +79,19 @@ export default function Login() {
       await signIn(cleanEmail, password);
       resetRateLimit(`login:${cleanEmail}`);
     } catch (err: any) {
-      toast({ title: "Sign in failed", description: getErrorMessage(err), variant: "destructive" });
+      toast({ title: 'Sign in failed', description: getErrorMessage(err), variant: 'destructive' });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDemoLogin = async (account: (typeof DEMO_ACCOUNTS)[0]) => {
+  const handleDemoLogin = async (account: typeof DEMO_ACCOUNTS[0]) => {
     if (demoLoading) return;
     setDemoLoading(account.email);
     try {
       await signIn(account.email, account.password);
     } catch (err: any) {
-      toast({ title: "Demo login failed", description: getErrorMessage(err), variant: "destructive" });
+      toast({ title: 'Demo login failed', description: getErrorMessage(err), variant: 'destructive' });
     } finally {
       setDemoLoading(null);
     }
@@ -107,11 +100,10 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-start sm:items-center justify-center bg-background p-4 py-8 sm:py-4 relative overflow-auto">
       {/* Animated grid pattern */}
-      <div
-        className="absolute inset-0 opacity-[0.04] pointer-events-none"
+      <div className="absolute inset-0 opacity-[0.04] pointer-events-none"
         style={{
-          backgroundImage: "radial-gradient(circle, hsl(var(--primary)) 1px, transparent 1px)",
-          backgroundSize: "32px 32px",
+          backgroundImage: 'radial-gradient(circle, hsl(var(--primary)) 1px, transparent 1px)',
+          backgroundSize: '32px 32px',
         }}
       />
 
@@ -131,7 +123,7 @@ export default function Login() {
             <motion.div
               className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-primary via-coral to-accent flex items-center justify-center shadow-lg shadow-primary/30 relative"
               animate={{ rotate: [0, 3, -3, 0] }}
-              transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+              transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
             >
               {/* Gradient ring */}
               <div className="absolute inset-[-3px] rounded-2xl bg-gradient-to-br from-primary via-coral to-accent opacity-40 blur-sm" />
@@ -168,27 +160,14 @@ export default function Login() {
               </div>
             </CardContent>
             <CardFooter className="flex flex-col gap-3">
-              <Button
-                type="submit"
-                className="w-full bg-gradient-to-r from-primary via-coral to-accent hover:opacity-90 transition-opacity text-white border-0 shadow-lg shadow-primary/20"
-                disabled={loading || !!demoLoading}
-              >
+              <Button type="submit" className="w-full bg-gradient-to-r from-primary via-coral to-accent hover:opacity-90 transition-opacity text-white border-0 shadow-lg shadow-primary/20" disabled={loading || !!demoLoading}>
                 {loading ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Signing in…
-                  </span>
-                ) : (
-                  "Sign In"
-                )}
+                  <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Signing in…</span>
+                ) : 'Sign In'}
               </Button>
               <div className="flex justify-between w-full text-sm">
-                <Link to="/forgot-password" className="text-muted-foreground hover:text-primary transition-colors">
-                  Forgot password?
-                </Link>
-                <Link to="/signup" className="text-muted-foreground hover:text-primary transition-colors">
-                  Create account
-                </Link>
+                <Link to="/forgot-password" className="text-muted-foreground hover:text-primary transition-colors">Forgot password?</Link>
+                <Link to="/signup" className="text-muted-foreground hover:text-primary transition-colors">Create account</Link>
               </div>
             </CardFooter>
           </form>
@@ -224,10 +203,7 @@ export default function Login() {
                   )}
                   <div className="flex flex-col items-start">
                     <span className="text-xs font-medium">{account.name}</span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {ROLE_LABELS[account.role]}
-                      {account.org ? ` · ${account.org}` : ""}
-                    </span>
+                    <span className="text-[10px] text-muted-foreground">{ROLE_LABELS[account.role]}{account.org ? ` · ${account.org}` : ''}</span>
                   </div>
                 </Button>
               </motion.div>
