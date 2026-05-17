@@ -52,10 +52,10 @@ export default function BatchesPage() {
   const { profile } = useAuth();
 
   // Add this debug log
-console.log("Profile object keys:", Object.keys(profile || {}));
-console.log("organizationId value:", profile?.organizationId);
-console.log("organization_id value:", (profile as any)?.organization_id);
-  
+  console.log("Profile object keys:", Object.keys(profile || {}));
+  console.log("organizationId value:", profile?.organizationId);
+  console.log("organization_id value:", (profile as any)?.organization_id);
+
   const { profile } = useAuth();
   const { isAdmin } = useRBAC();
 
@@ -113,15 +113,31 @@ console.log("organization_id value:", (profile as any)?.organization_id);
   };
 
   // ---------------- CREATE ----------------
+  // ---------------- CREATE ----------------
 
-const createMutation = useMutation({
-  mutationFn: async () => {
-    if (!profile?.organizationId) {  // ← USE camelCase
-      throw new Error("Organization ID missing");
-    }
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      if (!profile?.organizationId) {
+        throw new Error("Organization ID missing");
+      }
 
-    return await batchService.createBatch(profile.organizationId, ...); // ← USE camelCase
-  },
+      return await batchService.createBatch(profile.organizationId, selectedCourse, batchName.trim(), maxStudents);
+    },
+
+    onSuccess: async () => {
+      toast.success("Batch created");
+      setBatchName("");
+      setSelectedCourse("");
+      setMaxStudents(25);
+      setOpen(false);
+      await invalidate();
+    },
+
+    onError: (error: any) => {
+      toast.error(getErrorMessage(error));
+    },
+  });
+
   // ---------------- DELETE ----------------
 
   const deleteMutation = useMutation({
