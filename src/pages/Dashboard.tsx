@@ -112,9 +112,7 @@ export default function Dashboard() {
   const isSuperadmin = role === "superadmin";
   const organizationId = profile?.organizationId ?? null;
 
-  // Multi-tenant check: Roles that require an active organization context selection
-  const needsOrgSelection = !isStudent && !isParent;
-
+  // Multi-t
   // Student dashboard data
   const { data: studentData, isLoading: studentLoading } = useQuery({
     queryKey: ["student_dashboard", profile?.id],
