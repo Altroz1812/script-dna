@@ -51,10 +51,13 @@ const getErrorMessage = (error: any) => {
 export default function BatchesPage() {
   const { profile } = useAuth();
 
-  // Add this debug log
-  console.log("Profile object keys:", Object.keys(profile || {}));
-  console.log("organization_id value:", profile?.organization_id);
-  console.log("organization_id value:", (profile as any)?.organization_id);
+  // DEBUG: Log the entire profile object and specific properties
+  console.log("=== BATCHES PAGE DEBUG ===");
+  console.log("Full profile object:", profile);
+  console.log("profile.organizationId:", profile?.organizationId);
+  console.log("profile.organization_id:", (profile as any)?.organization_id);
+  console.log("All profile keys:", profile ? Object.keys(profile) : "no profile");
+  console.log("=========================");
 
   const { profile } = useAuth();
   const { isAdmin } = useRBAC();
