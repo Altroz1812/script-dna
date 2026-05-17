@@ -117,11 +117,11 @@ export default function BatchesPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      if (!profile?.organizationId) {
+      if (!profile?.organization_id) {
         throw new Error("Organization ID missing");
       }
 
-      return await batchService.createBatch(profile.organizationId, selectedCourse, batchName.trim(), maxStudents);
+      return await batchService.createBatch(profile.organization_id, selectedCourse, batchName.trim(), maxStudents);
     },
 
     onSuccess: async () => {
