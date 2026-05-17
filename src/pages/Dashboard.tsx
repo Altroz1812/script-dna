@@ -115,7 +115,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (!authLoading && profile) {
       // Superadmins, Students, or Parents might not be tied to a specific organization selection
-      const needsOrgSelection = !isSuperadmin && !isStudent && !isParent;
+      const needsOrgSelection = !isStudent && !isParent;
 
       // If the role requires an organization selection context, but none is set in their current session profile
       if (needsOrgSelection && !organizationId) {
