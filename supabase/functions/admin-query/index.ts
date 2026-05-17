@@ -618,17 +618,7 @@ Deno.serve(async (req) => {
         result = data ?? [];
         break;
       }
-      case "create_batch": {
-        const { course_id, name, max_students } = params;
-        const { data, error } = await supabase
-          .from("batches")
-          .insert({ course_id, name, max_students: max_students ?? 25 })
-          .select()
-          .single();
-        if (error) throw error;
-        result = data;
-        break;
-      }
+
       case "update_batch": {
         const { id, ...updates } = params;
         const { error } = await supabase.from("batches").update(updates).eq("id", id);
