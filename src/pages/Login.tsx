@@ -51,9 +51,15 @@ export default function Login() {
 
   useEffect(() => {
     if (!authLoading && session) {
-      navigate("/dashboard", { replace: true });
+      // If they belong to multiple organizations, route them to your selector screen
+      if (availableOrgs && availableOrgs.length > 1) {
+        navigate("/select-organization", { replace: true });
+      } else {
+        // If they belong to 1 or 0 orgs, proceed directly to the default workspace
+        navigate("/dashboard", { replace: true });
+      }
     }
-  }, [session, authLoading, navigate]);
+  }, [session, authLoading, availableOrgs, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
