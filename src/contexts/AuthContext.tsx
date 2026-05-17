@@ -40,24 +40,26 @@ export function useAuth() {
   return ctx;
 }
 
-// 1. Clean data fetcher wrapping profile details, application roles, and multi-tenant links
-async function fetchProfileAndTenants(userId: string): Promise<{ 
-  profile: UserProfile | null; 
+// Clean data fetcher wrapping profile details, application roles, and multi-tenant links
+async function fetchProfileAndTenants(userId: string): Promise<{
+  profile: UserProfile | null;
   orgs: TenantOrg[];
 } | null> {
   const [profileRes, roleRes, membershipsRes] = await Promise.all([
-    supabase.from('profiles').select('*').eq('user_id', userId).single(),
-    supabase.from('user_roles').select('role').eq('user_id', userId).single(),
+    supabase.from("profiles").select("*").eq("user_id", userId).single(),
+    supabase.from("user_roles").select("role").eq("user_id", userId).single(),
     supabase
-      .from('organization_members')
-      .select(`
+      .from("organization_members")
+      .select(
+        `
         organization_id,
         organizations:organization_id (
           id,
           name
         )
-      `)
-      .eq('user_id', userId)
+      `,
+      )
+      .eq("user_id", userId),
   ]);
 
   if (profileRes.error || !profileRes.data) return null;
@@ -69,14 +71,14 @@ async function fetchProfileAndTenants(userId: string): Promise<{
       if (row.organizations) {
         // Handle single object return
         orgs.push({
-          id: row.organizations.id,
-          name: row.organizations.name || 'Unnamed Organization'
+          id: (row.organizations as any).id,
+          name: (row.organizations as any).name || "Unnamed Organization",
         });
       } else if (Array.isArray(row.organizations) && row.organizations.length > 0) {
         // Handle array variant return nested by client libraries
         orgs.push({
           id: row.organizations[0].id,
-          name: row.organizations[0].name || 'Unnamed Organization'
+          name: row.organizations[0].name || "Unnamed Organization",
         });
       }
     });
@@ -85,15 +87,12 @@ async function fetchProfileAndTenants(userId: string): Promise<{
   const p = profileRes.data;
   const userProfile: UserProfile = {
     id: p.user_id,
-    email: p.email ?? '',
-    displayName: p.display_name ?? p.email ?? '',
+    email: p.email ?? "",
+    displayName: p.display_name ?? p.email ?? "",
     avatarUrl: p.avatar_url ?? undefined,
     organizationId: p.organization_id ?? undefined,
-    role: (roleRes.data?.role as AppRole) ?? 'student',
+    role: (roleRes.data?.role as AppRole) ?? "student",
   };
-
-  return { profile: userProfile, orgs };
-}  };
 
   return { profile: userProfile, orgs };
 }
@@ -115,7 +114,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAvailableOrgs(data.orgs);
 
       // Keep track of the active organizational boundary selection
-      // Priority: 1. Previously chosen sessionStorage org -> 2. Direct Profile profile assignment -> 3. First available index element row mapping
       const savedOrgId = sessionStorage.getItem(`_active_org_${userId}`);
       if (savedOrgId && data.orgs.some((o) => o.id === savedOrgId)) {
         setActiveOrgId(savedOrgId);
