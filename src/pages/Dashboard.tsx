@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
@@ -102,6 +102,7 @@ const itemVariants = {
 export default function Dashboard() {
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const [isSelectingId, setIsSelectingId] = useState<string | null>(null);
 
   const role = profile?.role;
   const isStudent = role === "student";
@@ -111,18 +112,33 @@ export default function Dashboard() {
   const isSuperadmin = role === "superadmin";
   const organizationId = profile?.organizationId ?? null;
 
-  // --- ADD THIS SAFETY CHECK GATE ---
-  useEffect(() => {
-    if (!authLoading && profile) {
-      // Superadmins, Students, or Parents might not be tied to a specific organization selection
-      const needsOrgSelection = !isStudent && !isParent;
+  // Multi-tenant check: Roles that require an active organization context selection
+  const needsOrgSelection = !isSuperadmin && !isStudent && !isParent;
 
-      // If the role requires an organization selection context, but none is set in their current session profile
-      if (needsOrgSelection && !organizationId) {
-        navigate("/select-organization", { replace: true });
-      }
-    }
-  }, [profile, authLoading, organizationId, isSuperadmin, isStudent, isParent, navigate]);
+  // 1. Fetch authorized organization memberships if selection context is missing
+  const { data: userOrgs, isLoading: orgsLoading } = useQuery({
+    queryKey: ["user_organizations", profile?.id],
+    queryFn: async () => {
+      if (!profile?.id) return [];
+      const { data, error } = await supabase
+        .from("organization_members")
+        .select(
+          `
+          organization_id,
+          organizations (
+            id,
+            name,
+            description
+          )
+        `,
+        )
+        .eq("user_id", profile.id);
+
+      if (error) throw error;
+      return (data || []).map((item: any) => item.organizations).filter(Boolean);
+    },
+    enabled: !!profile && needsOrgSelection && !organizationId,
+  });
 
   // Student dashboard data
   const { data: studentData, isLoading: studentLoading } = useQuery({
@@ -263,7 +279,8 @@ export default function Dashboard() {
     queryFn: () => adminQuery("get_stats", { organizationId, isSuperadmin }) as Promise<Stats>,
     staleTime: 1000 * 60 * 5,
     retry: 2,
-    enabled: !!profile && !isStudent && !isParent && !isTeacher && !isSupport,
+    enabled:
+      !!profile && !isStudent && !isParent && !isTeacher && !isSupport && (!needsOrgSelection || !!organizationId),
   });
 
   const cards = useMemo(() => {
@@ -289,6 +306,92 @@ export default function Dashboard() {
     }
     return base;
   }, [stats, isSuperadmin]);
+
+  const handleSelectWorkspace = async (orgId: string) => {
+    setIsSelectingId(orgId);
+    try {
+      const { error } = await supabase.from("profiles").update({ organization_id: orgId }).eq("user_id", profile!.id);
+
+      if (error) throw error;
+
+      // Instantly forces a secure application profile refresh
+      window.location.reload();
+    } catch (err) {
+      console.error("Workspace update context failed:", err);
+      setIsSelectingId(null);
+    }
+  };
+
+  // --- EMBEDDED MULTI-TENANT WORKSPACE GATEWAY PANEL ---
+  if (needsOrgSelection && !organizationId) {
+    return (
+      <div className="relative min-h-[75vh] flex items-center justify-center p-4">
+        <MorphingBlob className="w-[450px] h-[450px] -top-20 -right-20 opacity-30" color="hsl(265 90% 65% / 0.12)" />
+        <MorphingBlob className="w-[350px] h-[350px] bottom-0 left-10 opacity-20" color="hsl(12 90% 65% / 0.1)" />
+
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative z-10 w-full max-w-md space-y-6"
+        >
+          <div className="text-center space-y-2">
+            <div className="mx-auto w-12 h-12 rounded-xl bg-gradient-to-br from-primary via-coral to-accent flex items-center justify-center shadow-lg shadow-primary/30">
+              <Building2 className="w-5 h-5 text-white" />
+            </div>
+            <h1 className="text-2xl font-bold font-display text-gradient">Select Workspace</h1>
+            <p className="text-sm text-muted-foreground">
+              Your profile is registered to multiple accounts. Please select an organization context.
+            </p>
+          </div>
+
+          {orgsLoading ? (
+            <div className="space-y-3">
+              {[1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="h-[74px] w-full rounded-xl bg-white/[0.04] animate-pulse border border-white/[0.05]"
+                />
+              ))}
+            </div>
+          ) : userOrgs && userOrgs.length > 0 ? (
+            <div className="space-y-3">
+              {userOrgs.map((org: any, i: number) => (
+                <TiltCard key={org.id} className="cursor-pointer group" glowColor={GLOW_COLORS[i % GLOW_COLORS.length]}>
+                  <div
+                    className={`p-5 bg-gradient-to-br ${GRADIENT_PAIRS[i % GRADIENT_PAIRS.length]} flex items-center justify-between border-l-[3px] border-l-primary/70 group-hover:border-l-primary transition-all`}
+                    onClick={() => handleSelectWorkspace(org.id)}
+                  >
+                    <div className="space-y-0.5">
+                      <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">
+                        {org.name}
+                      </h3>
+                      {org.description && (
+                        <p className="text-xs text-muted-foreground line-clamp-1">{org.description}</p>
+                      )}
+                    </div>
+                    <div>
+                      {isSelectingId === org.id ? (
+                        <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                      )}
+                    </div>
+                  </div>
+                </TiltCard>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center p-6 border border-dashed border-white/[0.08] rounded-xl bg-white/[0.01]">
+              <p className="text-sm font-medium text-foreground">No Workspaces Found</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                You aren't associated with any active organization memberships yet. Please notify your administrator.
+              </p>
+            </div>
+          )}
+        </motion.div>
+      </div>
+    );
+  }
 
   // Student dashboard
   if (isStudent) {
@@ -880,39 +983,24 @@ export default function Dashboard() {
           >
             {cards.map((c, i) => (
               <motion.div key={c.label} variants={itemVariants}>
-                <TiltCard span={c.span} glowColor={GLOW_COLORS[i % GLOW_COLORS.length]} className="h-full">
+                <TiltCard span={c.span} glowColor={GLOW_COLORS[i % GLOW_COLORS.length]}>
                   <div
-                    className={`relative h-full p-5 bg-gradient-to-br ${GRADIENT_PAIRS[i % GRADIENT_PAIRS.length]} flex flex-col justify-between`}
+                    className={`h-full p-5 bg-gradient-to-br ${GRADIENT_PAIRS[i % GRADIENT_PAIRS.length]} flex flex-col justify-between`}
                   >
-                    <div
-                      className="absolute inset-0 rounded-2xl opacity-30 pointer-events-none"
-                      style={{
-                        boxShadow: `inset 0 0 40px ${GLOW_COLORS[i % GLOW_COLORS.length].replace(")", " / 0.15)")}`,
-                      }}
-                    />
-                    <div className="flex items-center justify-between relative z-10">
+                    <div className="flex justify-between items-start">
                       <div
                         className={`w-11 h-11 rounded-xl bg-gradient-to-br ${ICON_GRADIENTS[i % ICON_GRADIENTS.length]} flex items-center justify-center shadow-lg ${ICON_SHADOWS[i % ICON_SHADOWS.length]}`}
                       >
                         <c.icon className="w-5 h-5 text-white" />
                       </div>
-                      <ArrowRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-foreground transition-colors" />
                     </div>
-                    <div className="relative z-10">
-                      <AnimatedCounter
-                        value={c.value}
-                        className="text-3xl font-bold font-display text-gradient tracking-tight block"
-                      />
-                      <span className="text-sm text-muted-foreground mt-0.5 block">{c.label}</span>
-                    </div>
-                    <div className="absolute bottom-0 left-0 right-0 h-[3px]">
-                      <motion.div
-                        className={`h-full bg-gradient-to-r ${ICON_GRADIENTS[i % ICON_GRADIENTS.length]}`}
-                        initial={{ scaleX: 0 }}
-                        animate={{ scaleX: 1 }}
-                        transition={{ duration: 1, delay: 0.3 + i * 0.08, ease: [0.23, 1, 0.32, 1] }}
-                        style={{ transformOrigin: "left" }}
-                      />
+                    <div>
+                      <span className="text-3xl font-bold font-display text-gradient tracking-tight block">
+                        <AnimatedCounter value={c.value} />
+                      </span>
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        {c.label}
+                      </span>
                     </div>
                   </div>
                 </TiltCard>
@@ -921,50 +1009,7 @@ export default function Dashboard() {
           </motion.div>
         )}
 
-        {!isLoading && <EnrollmentTrendsChart />}
-
-        <motion.div
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6, duration: 0.5 }}
-          className="grid grid-cols-1 md:grid-cols-3 gap-4"
-        >
-          {[
-            {
-              title: "Schedule",
-              desc: "Manage class timetables",
-              path: "/schedule",
-              gradient: "from-purple-500/30 via-purple-600/10 to-transparent",
-              borderColor: "border-l-purple-500",
-            },
-            {
-              title: "Attendance",
-              desc: "Track student presence",
-              path: "/attendance",
-              gradient: "from-emerald-500/30 via-emerald-600/10 to-transparent",
-              borderColor: "border-l-emerald-500",
-            },
-            {
-              title: "Live Classes",
-              desc: "Join or create sessions",
-              path: "/live-classes",
-              gradient: "from-orange-500/30 via-orange-600/10 to-transparent",
-              borderColor: "border-l-orange-500",
-            },
-          ].map((item) => (
-            <TiltCard key={item.title} className="cursor-pointer group" glowColor="hsl(265 90% 65%)">
-              <div
-                className={`p-5 bg-gradient-to-br ${item.gradient} flex items-center justify-between border-l-[3px] ${item.borderColor}`}
-                onClick={() => navigate(item.path)}
-              >
-                <div>
-                  <h3 className="font-semibold text-foreground">{item.title}</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
-                </div>
-                <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
-              </div>
-            </TiltCard>
-          ))}
-        </motion.div>
+        {!isSuperadmin && <EnrollmentTrendsChart organizationId={organizationId} />}
       </div>
     </div>
   );
