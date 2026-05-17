@@ -50,6 +50,12 @@ const getErrorMessage = (error: any) => {
 
 export default function BatchesPage() {
   const { profile } = useAuth();
+
+  // Add this debug log
+  console.log("Full profile object:", profile);
+  console.log("organizationId:", profile?.organizationId);
+  console.log("organization_id:", (profile as any)?.organization_id);
+  const { profile } = useAuth();
   const { isAdmin } = useRBAC();
 
   const queryClient = useQueryClient();
