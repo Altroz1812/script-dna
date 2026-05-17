@@ -16,7 +16,10 @@ import { MarkAllReadButton } from '@/components/notifications/MarkAllReadButton'
 
 export default function NotificationsPage() {
   const { isAdmin } = useRBAC();
-  const { items, loading, unreadCount, markRead, markUnread, markAllRead, remove, refresh } = useNotifications();
+  const { items, loading, markRead, markUnread, remove, refresh } = useNotifications({
+    limit: 100,
+    toastOnInsert: false,
+  });
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title: '', message: '' });
 
@@ -44,11 +47,7 @@ export default function NotificationsPage() {
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h1 className="text-2xl font-bold text-foreground">Notifications</h1>
         <div className="flex items-center gap-2">
-          <MarkAllReadButton
-            variant="outline"
-            unreadCount={unreadCount}
-            onMarkAllRead={markAllRead}
-          />
+          <MarkAllReadButton variant="outline" />
           {isAdmin && (
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>

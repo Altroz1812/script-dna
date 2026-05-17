@@ -1,5 +1,6 @@
 import { CheckCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useNotifications } from '@/hooks/useNotifications';
 import { cn } from '@/lib/utils';
 
 interface MarkAllReadButtonProps {
@@ -7,8 +8,6 @@ interface MarkAllReadButtonProps {
   size?: 'sm' | 'default';
   variant?: 'ghost' | 'outline' | 'secondary' | 'default';
   hideWhenEmpty?: boolean;
-  unreadCount: number;
-  onMarkAllRead: () => void | Promise<void>;
 }
 
 export function MarkAllReadButton({
@@ -16,15 +15,14 @@ export function MarkAllReadButton({
   size = 'sm',
   variant = 'ghost',
   hideWhenEmpty = false,
-  unreadCount,
-  onMarkAllRead,
 }: MarkAllReadButtonProps) {
+  const { unreadCount, markAllRead } = useNotifications({ toastOnInsert: false });
   if (hideWhenEmpty && unreadCount === 0) return null;
   return (
     <Button
       variant={variant}
       size={size}
-      onClick={onMarkAllRead}
+      onClick={markAllRead}
       disabled={unreadCount === 0}
       className={cn('text-xs', className)}
     >

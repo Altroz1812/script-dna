@@ -1,4 +1,4 @@
-import { createContext, createElement, useContext, useEffect, useState, useCallback, useMemo, type ReactNode } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -19,24 +19,11 @@ interface UseNotificationsOptions {
   toastOnInsert?: boolean;
 }
 
-interface NotificationsState {
-  items: NotificationRow[];
-  loading: boolean;
-  unreadCount: number;
-  refresh: () => Promise<void>;
-  markRead: (id: string) => Promise<void>;
-  markUnread: (id: string) => Promise<void>;
-  markAllRead: () => Promise<void>;
-  remove: (id: string) => Promise<void>;
-}
-
-const NotificationsContext = createContext<NotificationsState | null>(null);
-
 /**
  * Universal per-user notifications hook. Provides realtime feed,
  * unread count, and shared mark/bulk actions for any role/component.
  */
-function useNotificationsSource(options: UseNotificationsOptions = {}): NotificationsState {
+export function useNotifications(options: UseNotificationsOptions = {}) {
   const { limit = 50, toastOnInsert = true } = options;
   const { profile } = useAuth();
   const userId = profile?.id;
@@ -160,19 +147,6 @@ function useNotificationsSource(options: UseNotificationsOptions = {}): Notifica
     markAllRead,
     remove,
   };
-}
-
-export function NotificationsProvider({ children }: { children: ReactNode }) {
-  const value = useNotificationsSource({ limit: 100, toastOnInsert: true });
-  return createElement(NotificationsContext.Provider, { value }, children);
-}
-
-export function useNotifications() {
-  const context = useContext(NotificationsContext);
-  if (!context) {
-    throw new Error('useNotifications must be used within NotificationsProvider');
-  }
-  return context;
 }
 
 export function timeAgo(iso: string): string {
