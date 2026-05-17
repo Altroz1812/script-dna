@@ -121,19 +121,6 @@ const createMutation = useMutation({
 
     return await batchService.createBatch(profile.organizationId, ...); // ← USE camelCase
   },
-  onSuccess: async () => {
-      toast.success("Batch created");
-      setBatchName("");
-      setSelectedCourse("");
-      setMaxStudents(25);
-      setOpen(false);
-      await invalidate();
-    },
-    onError: (error: any) => {
-      toast.error(getErrorMessage(error));
-    },
-  });
-
   // ---------------- DELETE ----------------
 
   const deleteMutation = useMutation({
