@@ -53,7 +53,7 @@ export default function BatchesPage() {
 
   // Add this debug log
   console.log("Profile object keys:", Object.keys(profile || {}));
-  console.log("organizationId value:", profile?.organizationId);
+  console.log("organization_id value:", profile?.organization_id);
   console.log("organization_id value:", (profile as any)?.organization_id);
 
   const { profile } = useAuth();
