@@ -125,9 +125,15 @@ Deno.serve(async (req) => {
 
         // Update profile with org
         await supabaseAdmin
-          .from("profiles")
-          .update({ organization_id: orgId })
-          .eq("user_id", userId);
+  .from("profiles")
+  .upsert({
+    user_id: userId,
+    organization_id: orgId,
+    display_name: user.name,
+    email: user.email,
+  }, {
+    onConflict: "user_id",
+  });          .eq("user_id", userId);
 
         results.push({ email: user.email, org: user.org, status: "org_assigned" });
       }
