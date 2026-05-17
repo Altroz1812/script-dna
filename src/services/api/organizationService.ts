@@ -26,16 +26,19 @@ export const organizationService = {
     return data ?? [];
   },
 
-  async getOrganization(id: string): Promise<Organization | null> {
-    const { data, error } = await (supabase
-      .from('organizations' as any)
-      .select('*')
-      .eq('id', id)
-      .maybeSingle() as any);
-    if (error) throw error;
-    return data;
-  },
+ async getOrganization(id: string): Promise<Organization | null> {
+  const { data, error } = await supabase
+    .from('organizations')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
 
+  console.log("ORG FETCH", { id, data, error });
+
+  if (error) throw error;
+
+  return data;
+}
   async createOrganization(name: string, slug: string): Promise<Organization> {
     const { data, error } = await (supabase
       .from('organizations' as any)
