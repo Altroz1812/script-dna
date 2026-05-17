@@ -123,7 +123,7 @@ export default function BatchesPage() {
         throw new Error("Organization ID missing");
       }
 
-      return await batchService.createBatch(profile.organization_id, selectedCourse, batchName.trim(), maxStudents);
+      return await batchService.createBatch(profile.organizationId, selectedCourse, batchName.trim(), maxStudents);
     },
 
     onSuccess: async () => {
