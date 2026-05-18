@@ -103,6 +103,8 @@ Deno.serve(async (req) => {
       'list_batch_students', 'add_batch_student', 'remove_batch_student', 'batch_student_count',
       'revenue_analytics', 'org_performance', 'student_trends',
       'system_health',
+      'list_practice_assignments', 'create_practice_assignment', 'update_practice_assignment', 'delete_practice_assignment',
+      'list_student_submissions', 'review_student_submission',
     ])
     if (!callerIsSuperadmin && ORG_SCOPED_ACTIONS.has(action) && !targetOrgId) {
       return new Response(JSON.stringify({ error: 'Forbidden: no active organization scope' }), {
