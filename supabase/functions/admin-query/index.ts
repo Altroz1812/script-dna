@@ -16,7 +16,19 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    const { action, params } = await req.json()
+    const body = await req.json()
+    const action = body.action
+    let params = body.params ?? {}
+
+    // SuperAdmin org-scoping override. When the client sets `target_org_id`,
+    // we treat the request as if it were issued by an admin scoped to that org.
+    const targetOrgId: string | null = (params && typeof params.target_org_id === 'string')
+      ? params.target_org_id
+      : null
+    if (params && 'target_org_id' in params) {
+      const { target_org_id: _omit, ...rest } = params
+      params = rest
+    }
 
     let result: any = null
 
@@ -50,7 +62,9 @@ Deno.serve(async (req) => {
 
       // ===== USERS =====
       case 'list_users': {
-        const { data: profiles } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
+        let profilesQ: any = supabase.from('profiles').select('*').order('created_at', { ascending: false })
+        if (targetOrgId) profilesQ = profilesQ.eq('organization_id', targetOrgId)
+        const { data: profiles } = await profilesQ
         const { data: roles } = await supabase.from('user_roles').select('user_id, role')
         const roleMap: Record<string, string> = {}
         for (const r of roles ?? []) roleMap[r.user_id] = r.role
@@ -164,7 +178,15 @@ Deno.serve(async (req) => {
 
       // ===== ENROLLMENTS =====
       case 'list_enrollments': {
-        const { data: enrollments } = await supabase.from('batch_students').select('*').order('enrolled_at', { ascending: false })
+        let scopedBatchIds: string[] | null = null
+        if (targetOrgId) {
+          const { data: ob } = await supabase.from('batches').select('id').eq('organization_id', targetOrgId)
+          scopedBatchIds = (ob ?? []).map((b: any) => b.id)
+          if (scopedBatchIds.length === 0) { result = []; break }
+        }
+        let enrollQ: any = supabase.from('batch_students').select('*').order('enrolled_at', { ascending: false })
+        if (scopedBatchIds) enrollQ = enrollQ.in('batch_id', scopedBatchIds)
+        const { data: enrollments } = await enrollQ
         const studentIds = [...new Set((enrollments ?? []).map((e: any) => e.student_id))]
         const batchIds = [...new Set((enrollments ?? []).map((e: any) => e.batch_id))]
         let profiles: any[] = []
@@ -251,7 +273,15 @@ Deno.serve(async (req) => {
 
       // ===== LIVE CLASSES =====
       case 'list_live_classes': {
-        const { data } = await supabase.from('live_classes').select('*, batches(name, teacher_id, courses(delivery_mode)), schedules(date, start_time, end_time, title, room)').order('scheduled_at', { ascending: false })
+        let scopedBatchIds: string[] | null = null
+        if (targetOrgId) {
+          const { data: ob } = await supabase.from('batches').select('id').eq('organization_id', targetOrgId)
+          scopedBatchIds = (ob ?? []).map((b: any) => b.id)
+          if (scopedBatchIds.length === 0) { result = []; break }
+        }
+        let lcQ: any = supabase.from('live_classes').select('*, batches(name, teacher_id, organization_id, courses(delivery_mode)), schedules(date, start_time, end_time, title, room)').order('scheduled_at', { ascending: false })
+        if (scopedBatchIds) lcQ = lcQ.in('batch_id', scopedBatchIds)
+        const { data } = await lcQ
         result = data ?? []
         break
       }
@@ -422,6 +452,11 @@ Deno.serve(async (req) => {
             .maybeSingle()
           callerOrgId = memberRow?.organization_id ?? null
         }
+        // SuperAdmin explicit org pick overrides "no scoping"
+        if (isSuperadmin && targetOrgId) {
+          callerOrgId = targetOrgId
+        }
+        const applyOrgScope = !isSuperadmin || !!targetOrgId
 
         // Determine candidate user_ids based on role + org scope
         const wantTeachers = action === 'list_teachers'
@@ -434,7 +469,7 @@ Deno.serve(async (req) => {
           .eq('role', targetRole)
         let candidateIds = new Set<string>((roleRows ?? []).map((r: any) => r.user_id))
 
-        if (!isSuperadmin) {
+        if (applyOrgScope) {
           if (!callerOrgId) { result = []; break }
 
           if (wantTeachers) {
@@ -498,8 +533,8 @@ Deno.serve(async (req) => {
           .in('student_id', ids)
         const enrollMap: Record<string, any[]> = {}
         for (const e of enrollments ?? []) {
-          // For admins, only include enrollments within their org
-          if (!isSuperadmin && callerOrgId && e.batches?.organization_id !== callerOrgId) continue
+          // Restrict enrollments to the scoped org (admin's org, or SuperAdmin's picked org)
+          if (applyOrgScope && callerOrgId && e.batches?.organization_id !== callerOrgId) continue
           if (!enrollMap[e.student_id]) enrollMap[e.student_id] = []
           enrollMap[e.student_id].push(e)
         }
@@ -514,7 +549,7 @@ Deno.serve(async (req) => {
         break
       }
       case 'create_course': {
-        const { name, description, created_by, grade_level, duration_days, total_hours, daily_hours, language, writing_style, includes_speed, fee, delivery_mode, center } = params
+        const { name, description, created_by, grade_level, duration_days, total_hours, daily_hours, language, writing_style, includes_speed, fee, delivery_mode, center, organization_id } = params
         const { data, error } = await supabase.from('courses').insert({
           name, description, created_by,
           grade_level: grade_level || null,
@@ -527,6 +562,7 @@ Deno.serve(async (req) => {
           fee: fee ?? 0,
           delivery_mode: delivery_mode || 'online',
           center: center || null,
+          organization_id: organization_id || targetOrgId || null,
         }).select().single()
         if (error) throw error
         result = data
@@ -550,13 +586,17 @@ Deno.serve(async (req) => {
       case 'list_batches': {
         let query = supabase.from('batches').select('*, courses(name, duration_days, daily_hours, total_hours, delivery_mode)')
         if (params?.course_id) query = query.eq('course_id', params.course_id)
+        if (targetOrgId) query = query.eq('organization_id', targetOrgId)
         const { data } = await query.order('created_at', { ascending: false })
         result = data ?? []
         break
       }
       case 'create_batch': {
-        const { course_id, name, max_students } = params
-        const { data, error } = await supabase.from('batches').insert({ course_id, name, max_students: max_students ?? 25 }).select().single()
+        const { course_id, name, max_students, organization_id } = params
+        const orgIdForInsert = organization_id || targetOrgId || null
+        const insertRow: any = { course_id, name, max_students: max_students ?? 25 }
+        if (orgIdForInsert) insertRow.organization_id = orgIdForInsert
+        const { data, error } = await supabase.from('batches').insert(insertRow).select().single()
         if (error) throw error
         result = data
         break

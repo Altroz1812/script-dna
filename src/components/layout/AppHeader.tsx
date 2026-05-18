@@ -1,10 +1,12 @@
-import { LogOut, User, Settings, ChevronDown } from 'lucide-react';
+import { LogOut, User, Settings, ChevronDown, Building2, Globe2, Repeat } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRBAC } from '@/hooks/useRBAC';
+import { useActiveOrg } from '@/contexts/ActiveOrgContext';
 import { ROLE_LABELS } from '@/types/roles';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { NotificationsBell } from '@/components/layout/NotificationsBell';
 import {
@@ -20,6 +22,7 @@ export function AppHeader() {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
   const { isSuperAdmin } = useRBAC();
+  const { activeOrgId, activeOrgName } = useActiveOrg();
 
   const initials = profile?.displayName
     ? profile.displayName
@@ -42,6 +45,27 @@ export function AppHeader() {
 
       <div className="flex items-center gap-2">
         <SidebarTrigger />
+        {isSuperAdmin && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate('/select-organization')}
+            className="ml-2 h-8 gap-2 bg-white/[0.03] border-white/[0.1] hover:border-primary/40"
+            title="Switch organization"
+          >
+            {activeOrgId === null ? (
+              <Globe2 className="h-3.5 w-3.5 text-primary" />
+            ) : (
+              <Building2 className="h-3.5 w-3.5 text-primary" />
+            )}
+            <span className="hidden sm:inline text-xs font-medium max-w-[160px] truncate">
+              {activeOrgId === null ? 'Global view' : (activeOrgName || 'Select organization')}
+            </span>
+            <Badge variant="secondary" className="hidden md:inline-flex h-5 px-1.5 text-[10px]">
+              <Repeat className="h-3 w-3 mr-1" /> Switch
+            </Badge>
+          </Button>
+        )}
       </div>
 
       <div className="flex items-center gap-1">

@@ -1,6 +1,20 @@
 import { supabase } from '@/integrations/supabase/client';
+import { readActiveOrgFromStorage } from '@/contexts/ActiveOrgContext';
 
 export async function adminQuery(action: string, params: any = {}): Promise<any> {
+  // Auto-inject the SuperAdmin's active organization scope unless the caller opts out
+  // via __skip_org_filter, or an organization_id is already explicit on the params.
+  if (params && !params.__skip_org_filter && params.target_org_id === undefined) {
+    const active = readActiveOrgFromStorage();
+    // undefined (no selection yet) or null (Global) → no scoping
+    if (typeof active === 'string') {
+      params = { ...params, target_org_id: active };
+    }
+  }
+  if (params && '__skip_org_filter' in params) {
+    const { __skip_org_filter: _omit, ...rest } = params;
+    params = rest;
+  }
   switch (action) {
     // ===== STATS =====
     case 'get_stats': return getStats(params);
@@ -504,7 +518,10 @@ async function deleteNotification(params: any) {
 
 // ===== COURSES =====
 async function listCourses() {
-  const { data, error } = await (supabase.from('courses' as any).select('*').order('created_at', { ascending: false }) as any);
+  const targetOrgId = readActiveOrgFromStorage();
+  let q: any = supabase.from('courses' as any).select('*').order('created_at', { ascending: false });
+  if (typeof targetOrgId === 'string') q = q.eq('organization_id', targetOrgId);
+  const { data, error } = await q;
   if (error) throw error;
   return data ?? [];
 }

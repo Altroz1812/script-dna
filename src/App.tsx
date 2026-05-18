@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { CartProvider } from "@/contexts/CartContext";
+import { ActiveOrgProvider } from "@/contexts/ActiveOrgContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { AppLayout } from "@/components/layout/AppLayout";
 import LandingPage from "@/pages/LandingPage";
@@ -47,6 +48,7 @@ import ParentChildrenPage from "@/pages/ParentChildrenPage";
 import ParentProgressPage from "@/pages/ParentProgressPage";
 import OrderHistoryPage from "@/pages/OrderHistoryPage";
 import ProfilePage from "@/pages/ProfilePage";
+import SelectOrganizationPage from "@/pages/SelectOrganizationPage";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -57,6 +59,7 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <AuthProvider>
+            <ActiveOrgProvider>
             <Routes>
               {/* Public routes */}
               <Route path="/" element={<LandingPage />} />
@@ -65,6 +68,7 @@ const App = () => (
               <Route path="/checkout" element={<CheckoutPage />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/select-organization" element={<ProtectedRoute allowedRoles={['superadmin']}><SelectOrganizationPage /></ProtectedRoute>} />
 
               {/* Protected app routes */}
               <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
@@ -104,6 +108,7 @@ const App = () => (
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
+            </ActiveOrgProvider>
           </AuthProvider>
         </BrowserRouter>
       </CartProvider>
