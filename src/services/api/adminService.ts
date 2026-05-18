@@ -1,141 +1,189 @@
-import { supabase } from '@/integrations/supabase/client';
-import { readActiveOrgFromStorage } from '@/contexts/ActiveOrgContext';
+import { supabase } from "@/integrations/supabase/client";
+import { readActiveOrgFromStorage } from "@/contexts/ActiveOrgContext";
 
 export async function adminQuery(action: string, params: any = {}): Promise<any> {
-  // Auto-inject the SuperAdmin's active organization scope unless the caller opts out
-  // via __skip_org_filter, or an organization_id is already explicit on the params.
+  // Don't auto-inject for get_stats - we want explicit control
+  if (action === "get_stats") {
+    // Pass through as-is, no auto-injection
+    return getStats(params);
+  }
+
+  // For other actions, handle org filtering
   if (params && !params.__skip_org_filter && params.target_org_id === undefined) {
     const active = readActiveOrgFromStorage();
-    // undefined (no selection yet) or null (Global) → no scoping
-    if (typeof active === 'string') {
+    if (typeof active === "string") {
       params = { ...params, target_org_id: active };
     }
   }
-  if (params && '__skip_org_filter' in params) {
+
+  // Remove skip flag if present
+  if (params && "__skip_org_filter" in params) {
     const { __skip_org_filter: _omit, ...rest } = params;
     params = rest;
   }
+
   switch (action) {
-    // ===== STATS =====
-    case 'get_stats': return getStats(params);
+    case "get_stats":
+      return getStats(params);
+    // ... rest of your cases
 
     // ===== USERS =====
-    case 'list_users': return listUsers();
-    case 'update_user': return updateUser(params);
-    case 'delete_user': return deleteUser(params);
-    case 'change_role': return changeRole(params);
+    case "list_users":
+      return listUsers();
+    case "update_user":
+      return updateUser(params);
+    case "delete_user":
+      return deleteUser(params);
+    case "change_role":
+      return changeRole(params);
 
     // ===== ORGANIZATIONS =====
-    case 'list_organizations': return listOrganizations();
-    case 'create_organization': return createOrganization(params);
-    case 'delete_organization': return deleteOrganization(params);
-    case 'list_org_members': return listOrgMembers(params);
-    case 'add_org_member': return addOrgMember(params);
-    case 'remove_org_member': return removeOrgMember(params);
+    case "list_organizations":
+      return listOrganizations();
+    case "create_organization":
+      return createOrganization(params);
+    case "delete_organization":
+      return deleteOrganization(params);
+    case "list_org_members":
+      return listOrgMembers(params);
+    case "add_org_member":
+      return addOrgMember(params);
+    case "remove_org_member":
+      return removeOrgMember(params);
 
     // ===== LEADS =====
-    case 'list_leads': return listLeads();
-    case 'create_lead': return createLead(params);
-    case 'update_lead': return updateLead(params);
-    case 'delete_lead': return deleteLead(params);
+    case "list_leads":
+      return listLeads();
+    case "create_lead":
+      return createLead(params);
+    case "update_lead":
+      return updateLead(params);
+    case "delete_lead":
+      return deleteLead(params);
 
     // ===== ENROLLMENTS =====
-    case 'list_enrollments': return listEnrollments();
+    case "list_enrollments":
+      return listEnrollments();
 
     // ===== SCHEDULES =====
-    case 'list_schedules': return listSchedules(params);
-    case 'create_schedule': return createSchedule(params);
-    case 'update_schedule': return updateSchedule(params);
-    case 'delete_schedule': return deleteSchedule(params);
+    case "list_schedules":
+      return listSchedules(params);
+    case "create_schedule":
+      return createSchedule(params);
+    case "update_schedule":
+      return updateSchedule(params);
+    case "delete_schedule":
+      return deleteSchedule(params);
 
     // ===== ATTENDANCE =====
-    case 'list_attendance': return listAttendance(params);
-    case 'save_attendance': return saveAttendance(params);
+    case "list_attendance":
+      return listAttendance(params);
+    case "save_attendance":
+      return saveAttendance(params);
 
     // ===== LIVE CLASSES =====
-    case 'list_live_classes': return listLiveClasses();
-    case 'create_live_class': return createLiveClass(params);
-    case 'update_live_class': return updateLiveClass(params);
-    case 'delete_live_class': return deleteLiveClass(params);
+    case "list_live_classes":
+      return listLiveClasses();
+    case "create_live_class":
+      return createLiveClass(params);
+    case "update_live_class":
+      return updateLiveClass(params);
+    case "delete_live_class":
+      return deleteLiveClass(params);
 
     // ===== MATERIALS =====
-    case 'list_materials': return listMaterials(params);
-    case 'create_material': return createMaterial(params);
-    case 'delete_material': return deleteMaterial(params);
+    case "list_materials":
+      return listMaterials(params);
+    case "create_material":
+      return createMaterial(params);
+    case "delete_material":
+      return deleteMaterial(params);
 
     // ===== PAYMENTS =====
-    case 'list_payments': return listPayments();
-    case 'create_payment': return createPayment(params);
-    case 'update_payment': return updatePayment(params);
+    case "list_payments":
+      return listPayments();
+    case "create_payment":
+      return createPayment(params);
+    case "update_payment":
+      return updatePayment(params);
 
     // ===== PAYROLL =====
-    case 'list_payroll': return listPayroll();
-    case 'create_payroll': return createPayroll(params);
-    case 'update_payroll': return updatePayroll(params);
+    case "list_payroll":
+      return listPayroll();
+    case "create_payroll":
+      return createPayroll(params);
+    case "update_payroll":
+      return updatePayroll(params);
 
     // ===== NOTIFICATIONS =====
-    case 'list_notifications': return listNotifications();
-    case 'create_notification': return createNotification(params);
-    case 'mark_read': return markRead(params);
-    case 'delete_notification': return deleteNotification(params);
+    case "list_notifications":
+      return listNotifications();
+    case "create_notification":
+      return createNotification(params);
+    case "mark_read":
+      return markRead(params);
+    case "delete_notification":
+      return deleteNotification(params);
 
     // ===== STUDENTS =====
-    case 'list_students_with_batches':
-    case 'list_teachers':
-    case 'list_all_students':
+    case "list_students_with_batches":
+    case "list_teachers":
+    case "list_all_students":
       return edgeFunctionAction(action, params);
 
     // ===== COURSES =====
-    case 'list_courses': return listCourses();
-    case 'delete_course': return deleteCourse(params);
+    case "list_courses":
+      return listCourses();
+    case "delete_course":
+      return deleteCourse(params);
 
     // ===== BATCHES =====
     // Routed through edge function (service role + admin org scoping)
-    case 'list_batches':
-    case 'create_batch':
-    case 'update_batch':
-    case 'delete_batch':
-    case 'list_batch_students':
-    case 'add_batch_student':
-    case 'remove_batch_student':
-    case 'batch_student_count':
+    case "list_batches":
+    case "create_batch":
+    case "update_batch":
+    case "delete_batch":
+    case "list_batch_students":
+    case "add_batch_student":
+    case "remove_batch_student":
+    case "batch_student_count":
       return edgeFunctionAction(action, params);
 
     // ===== EDGE FUNCTION ACTIONS (require service role) =====
-    case 'toggle_org_active':
-    case 'toggle_user_active':
-    case 'create_user':
-    case 'admin_reset_password':
-    case 'list_activity_logs':
-    case 'revenue_analytics':
-    case 'org_performance':
-    case 'student_trends':
-    case 'list_subscription_plans':
-    case 'create_subscription_plan':
-    case 'update_subscription_plan':
-    case 'delete_subscription_plan':
-    case 'list_org_subscriptions':
-    case 'assign_org_subscription':
-    case 'cancel_org_subscription':
-    case 'list_coupons':
-    case 'create_coupon':
-    case 'update_coupon':
-    case 'delete_coupon':
-    case 'update_org_branding':
-    case 'list_course_modules':
-    case 'create_course_module':
-    case 'update_course_module':
-    case 'delete_course_module':
-    case 'create_lesson':
-    case 'update_lesson':
-    case 'delete_lesson':
-    case 'list_parent_children':
-    case 'add_parent_child':
-    case 'remove_parent_child':
-    case 'list_parents':
-    case 'bulk_create_schedules':
-    case 'create_course':
-    case 'update_course':
+    case "toggle_org_active":
+    case "toggle_user_active":
+    case "create_user":
+    case "admin_reset_password":
+    case "list_activity_logs":
+    case "revenue_analytics":
+    case "org_performance":
+    case "student_trends":
+    case "list_subscription_plans":
+    case "create_subscription_plan":
+    case "update_subscription_plan":
+    case "delete_subscription_plan":
+    case "list_org_subscriptions":
+    case "assign_org_subscription":
+    case "cancel_org_subscription":
+    case "list_coupons":
+    case "create_coupon":
+    case "update_coupon":
+    case "delete_coupon":
+    case "update_org_branding":
+    case "list_course_modules":
+    case "create_course_module":
+    case "update_course_module":
+    case "delete_course_module":
+    case "create_lesson":
+    case "update_lesson":
+    case "delete_lesson":
+    case "list_parent_children":
+    case "add_parent_child":
+    case "remove_parent_child":
+    case "list_parents":
+    case "bulk_create_schedules":
+    case "create_course":
+    case "update_course":
       return edgeFunctionAction(action, params);
 
     default:
@@ -144,50 +192,109 @@ export async function adminQuery(action: string, params: any = {}): Promise<any>
 }
 
 // ===== STATS (live query, org-scoped) =====
+// ===== STATS (live query, org-scoped) =====
 async function getStats(params: { organizationId?: string | null; isSuperadmin?: boolean } = {}) {
   const { organizationId, isSuperadmin } = params;
-  const scoped = !isSuperadmin && !!organizationId;
+
+  console.log("getStats received:", { organizationId, isSuperadmin });
+
+  // For superadmin: if organizationId is provided (string), scope to that org
+  // For superadmin: if organizationId is null, show global (all orgs)
+  // For regular admin: always scope to their org
+  const shouldScopeToOrg = !!organizationId; // If we have an org ID, scope to it
+
+  console.log("shouldScopeToOrg:", shouldScopeToOrg, "orgId:", organizationId);
 
   // Courses count
-  let coursesQ = supabase.from('courses' as any).select('id', { count: 'exact', head: true }) as any;
-  if (scoped) coursesQ = coursesQ.eq('organization_id', organizationId);
+  let coursesQ = supabase.from("courses" as any).select("id", { count: "exact", head: true }) as any;
+  if (shouldScopeToOrg) {
+    coursesQ = coursesQ.eq("organization_id", organizationId);
+  }
   const { count: totalCourses } = await coursesQ;
 
   // Batches count
-  let batchesQ = supabase.from('batches' as any).select('id', { count: 'exact', head: true }) as any;
-  if (scoped) batchesQ = batchesQ.eq('organization_id', organizationId);
+  let batchesQ = supabase.from("batches" as any).select("id", { count: "exact", head: true }) as any;
+  if (shouldScopeToOrg) {
+    batchesQ = batchesQ.eq("organization_id", organizationId);
+  }
   const { count: totalBatches } = await batchesQ;
 
-  // Org members (users in this org) or total users
+  // Users count - FIXED: Use profiles or organization_members correctly
   let totalUsers = 0;
-  if (scoped) {
-    const { count } = await (supabase.from('organization_members' as any).select('id', { count: 'exact', head: true }).eq('organization_id', organizationId) as any);
+  if (shouldScopeToOrg) {
+    // For scoped view, get users from organization_members
+    const { count } = await (supabase
+      .from("organization_members" as any)
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId) as any);
     totalUsers = count ?? 0;
   } else {
-    const { count } = await (supabase.from('profiles' as any).select('id', { count: 'exact', head: true }) as any);
+    // For global view (superadmin with no org selected), count all profiles
+    const { count } = await (supabase.from("profiles" as any).select("id", { count: "exact", head: true }) as any);
     totalUsers = count ?? 0;
   }
 
-  // Orgs count (platform-wide always)
-  const { count: totalOrgs } = await (supabase.from('organizations' as any).select('id', { count: 'exact', head: true }) as any);
+  // Orgs count - only show in global view
+  let totalOrgs = 0;
+  if (!shouldScopeToOrg && isSuperadmin) {
+    const { count } = await (supabase.from("organizations" as any).select("id", { count: "exact", head: true }) as any);
+    totalOrgs = count ?? 0;
+  }
 
-  // Leads & payments (not org-scoped currently)
-  const { count: totalLeads } = await (supabase.from('leads' as any).select('id', { count: 'exact', head: true }) as any);
-  const { count: totalPayments } = await (supabase.from('payments' as any).select('id', { count: 'exact', head: true }) as any);
+  // Leads - scope if needed
+  let leadsQ = supabase.from("leads" as any).select("id", { count: "exact", head: true }) as any;
+  if (shouldScopeToOrg && isSuperadmin) {
+    // If leads has organization_id
+    leadsQ = leadsQ.eq("organization_id", organizationId);
+  }
+  const { count: totalLeads } = await leadsQ;
 
-  // Role counts – scoped to org members if not superadmin
+  // Payments - scope if needed
+  let paymentsQ = supabase.from("payments" as any).select("id", { count: "exact", head: true }) as any;
+  if (shouldScopeToOrg && isSuperadmin) {
+    paymentsQ = paymentsQ.eq("organization_id", organizationId);
+  }
+  const { count: totalPayments } = await paymentsQ;
+
+  // Role counts - FIXED: Properly scope to organization members
   let roleCounts: Record<string, number> = {};
-  if (scoped) {
-    const { data: members } = await (supabase.from('organization_members' as any).select('user_id').eq('organization_id', organizationId) as any);
+
+  if (shouldScopeToOrg) {
+    // Get members of this organization
+    const { data: members } = await (supabase
+      .from("organization_members" as any)
+      .select("user_id")
+      .eq("organization_id", organizationId) as any);
+
     const memberIds = (members ?? []).map((m: any) => m.user_id);
+
     if (memberIds.length > 0) {
-      const { data: roles } = await (supabase.from('user_roles' as any).select('role').in('user_id', memberIds) as any);
-      for (const r of roles ?? []) roleCounts[r.role] = (roleCounts[r.role] || 0) + 1;
+      const { data: roles } = await (supabase
+        .from("user_roles" as any)
+        .select("role")
+        .in("user_id", memberIds) as any);
+
+      for (const r of roles ?? []) {
+        roleCounts[r.role] = (roleCounts[r.role] || 0) + 1;
+      }
     }
   } else {
-    const { data: roles } = await (supabase.from('user_roles' as any).select('role') as any);
-    for (const r of roles ?? []) roleCounts[r.role] = (roleCounts[r.role] || 0) + 1;
+    // Global view - count all roles
+    const { data: roles } = await (supabase.from("user_roles" as any).select("role") as any);
+    for (const r of roles ?? []) {
+      roleCounts[r.role] = (roleCounts[r.role] || 0) + 1;
+    }
   }
+
+  console.log("Stats result:", {
+    totalUsers,
+    totalCourses,
+    totalBatches,
+    totalOrgs,
+    totalLeads,
+    totalPayments,
+    roleCounts,
+  });
 
   return {
     totalUsers: totalUsers ?? 0,
@@ -202,42 +309,64 @@ async function getStats(params: { organizationId?: string | null; isSuperadmin?:
 
 // ===== USERS =====
 async function listUsers() {
-  const { data: profilesData } = await (supabase.from('profiles' as any).select('*').order('created_at', { ascending: false }) as any);
-  const { data: rolesData } = await (supabase.from('user_roles' as any).select('user_id, role') as any);
+  const { data: profilesData } = await (supabase
+    .from("profiles" as any)
+    .select("*")
+    .order("created_at", { ascending: false }) as any);
+  const { data: rolesData } = await (supabase.from("user_roles" as any).select("user_id, role") as any);
   const roleMap: Record<string, string> = {};
   for (const r of rolesData ?? []) roleMap[r.user_id] = r.role;
-  return (profilesData ?? []).map((p: any) => ({ ...p, role: roleMap[p.user_id] || 'student' }));
+  return (profilesData ?? []).map((p: any) => ({ ...p, role: roleMap[p.user_id] || "student" }));
 }
 
 async function updateUser(params: any) {
   const { user_id, display_name } = params;
-  const { error } = await (supabase.from('profiles' as any).update({ display_name }).eq('user_id', user_id) as any);
+  const { error } = await (supabase
+    .from("profiles" as any)
+    .update({ display_name })
+    .eq("user_id", user_id) as any);
   if (error) throw error;
   return { success: true };
 }
 
 async function deleteUser(params: any) {
   const { user_id } = params;
-  await (supabase.from('profiles' as any).delete().eq('user_id', user_id) as any);
-  await (supabase.from('user_roles' as any).delete().eq('user_id', user_id) as any);
+  await (supabase
+    .from("profiles" as any)
+    .delete()
+    .eq("user_id", user_id) as any);
+  await (supabase
+    .from("user_roles" as any)
+    .delete()
+    .eq("user_id", user_id) as any);
   return { success: true };
 }
 
 async function changeRole(params: any) {
   const { user_id, role } = params;
-  const { data: existing } = await (supabase.from('user_roles' as any).select('id').eq('user_id', user_id).maybeSingle() as any);
+  const { data: existing } = await (supabase
+    .from("user_roles" as any)
+    .select("id")
+    .eq("user_id", user_id)
+    .maybeSingle() as any);
   if (existing) {
-    await (supabase.from('user_roles' as any).update({ role }).eq('user_id', user_id) as any);
+    await (supabase
+      .from("user_roles" as any)
+      .update({ role })
+      .eq("user_id", user_id) as any);
   } else {
-    await (supabase.from('user_roles' as any).insert({ user_id, role }) as any);
+    await (supabase.from("user_roles" as any).insert({ user_id, role }) as any);
   }
   return { success: true };
 }
 
 // ===== ORGANIZATIONS =====
 async function listOrganizations() {
-  const { data: orgs } = await (supabase.from('organizations' as any).select('*').order('created_at', { ascending: false }) as any);
-  const { data: members } = await (supabase.from('organization_members' as any).select('organization_id') as any);
+  const { data: orgs } = await (supabase
+    .from("organizations" as any)
+    .select("*")
+    .order("created_at", { ascending: false }) as any);
+  const { data: members } = await (supabase.from("organization_members" as any).select("organization_id") as any);
   const countMap: Record<string, number> = {};
   for (const m of members ?? []) countMap[m.organization_id] = (countMap[m.organization_id] || 0) + 1;
   return (orgs ?? []).map((o: any) => ({ ...o, member_count: countMap[o.id] || 0 }));
@@ -245,26 +374,42 @@ async function listOrganizations() {
 
 async function createOrganization(params: any) {
   const { name, slug } = params;
-  const { data, error } = await (supabase.from('organizations' as any).insert({ name, slug }).select().single() as any);
+  const { data, error } = await (supabase
+    .from("organizations" as any)
+    .insert({ name, slug })
+    .select()
+    .single() as any);
   if (error) throw error;
   return data;
 }
 
 async function deleteOrganization(params: any) {
   const { id } = params;
-  await (supabase.from('organization_members' as any).delete().eq('organization_id', id) as any);
-  const { error } = await (supabase.from('organizations' as any).delete().eq('id', id) as any);
+  await (supabase
+    .from("organization_members" as any)
+    .delete()
+    .eq("organization_id", id) as any);
+  const { error } = await (supabase
+    .from("organizations" as any)
+    .delete()
+    .eq("id", id) as any);
   if (error) throw error;
   return { success: true };
 }
 
 async function listOrgMembers(params: any) {
   const { organization_id } = params;
-  const { data: members } = await (supabase.from('organization_members' as any).select('*').eq('organization_id', organization_id) as any);
+  const { data: members } = await (supabase
+    .from("organization_members" as any)
+    .select("*")
+    .eq("organization_id", organization_id) as any);
   const userIds = (members ?? []).map((m: any) => m.user_id);
   let profiles: any[] = [];
   if (userIds.length > 0) {
-    const { data } = await (supabase.from('profiles' as any).select('user_id, display_name, email').in('user_id', userIds) as any);
+    const { data } = await (supabase
+      .from("profiles" as any)
+      .select("user_id, display_name, email")
+      .in("user_id", userIds) as any);
     profiles = data ?? [];
   }
   const profileMap: Record<string, any> = {};
@@ -274,57 +419,83 @@ async function listOrgMembers(params: any) {
 
 async function addOrgMember(params: any) {
   const { organization_id, user_id } = params;
-  const { error } = await (supabase.from('organization_members' as any).insert({ organization_id, user_id }) as any);
+  const { error } = await (supabase.from("organization_members" as any).insert({ organization_id, user_id }) as any);
   if (error) throw error;
   return { success: true };
 }
 
 async function removeOrgMember(params: any) {
   const { organization_id, user_id } = params;
-  const { error } = await (supabase.from('organization_members' as any).delete().eq('organization_id', organization_id).eq('user_id', user_id) as any);
+  const { error } = await (supabase
+    .from("organization_members" as any)
+    .delete()
+    .eq("organization_id", organization_id)
+    .eq("user_id", user_id) as any);
   if (error) throw error;
   return { success: true };
 }
 
 // ===== LEADS =====
 async function listLeads() {
-  const { data, error } = await (supabase.from('leads' as any).select('*').order('created_at', { ascending: false }) as any);
+  const { data, error } = await (supabase
+    .from("leads" as any)
+    .select("*")
+    .order("created_at", { ascending: false }) as any);
   if (error) throw error;
   return data ?? [];
 }
 
 async function createLead(params: any) {
-  const { data, error } = await (supabase.from('leads' as any).insert(params).select().single() as any);
+  const { data, error } = await (supabase
+    .from("leads" as any)
+    .insert(params)
+    .select()
+    .single() as any);
   if (error) throw error;
   return data;
 }
 
 async function updateLead(params: any) {
   const { id, ...updates } = params;
-  const { error } = await (supabase.from('leads' as any).update(updates).eq('id', id) as any);
+  const { error } = await (supabase
+    .from("leads" as any)
+    .update(updates)
+    .eq("id", id) as any);
   if (error) throw error;
   return { success: true };
 }
 
 async function deleteLead(params: any) {
-  const { error } = await (supabase.from('leads' as any).delete().eq('id', params.id) as any);
+  const { error } = await (supabase
+    .from("leads" as any)
+    .delete()
+    .eq("id", params.id) as any);
   if (error) throw error;
   return { success: true };
 }
 
 // ===== ENROLLMENTS =====
 async function listEnrollments() {
-  const { data: enrollments } = await (supabase.from('batch_students' as any).select('*').order('enrolled_at', { ascending: false }) as any);
+  const { data: enrollments } = await (supabase
+    .from("batch_students" as any)
+    .select("*")
+    .order("enrolled_at", { ascending: false }) as any);
   const studentIds = [...new Set((enrollments ?? []).map((e: any) => e.student_id))];
   const batchIds = [...new Set((enrollments ?? []).map((e: any) => e.batch_id))];
   let profiles: any[] = [];
   let batches: any[] = [];
   if (studentIds.length) {
-    const { data } = await (supabase.from('profiles' as any).select('user_id, display_name, email').in('user_id', studentIds) as any);
+    const { data } = await (supabase
+      .from("profiles" as any)
+      .select("user_id, display_name, email")
+      .in("user_id", studentIds) as any);
     profiles = data ?? [];
   }
   if (batchIds.length) {
-    const { data } = await (supabase.from('batches' as any).select('id, name, course_id, courses(name)').in('id', batchIds) as any);
+    const { data } = await (supabase
+      .from("batches" as any)
+      .select("id, name, course_id, courses(name)")
+      .in("id", batchIds) as any);
     batches = data ?? [];
   }
   const pMap: Record<string, any> = {};
@@ -340,41 +511,61 @@ async function listEnrollments() {
 
 // ===== SCHEDULES =====
 async function listSchedules(params: any) {
-  let query = supabase.from('schedules' as any).select('*, batches(name, courses(name))').order('day_of_week').order('start_time') as any;
-  if (params?.batch_id) query = query.eq('batch_id', params.batch_id);
+  let query = supabase
+    .from("schedules" as any)
+    .select("*, batches(name, courses(name))")
+    .order("day_of_week")
+    .order("start_time") as any;
+  if (params?.batch_id) query = query.eq("batch_id", params.batch_id);
   const { data } = await query;
   return data ?? [];
 }
 
 async function createSchedule(params: any) {
-  const { data, error } = await (supabase.from('schedules' as any).insert(params).select().single() as any);
+  const { data, error } = await (supabase
+    .from("schedules" as any)
+    .insert(params)
+    .select()
+    .single() as any);
   if (error) throw error;
   return data;
 }
 
 async function updateSchedule(params: any) {
   const { id, ...updates } = params;
-  const { error } = await (supabase.from('schedules' as any).update(updates).eq('id', id) as any);
+  const { error } = await (supabase
+    .from("schedules" as any)
+    .update(updates)
+    .eq("id", id) as any);
   if (error) throw error;
   return { success: true };
 }
 
 async function deleteSchedule(params: any) {
-  const { error } = await (supabase.from('schedules' as any).delete().eq('id', params.id) as any);
+  const { error } = await (supabase
+    .from("schedules" as any)
+    .delete()
+    .eq("id", params.id) as any);
   if (error) throw error;
   return { success: true };
 }
 
 // ===== ATTENDANCE =====
 async function listAttendance(params: any) {
-  let query = supabase.from('attendance' as any).select('*').order('date', { ascending: false }) as any;
-  if (params?.batch_id) query = query.eq('batch_id', params.batch_id);
-  if (params?.date) query = query.eq('date', params.date);
+  let query = supabase
+    .from("attendance" as any)
+    .select("*")
+    .order("date", { ascending: false }) as any;
+  if (params?.batch_id) query = query.eq("batch_id", params.batch_id);
+  if (params?.date) query = query.eq("date", params.date);
   const { data } = await query;
   const sIds = [...new Set((data ?? []).map((a: any) => a.student_id))];
   let profs: any[] = [];
   if (sIds.length) {
-    const { data: p } = await (supabase.from('profiles' as any).select('user_id, display_name, email').in('user_id', sIds) as any);
+    const { data: p } = await (supabase
+      .from("profiles" as any)
+      .select("user_id, display_name, email")
+      .in("user_id", sIds) as any);
     profs = p ?? [];
   }
   const pm: Record<string, any> = {};
@@ -384,10 +575,14 @@ async function listAttendance(params: any) {
 
 async function saveAttendance(params: any) {
   const { batch_id, date, records } = params;
-  await (supabase.from('attendance' as any).delete().eq('batch_id', batch_id).eq('date', date) as any);
+  await (supabase
+    .from("attendance" as any)
+    .delete()
+    .eq("batch_id", batch_id)
+    .eq("date", date) as any);
   if (records.length > 0) {
     const rows = records.map((r: any) => ({ batch_id, date, student_id: r.student_id, status: r.status }));
-    const { error } = await (supabase.from('attendance' as any).insert(rows) as any);
+    const { error } = await (supabase.from("attendance" as any).insert(rows) as any);
     if (error) throw error;
   }
   return { success: true };
@@ -395,56 +590,85 @@ async function saveAttendance(params: any) {
 
 // ===== LIVE CLASSES =====
 async function listLiveClasses() {
-  const { data } = await (supabase.from('live_classes' as any).select('*, batches(name, teacher_id, courses(delivery_mode))').order('scheduled_at', { ascending: false }) as any);
+  const { data } = await (supabase
+    .from("live_classes" as any)
+    .select("*, batches(name, teacher_id, courses(delivery_mode))")
+    .order("scheduled_at", { ascending: false }) as any);
   return data ?? [];
 }
 
 async function createLiveClass(params: any) {
-  const { data, error } = await (supabase.from('live_classes' as any).insert(params).select().single() as any);
+  const { data, error } = await (supabase
+    .from("live_classes" as any)
+    .insert(params)
+    .select()
+    .single() as any);
   if (error) throw error;
   return data;
 }
 
 async function updateLiveClass(params: any) {
   const { id, ...updates } = params;
-  const { error } = await (supabase.from('live_classes' as any).update(updates).eq('id', id) as any);
+  const { error } = await (supabase
+    .from("live_classes" as any)
+    .update(updates)
+    .eq("id", id) as any);
   if (error) throw error;
   return { success: true };
 }
 
 async function deleteLiveClass(params: any) {
-  const { error } = await (supabase.from('live_classes' as any).delete().eq('id', params.id) as any);
+  const { error } = await (supabase
+    .from("live_classes" as any)
+    .delete()
+    .eq("id", params.id) as any);
   if (error) throw error;
   return { success: true };
 }
 
 // ===== MATERIALS =====
 async function listMaterials(params: any) {
-  let query = supabase.from('materials' as any).select('*, courses(name)').order('created_at', { ascending: false }) as any;
-  if (params?.course_id) query = query.eq('course_id', params.course_id);
+  let query = supabase
+    .from("materials" as any)
+    .select("*, courses(name)")
+    .order("created_at", { ascending: false }) as any;
+  if (params?.course_id) query = query.eq("course_id", params.course_id);
   const { data } = await query;
   return data ?? [];
 }
 
 async function createMaterial(params: any) {
-  const { data, error } = await (supabase.from('materials' as any).insert(params).select().single() as any);
+  const { data, error } = await (supabase
+    .from("materials" as any)
+    .insert(params)
+    .select()
+    .single() as any);
   if (error) throw error;
   return data;
 }
 
 async function deleteMaterial(params: any) {
-  const { error } = await (supabase.from('materials' as any).delete().eq('id', params.id) as any);
+  const { error } = await (supabase
+    .from("materials" as any)
+    .delete()
+    .eq("id", params.id) as any);
   if (error) throw error;
   return { success: true };
 }
 
 // ===== PAYMENTS =====
 async function listPayments() {
-  const { data } = await (supabase.from('payments' as any).select('*').order('created_at', { ascending: false }) as any);
+  const { data } = await (supabase
+    .from("payments" as any)
+    .select("*")
+    .order("created_at", { ascending: false }) as any);
   const sIds = [...new Set((data ?? []).map((p: any) => p.student_id))];
   let profs: any[] = [];
   if (sIds.length) {
-    const { data: p } = await (supabase.from('profiles' as any).select('user_id, display_name, email').in('user_id', sIds) as any);
+    const { data: p } = await (supabase
+      .from("profiles" as any)
+      .select("user_id, display_name, email")
+      .in("user_id", sIds) as any);
     profs = p ?? [];
   }
   const pm: Record<string, any> = {};
@@ -453,25 +677,39 @@ async function listPayments() {
 }
 
 async function createPayment(params: any) {
-  const { data, error } = await (supabase.from('payments' as any).insert(params).select().single() as any);
+  const { data, error } = await (supabase
+    .from("payments" as any)
+    .insert(params)
+    .select()
+    .single() as any);
   if (error) throw error;
   return data;
 }
 
 async function updatePayment(params: any) {
   const { id, ...updates } = params;
-  const { error } = await (supabase.from('payments' as any).update(updates).eq('id', id) as any);
+  const { error } = await (supabase
+    .from("payments" as any)
+    .update(updates)
+    .eq("id", id) as any);
   if (error) throw error;
   return { success: true };
 }
 
 // ===== PAYROLL =====
 async function listPayroll() {
-  const { data } = await (supabase.from('payroll' as any).select('*').order('year', { ascending: false }).order('month', { ascending: false }) as any);
+  const { data } = await (supabase
+    .from("payroll" as any)
+    .select("*")
+    .order("year", { ascending: false })
+    .order("month", { ascending: false }) as any);
   const tIds = [...new Set((data ?? []).map((p: any) => p.teacher_id))];
   let profs: any[] = [];
   if (tIds.length) {
-    const { data: p } = await (supabase.from('profiles' as any).select('user_id, display_name, email').in('user_id', tIds) as any);
+    const { data: p } = await (supabase
+      .from("profiles" as any)
+      .select("user_id, display_name, email")
+      .in("user_id", tIds) as any);
     profs = p ?? [];
   }
   const pm: Record<string, any> = {};
@@ -480,38 +718,45 @@ async function listPayroll() {
 }
 
 async function createPayroll(params: any) {
-  const { data, error } = await (supabase.from('payroll' as any).insert(params).select().single() as any);
+  const { data, error } = await (supabase
+    .from("payroll" as any)
+    .insert(params)
+    .select()
+    .single() as any);
   if (error) throw error;
   return data;
 }
 
 async function updatePayroll(params: any) {
   const { id, ...updates } = params;
-  const { error } = await (supabase.from('payroll' as any).update(updates).eq('id', id) as any);
+  const { error } = await (supabase
+    .from("payroll" as any)
+    .update(updates)
+    .eq("id", id) as any);
   if (error) throw error;
   return { success: true };
 }
 
 // ===== NOTIFICATIONS =====
 async function listNotifications() {
-  const { data } = await (supabase.from('notifications').select('*').order('created_at', { ascending: false }) as any);
+  const { data } = await (supabase.from("notifications").select("*").order("created_at", { ascending: false }) as any);
   return data ?? [];
 }
 
 async function createNotification(params: any) {
-  const { data, error } = await (supabase.from('notifications').insert(params).select().single() as any);
+  const { data, error } = await (supabase.from("notifications").insert(params).select().single() as any);
   if (error) throw error;
   return data;
 }
 
 async function markRead(params: any) {
-  const { error } = await (supabase.from('notifications').update({ read: true }).eq('id', params.id) as any);
+  const { error } = await (supabase.from("notifications").update({ read: true }).eq("id", params.id) as any);
   if (error) throw error;
   return { success: true };
 }
 
 async function deleteNotification(params: any) {
-  const { error } = await (supabase.from('notifications').delete().eq('id', params.id) as any);
+  const { error } = await (supabase.from("notifications").delete().eq("id", params.id) as any);
   if (error) throw error;
   return { success: true };
 }
@@ -519,22 +764,28 @@ async function deleteNotification(params: any) {
 // ===== COURSES =====
 async function listCourses() {
   const targetOrgId = readActiveOrgFromStorage();
-  let q: any = supabase.from('courses' as any).select('*').order('created_at', { ascending: false });
-  if (typeof targetOrgId === 'string') q = q.eq('organization_id', targetOrgId);
+  let q: any = supabase
+    .from("courses" as any)
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (typeof targetOrgId === "string") q = q.eq("organization_id", targetOrgId);
   const { data, error } = await q;
   if (error) throw error;
   return data ?? [];
 }
 
 async function deleteCourse(params: any) {
-  const { error } = await (supabase.from('courses' as any).delete().eq('id', params.id) as any);
+  const { error } = await (supabase
+    .from("courses" as any)
+    .delete()
+    .eq("id", params.id) as any);
   if (error) throw error;
   return { success: true };
 }
 
 // ===== BATCHES =====
 async function edgeFunctionAction(action: string, params: any) {
-  const { data, error } = await supabase.functions.invoke('admin-query', {
+  const { data, error } = await supabase.functions.invoke("admin-query", {
     body: { action, params },
   });
   if (error) throw error;
