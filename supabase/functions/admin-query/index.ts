@@ -798,6 +798,23 @@ Deno.serve(async (req) => {
         if (!params?.batch_id || !params?.student_id) {
           throw new Error('batch_id and student_id are required')
         }
+        let studentProfileId = params.student_id
+        let { data: studentProfile } = await supabase
+          .from('profiles')
+          .select('id, user_id')
+          .eq('id', params.student_id)
+          .maybeSingle()
+        if (!studentProfile) {
+          const { data: byUserId } = await supabase
+            .from('profiles')
+            .select('id, user_id')
+            .eq('user_id', params.student_id)
+            .maybeSingle()
+          studentProfile = byUserId
+        }
+        if (!studentProfile) throw new Error('Student profile not found')
+        studentProfileId = studentProfile.id
+
         const { data: batchInfo } = await supabase
           .from('batches')
           .select('max_students, organization_id')
@@ -808,6 +825,13 @@ Deno.serve(async (req) => {
         if (!callerIsSuperadmin && targetOrgId && batchInfo.organization_id !== targetOrgId) {
           throw new Error('Batch is outside your organization')
         }
+        const { data: member } = await supabase
+          .from('organization_members')
+          .select('id')
+          .eq('organization_id', batchInfo.organization_id)
+          .eq('user_id', studentProfile.user_id)
+          .maybeSingle()
+        if (!member) throw new Error('Student is not assigned to this organization')
         const { count: currentCount } = await supabase.from('batch_students').select('id', { count: 'exact', head: true }).eq('batch_id', params.batch_id)
         if ((currentCount ?? 0) >= batchInfo.max_students) {
           throw new Error(`Batch is full (${batchInfo.max_students}/${batchInfo.max_students} seats taken)`)
@@ -817,12 +841,12 @@ Deno.serve(async (req) => {
           .from('batch_students')
           .select('id')
           .eq('batch_id', params.batch_id)
-          .eq('student_id', params.student_id)
+          .eq('student_id', studentProfileId)
           .maybeSingle()
         if (existing) throw new Error('Student is already enrolled in this batch')
         const { error } = await supabase
           .from('batch_students')
-          .insert({ batch_id: params.batch_id, student_id: params.student_id })
+          .insert({ batch_id: params.batch_id, student_id: studentProfileId })
         if (error) throw error
         result = { success: true }
         break
