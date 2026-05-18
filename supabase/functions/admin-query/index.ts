@@ -1501,8 +1501,10 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
+    // Return 200 with the error payload so the Supabase JS client surfaces
+    // the actual message instead of the opaque "non-2xx status code" wrapper.
+    return new Response(JSON.stringify({ error: err?.message || String(err) }), {
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
