@@ -45,19 +45,21 @@ export default function BatchesPage() {
   const [studentCount, setStudentCount] = useState(0);
 
   const { data: courses = [] } = useQuery<Course[]>({
-    queryKey: ['courses'],
+    queryKey: ['courses', activeOrgId],
     queryFn: () => courseService.listCourses(),
     staleTime: 1000 * 60 * 5,
   });
 
   const { data: batches = [], isLoading } = useQuery<Batch[]>({
-    queryKey: ['batches'],
+    queryKey: ['batches', activeOrgId],
     queryFn: () => batchService.listBatches(),
     staleTime: 1000 * 60 * 5,
   });
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['batches'] });
+    queryClient.invalidateQueries({ queryKey: ['courses'] });
+    queryClient.invalidateQueries({ queryKey: ['course_batches'] });
     queryClient.invalidateQueries({ queryKey: ['admin_stats'] });
   };
 
@@ -269,9 +271,16 @@ export default function BatchesPage() {
                   ) : (
                     <Badge variant="outline" className="gap-1"><Wifi className="h-3 w-3" /> Online</Badge>
                   )}
-                  <span className="text-muted-foreground">
-                    Teacher: {b.teacher_id ? 'Assigned' : 'None'}
-                  </span>
+                  {typeof (b as any).enrolled_count === 'number' && (
+                    <Badge variant="secondary" className="gap-1">
+                      <Users className="h-3 w-3" /> {(b as any).enrolled_count}/{b.max_students}
+                    </Badge>
+                  )}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  Teacher: {(b as any).teacher_name
+                    ? (b as any).teacher_name
+                    : (b.teacher_id ? 'Assigned' : 'None')}
                 </div>
                 {isAdmin && (
                   <div className="flex gap-2">
