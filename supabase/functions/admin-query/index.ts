@@ -642,7 +642,7 @@ Deno.serve(async (req) => {
           if (finalIds.length === 0) { result = []; break }
           const { data: profiles } = await supabase
             .from('profiles')
-            .select('user_id, display_name, email')
+            .select('id, user_id, display_name, email')
             .in('user_id', finalIds)
           result = profiles ?? []
           break
@@ -777,11 +777,11 @@ Deno.serve(async (req) => {
         const sIds = (data ?? []).map((d: any) => d.student_id)
         let profs: any[] = []
         if (sIds.length) {
-          const { data: p } = await supabase.from('profiles').select('user_id, display_name, email').in('user_id', sIds)
+          const { data: p } = await supabase.from('profiles').select('id, user_id, display_name, email').in('id', sIds)
           profs = p ?? []
         }
         const pm: Record<string, any> = {}
-        for (const p of profs) pm[p.user_id] = p
+        for (const p of profs) pm[p.id] = p
         result = (data ?? []).map((d: any) => ({ ...d, profile: pm[d.student_id] || null }))
         break
       }
