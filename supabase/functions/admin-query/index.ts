@@ -543,7 +543,7 @@ Deno.serve(async (req) => {
         break
       }
       case 'create_course': {
-        const { name, description, created_by, grade_level, duration_days, total_hours, daily_hours, language, writing_style, includes_speed, fee, delivery_mode, center } = params
+        const { name, description, created_by, grade_level, duration_days, total_hours, daily_hours, language, writing_style, includes_speed, fee, delivery_mode, center, organization_id } = params
         const { data, error } = await supabase.from('courses').insert({
           name, description, created_by,
           grade_level: grade_level || null,
@@ -556,6 +556,7 @@ Deno.serve(async (req) => {
           fee: fee ?? 0,
           delivery_mode: delivery_mode || 'online',
           center: center || null,
+          organization_id: organization_id || targetOrgId || null,
         }).select().single()
         if (error) throw error
         result = data
