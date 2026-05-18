@@ -1,53 +1,64 @@
-## Problem
+# SuperAdmin Org Scoping
 
-The Students page works for SuperAdmin but is empty for Admin.
+After a SuperAdmin signs in, route them to an **Organization Selector**. The chosen org becomes the active tenant — all subsequent pages (dashboard, students, teachers, batches, courses, payments, leads, etc.) display, save and modify data filtered to that org by default. A switcher in the header lets them change org or return to "All Orgs" (global view).
 
-**Root cause:** `list_students_with_batches`, `list_all_students`, and `list_teachers` run as direct browser queries against `user_roles` and `profiles`. The `user_roles` SELECT policy only allows `auth.uid() = user_id`, so an admin only sees their own role row — `studentIds` resolves to empty and the page shows nothing. SuperAdmin works only because their own row happens to be a `student` placeholder in some seeds, or because the join still finds them; either way it's coincidental.
+## User-facing changes
 
-Additionally, even after fixing visibility, an Admin should only see students **belonging to their organization**, not every student in the system.
+1. **Org Selector page** (`/select-organization`)
+   - Shown automatically after SuperAdmin login if no org is selected yet.
+   - Grid of org cards (logo, name, member count) + an "All Organizations (Global)" option.
+   - Clicking an org persists the choice and redirects to `/dashboard`.
 
-## Fix
+2. **Header switcher** (`AppHeader`)
+   - SuperAdmin-only dropdown showing current active org with a "Switch organization" action.
+   - Visible badge: "Viewing: Sunrise Academy" or "Global view".
 
-Route all three actions through the existing `admin-query` edge function (service role + JWT-based caller resolution), mirroring how batches were fixed.
+3. **Scoped data everywhere**
+   - All list pages and create/update flows default `organization_id = activeOrgId`.
+   - Global view (`null`) keeps current unrestricted behavior.
 
-### 1. Edge function (`supabase/functions/admin-query/index.ts`)
+## Technical implementation
 
-Add a shared "admin-or-superadmin auth + org resolve" block (reuse the same JWT/role/org pattern already used by the batch handlers) covering these actions:
+### Active org context
+- New `ActiveOrgContext` (`src/contexts/ActiveOrgContext.tsx`) storing `{ activeOrgId, activeOrgName, setActiveOrg, clearActiveOrg }`.
+- Persisted in `localStorage` (`aurapen.active_org`) so reloads keep selection.
+- Provider mounted in `App.tsx` inside `AuthProvider`.
+- Hook: `useActiveOrg()`.
 
-- `list_students_with_batches`
-- `list_all_students`
-- `list_teachers`
+### Routing gate
+- New `<RequireOrgSelection>` wrapper in `ProtectedRoute` (or App routes): if `role === 'superadmin'` and `activeOrgId === undefined` (never chosen), redirect to `/select-organization`. `null` = explicit Global selection (allowed).
 
-Logic per action:
+### New page
+- `src/pages/SelectOrganizationPage.tsx` — fetches orgs via `adminQuery('list_organizations')` (already exists) and renders cards. Includes a "Global (All Orgs)" tile.
 
-- **SuperAdmin** → return all students/teachers (current behavior).
-- **Admin** → resolve `callerOrgId` via `organization_members` (or `first_org_for_user`). Then:
-  - **Students**: a user is "in this org" if they are enrolled in any batch where `batches.organization_id = callerOrgId`. Build the student set from `batch_students JOIN batches WHERE organization_id = callerOrgId`, then fetch their profiles + enrollments.
-  - **Teachers**: teachers assigned to any `batches.teacher_id` where `organization_id = callerOrgId`, **plus** teachers whose `organization_members.organization_id = callerOrgId` (covers teachers created in the org but not yet assigned a batch). Union and dedupe.
-- Reject other roles with 403.
+### Header switcher
+- Update `src/components/layout/AppHeader.tsx` to show a `DropdownMenu` for SuperAdmin: current org name + "Switch organization" (navigates to `/select-organization`) + "Global view".
 
-### 2. Service layer (`src/services/api/adminService.ts`)
+### Scoping queries
+- Extend `adminQuery` calls: where applicable, pass `organization_id: activeOrgId` param.
+- Update `admin-query` edge function: for SuperAdmin, when `organization_id` param present, filter `list_students_with_batches`, `list_teachers`, `list_all_students`, `list_organizations` results, batches, courses, etc., by that org.
+- Client pages (Batches, Courses, Leads, Payments, Payroll, Live Classes, Enrollments) — read `activeOrgId` and add `.eq('organization_id', activeOrgId)` where the table has that column.
 
-Move these three cases to the `edgeFunctionAction` switch (alongside batches) and delete the now-unused local `listStudentsWithBatches`, `listAllStudents`, `listTeachers` functions:
+### Default values on create
+- Batch/Course/Material/Lead forms: pre-fill `organization_id = activeOrgId` for SuperAdmin when an org is active.
 
-```ts
-case 'list_students_with_batches':
-case 'list_all_students':
-case 'list_teachers':
-  return edgeFunctionAction(action, params);
-```
+### Tables with `organization_id`
+`batches`, `courses`, `organization_members`, `org_subscriptions`, profile (via membership). Tables without a direct org column (students, teachers, payments, attendance) are filtered through joins on `batches`/`organization_members` inside the edge function.
 
-### 3. No client/page changes
+## Out of scope
+- Admin/Support/Teacher/Student/Parent users — their org is already auto-scoped via RLS; no UI changes.
+- No schema migrations needed.
 
-`StudentsPage`, `LiveClassesPage`, `ParentChildLinkDialog`, `ReassignTeacherDialog`, and `courseService` already call `adminQuery(...)` — they automatically pick up the new routing.
+## Files
 
-### 4. No DB migration required
+**New**
+- `src/contexts/ActiveOrgContext.tsx`
+- `src/pages/SelectOrganizationPage.tsx`
 
-RLS policies stay as-is. Service role in the edge function bypasses RLS; org scoping is enforced in code.
-
-## Outcome
-
-- Admin on Students page sees every student enrolled in any batch within their organization.
-- SuperAdmin behavior is unchanged.
-- Teacher dropdowns in Live Classes and Reassign dialog become org-scoped for admins.
-- Parent linking dialog shows only students in the admin's org.
+**Edited**
+- `src/App.tsx` — mount provider + route
+- `src/components/auth/ProtectedRoute.tsx` — redirect SuperAdmin without selection
+- `src/components/layout/AppHeader.tsx` — org switcher
+- `src/services/api/adminService.ts` — pass `organization_id` through
+- `supabase/functions/admin-query/index.ts` — honor `organization_id` for SuperAdmin in list actions
+- A handful of pages (Batches, Courses, Leads, Payments, Students, Teachers) — apply active-org filter
