@@ -1,95 +1,112 @@
-# Multi-tenant audit & hardening — strict org scoping for all roles
+## Goal
+Close every multi-tenant gap so that for any non-SuperAdmin user, **every read shows only their active org's data** and **every write stamps `organization_id`**. SuperAdmin keeps the global view + org picker.
 
-Today's setup is incomplete: only SuperAdmin has a real org picker, half the tables don't even carry `organization_id`, and admin/support/teacher users that belong to several orgs silently see data merged across all of them. This plan closes those gaps in three layers — database, edge function, and UI — without changing any business logic.
+---
 
-## 1. Database — make every tenant-owned table org-aware
+## Part A — Edge function `admin-query` (handler-by-handler hardening)
 
-### Tables missing `organization_id`
-Add a non-null `organization_id uuid` column (with index + FK to `organizations`) and backfill via the parent batch / student profile:
+Today only `list_users`, `list_batches`, `list_enrollments`, `list_live_classes`, `list_students`, `list_teachers` honor `targetOrgId`. The rest return **all rows across all orgs**.
 
-- `leads`
-- `payments`
-- `payroll`
-- `attendance`         (backfill from `batches.organization_id`)
-- `live_classes`       (backfill from `batches.organization_id`)
-- `schedules`          (backfill from `batches.organization_id`)
-- `materials`          (backfill from `courses.organization_id`)
-- `practice_assignments` (from `batches`)
-- `student_submissions`  (from `practice_assignments → batches`)
-- `student_progress`     (from `batches`)
-- `notifications`        (already has `target_org_id` → rename/normalize to `organization_id` + keep `user_id` for direct delivery)
-- `orders`               (denormalize from first enrolled batch's org)
-- `coupons`              (nullable — `NULL` = global coupon)
+Apply the same `if (targetOrgId) query = query.eq('organization_id', targetOrgId)` pattern (and on create handlers, inject `organization_id: targetOrgId` when missing) to:
 
-### Replace blanket "Admins manage X" policies with org-scoped policies
-For every table above (plus existing `batches`, `courses`, `org_subscriptions`, `organization_members`), the admin/support policies must use `user_in_org(auth.uid(), organization_id)` instead of unconditional `has_role('admin')`. SuperAdmin keeps the global bypass. Teacher policies stay batch-scoped (already correct). This is the single biggest leak today.
+| Handler | Fix on READ | Fix on WRITE |
+|---|---|---|
+| `list_leads` / `create_lead` / `update_lead` | filter by org | stamp org on insert |
+| `list_payments` / `create_payment` | filter by org | stamp org |
+| `list_payroll` / `create_payroll` | filter by org | stamp org |
+| `list_materials` / `create_material` | filter by org | stamp org |
+| `list_schedules` / `create_schedule` | filter by org | stamp org |
+| `list_notifications` / `create_notification` | filter by `target_org_id`/`organization_id` | stamp org |
+| `list_courses` / `create_course` | filter by org | stamp org |
+| `list_coupons` / `create_coupon` | filter by org | stamp org |
+| `list_activity_logs` | filter by org (via user_ids in org) | n/a |
+| `list_modules` / `list_lessons` | filter via course→org | inherit course org |
+| `list_assignments` / `create_assignment` | filter via batch→org | stamp org |
+| `get_reports` | scope all sub-aggregates to org | n/a |
+| `system_health` | scope counts to org (or block for non-SA) | n/a |
+| `getStats` | already scopes; verify counts for leads/payments/courses also filter by `organization_id` |
 
-### New helper functions (SECURITY DEFINER, avoid recursion)
-- `public.user_org_ids(_user_id uuid) → setof uuid` — list every org a user belongs to.
-- `public.user_has_org_access(_user_id, _org_id) → boolean` — convenience wrapper used by the edge function and RLS.
+Membership validation (already in place) stays — non-SA cannot pass a `target_org_id` outside their memberships.
 
-## 2. Edge function `admin-query`
+---
 
-- Stop assuming `first_org_for_user` for admins. Read `target_org_id` from params for **all** roles (not just SuperAdmin). 
-- Before honoring it, validate: SuperAdmin → any org; admin/support/teacher → must appear in `user_org_ids`.
-- All `list_*` actions become uniformly org-filtered when `target_org_id` is set, otherwise (for multi-org admin without selection) return data for every org the caller belongs to.
-- All `create_*` actions auto-fill `organization_id = target_org_id` and reject if the caller can't access it.
+## Part B — Frontend pages that bypass `adminQuery` (raw `supabase.from` calls)
 
-## 3. Frontend — universal active-org context + picker
+Replace raw client reads/writes with either (a) an `adminQuery` call, or (b) a direct query with explicit `.eq('organization_id', activeOrgId)` plus `organization_id: activeOrgId` on insert.
 
-### Generalise `ActiveOrgContext`
-- Promote from SuperAdmin-only to every role.
-- New behaviour:
-  - `availableOrgs` — loaded from `organization_members` (or `list_organizations` for SuperAdmin).
-  - If user has exactly **1** org → auto-select it on login (no picker shown).
-  - If user has **>1** orgs → force `/select-organization` after login (same page, restricted list).
-  - SuperAdmin keeps the "Global view" tile; other roles do not get it.
-- Storage key stays `aurapen.active_org`; add `aurapen.active_org_name`.
+| Page | Action |
+|---|---|
+| **AttendancePage** | On insert, stamp `organization_id` (resolve from batch). Reads via `batch_students` are fine (RLS) but add an org guard when listing batches for the picker. |
+| **LiveClassesPage** | Direct `live_classes` insert → stamp `organization_id`. |
+| **PaymentsPage** | Admin direct `payments` select/insert → switch to `adminQuery('list_payments' / 'create_payment')` so org scoping is centralized. |
+| **PracticeAssignmentsPage** | `batches` list → filter by `activeOrgId`. `practice_assignments` insert → stamp org. |
+| **StudentSubmissionsPage** | Stamp `organization_id` on insert (inherit from assignment). |
+| **ReportsPage** | `batches` list → filter by `activeOrgId`. |
+| **CoursesPage** | Secondary `courses`/`profiles` lookups → constrain by `activeOrgId`. |
+| **Dashboard (admin counts)** | `leads`, `batch_students`, `payments` head-count queries → add `.eq('organization_id', activeOrgId)` when `activeOrgId` is set; keep global when SA chooses global view. |
+| **UsersPage** | Already uses `adminQuery('list_users')` → org-filtered server-side. Verify the role-counts widget also passes through. |
+| **CoursesPage (list)** | Currently uses `adminQuery('list_courses')` — depends on Part A fix to actually filter. |
 
-### `ProtectedRoute`
-Replace the SuperAdmin-only redirect with:
-```
-needsPicker = profile && availableOrgs.length > 1 && activeOrgId === undefined
-```
+(All other pages already route through `adminQuery` or are correctly user-scoped — parents, students, profile, auth pages, landing.)
 
-### `AppHeader`
-Show the org switcher to any user with `availableOrgs.length > 1` (today only SuperAdmin sees it).
+---
 
-### `adminService.adminQuery`
-Already auto-injects `target_org_id` from storage — keep it, but stop the `__skip_org_filter` shortcut for non-SuperAdmin callers.
+## Part C — Login & session-time org validation
 
-### Direct Supabase queries on pages
-Audit every page that hits Supabase directly and add `.eq('organization_id', activeOrgId)` (when set). Pages to update:
+Today `ActiveOrgContext` auto-picks an org or sends to the selector after login, but there's no hard check that the **role row** and the **profile's `organization_id`** agree with an actual `organization_members` row. Add:
 
-`BatchesPage`, `CoursesPage`, `StudentsPage`, `LeadsPage`, `PaymentsPage`, `PayrollPage`, `LiveClassesPage`, `AttendancePage`, `MaterialsPage`, `EnrollmentsPage`, `SchedulePage`, `CouponsPage`, `NotificationsPage`, `OrderHistoryPage`, `PracticeAssignmentsPage`, `StudentSubmissionsPage`, `StudentProgressPage`, `ReportsPage`, `Dashboard` (live metrics RPC already org-scoped — verify).
+1. **On login / session bootstrap**, in `ActiveOrgContext`:
+   - Load `user_roles` + `organization_memberships` + `profile.organization_id` together.
+   - If role ∈ {admin, support, teacher} and `availableOrgs.length === 0` → sign-out + toast "No organization assigned, contact admin." (prevents orphaned admins seeing nothing or, worse, falling back to a global query.)
+   - If role = student/parent and the underlying batch/parent_children rows resolve to zero orgs → same guard.
+   - If `profile.organization_id` is set but not in `availableOrgs`, clear it and force `/select-organization`.
 
-### Create/update forms
-For every create form (batch, course, lead, material, assignment, payment, payroll entry, live class), pre-fill and lock `organization_id = activeOrgId`. If `activeOrgId` is null (Global view, SuperAdmin only) and table requires org, show a "Pick an organization first" inline state.
+2. **Switcher safety**: when the user changes `activeOrgId` via the header, re-validate it is still in `availableOrgs` before persisting; otherwise reset.
 
-## 4. Sequencing (so nothing breaks mid-flight)
+3. **Edge-function defense-in-depth**: in `admin-query`, when caller is non-SA and `targetOrgId` is null/undefined, **reject** the request (403) instead of silently returning unscoped data. This guarantees that even if a frontend forgets to inject, no leak occurs.
 
-```text
-Step A  DB migration #1 — add nullable organization_id columns + backfill
-Step B  DB migration #2 — set NOT NULL + add indexes + new helper funcs
-Step C  DB migration #3 — rewrite RLS policies on the 12 tables
-Step D  Edge function admin-query — honor target_org_id for all roles + membership check
-Step E  Generalise ActiveOrgContext + ProtectedRoute + AppHeader
-Step F  Page-by-page query/scoping audit (one PR slice per domain: academics, finance, CRM, content)
-Step G  Manual smoke test matrix — see §5
-```
+4. **Users page filter**: enforce that `list_users` for a non-SA can only return profiles whose `organization_id` ∈ caller's memberships, even if `targetOrgId` is omitted (server clamps to caller's orgs).
 
-## 5. Manual test matrix (post-implementation)
+---
 
-| Role             | Single org | Multi org | Expected |
-|------------------|-----------|-----------|----------|
-| SuperAdmin       | n/a       | n/a       | Picker + Global tile; switch works on every page |
-| Admin            | Auto-enter org | Picker on login + header switcher | Sees only active org's data, create writes to it |
-| Support          | Auto-enter | Picker | Read-only, scoped |
-| Teacher          | Auto-enter | Picker (org of their batches) | Sees only batches in active org |
-| Student / Parent | Auto-enter | n/a (single org by design) | No picker, no header switcher |
+## Part D — Database guarantees (small migration)
 
-## 6. Out of scope
+To remove the "RLS-allows-but-UI-forgets" class of bugs:
 
-- No business-logic changes (pricing, attendance flow, payroll calc).
-- No new UI screens beyond reusing existing `SelectOrganizationPage`.
-- Student / parent users remain single-org (current product assumption).
+1. **Backfill + NOT NULL** `organization_id` on these tables once verified clean: `leads`, `payments`, `payroll`, `live_classes`, `schedules`, `attendance`, `materials`, `student_submissions`, `student_progress`, `practice_assignments`, `notifications`, `courses`, `orders`.
+2. **BEFORE INSERT triggers** to auto-stamp `organization_id` from the parent row when null:
+   - `attendance.organization_id ← batches.organization_id`
+   - `live_classes.organization_id ← batches.organization_id`
+   - `schedules.organization_id ← batches.organization_id`
+   - `practice_assignments.organization_id ← batches.organization_id`
+   - `student_submissions.organization_id ← practice_assignments.organization_id`
+   - `student_progress.organization_id ← batches.organization_id`
+3. **Tighten RLS** to remove the `OR organization_id IS NULL` escape hatch on `leads`, `orders` once backfilled.
+4. **Tighten `batches`/`courses` SELECT policies** — drop the legacy "Public courses read / Users can view courses" `USING (true)` policies (only the public landing edge function should expose marketing courses).
+
+---
+
+## Part E — Verification (manual + scripted)
+
+1. **Per-role smoke matrix** (run for Admin-A, Admin-B, Teacher, Support, Student, Parent, SuperAdmin-Global, SuperAdmin-OrgA):
+   - Open every page in the sidebar.
+   - Confirm row counts equal the org-scoped truth from a `psql` baseline query.
+2. **Cross-org leak test**: as Admin-A, attempt `adminQuery('list_payments', { target_org_id: OrgB })` from devtools → expect 403.
+3. **Insert audit**: after creating one row of every type (lead, payment, payroll, material, schedule, live class, assignment, submission, course), `SELECT id, organization_id FROM <table> ORDER BY created_at DESC LIMIT 1` → expect non-null and equal to active org.
+4. **Backfill report**: `SELECT table_name, COUNT(*) FROM ... WHERE organization_id IS NULL` across all scoped tables → expect 0 before NOT NULL migration.
+
+---
+
+## Out of scope (intentionally)
+- Public landing/checkout flows (must remain unauthenticated).
+- Font compiler / handwriting engine tables (project-wide design assets).
+- Auth pages, ProfilePage, SettingsPage.
+
+---
+
+## Execution order
+1. Part C (frontend login validation + edge fn 403) — closes the largest leak first.
+2. Part A (edge handler scoping) — server-side enforcement.
+3. Part B (page-by-page raw-query fixes) — UI alignment.
+4. Part D (DB backfill, triggers, NOT NULL, RLS tighten) — hard guarantees.
+5. Part E (full verification matrix).
