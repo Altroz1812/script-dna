@@ -125,7 +125,7 @@ export default function BatchesPage() {
   const openTeacherDialog = async (batchId: string) => {
     setTeacherDialogBatch(batchId);
     try {
-      setTeachers(await batchService.listTeachers());
+      setTeachers(await batchService.listTeachers({ excludeAssigned: true, batchId }));
     } catch (e: any) {
       toast.error(e.message);
     }
