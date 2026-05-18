@@ -1,5 +1,6 @@
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useActiveOrg } from '@/contexts/ActiveOrgContext';
 import type { AppRole } from '@/types/roles';
 
 interface ProtectedRouteProps {
@@ -9,6 +10,8 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   const { session, profile, loading } = useAuth();
+  const { activeOrgId } = useActiveOrg();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -24,6 +27,15 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
 
   if (allowedRoles && profile && !allowedRoles.includes(profile.role)) {
     return <Navigate to="/unauthorized" replace />;
+  }
+
+  // SuperAdmin must pick an organization (or Global) before entering the app.
+  if (
+    profile?.role === 'superadmin' &&
+    activeOrgId === undefined &&
+    location.pathname !== '/select-organization'
+  ) {
+    return <Navigate to="/select-organization" replace />;
   }
 
   return children ? <>{children}</> : <Outlet />;
