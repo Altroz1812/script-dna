@@ -446,6 +446,11 @@ Deno.serve(async (req) => {
             .maybeSingle()
           callerOrgId = memberRow?.organization_id ?? null
         }
+        // SuperAdmin explicit org pick overrides "no scoping"
+        if (isSuperadmin && targetOrgId) {
+          callerOrgId = targetOrgId
+        }
+        const applyOrgScope = !isSuperadmin || !!targetOrgId
 
         // Determine candidate user_ids based on role + org scope
         const wantTeachers = action === 'list_teachers'
@@ -458,7 +463,7 @@ Deno.serve(async (req) => {
           .eq('role', targetRole)
         let candidateIds = new Set<string>((roleRows ?? []).map((r: any) => r.user_id))
 
-        if (!isSuperadmin) {
+        if (applyOrgScope) {
           if (!callerOrgId) { result = []; break }
 
           if (wantTeachers) {
