@@ -267,7 +267,15 @@ Deno.serve(async (req) => {
 
       // ===== LIVE CLASSES =====
       case 'list_live_classes': {
-        const { data } = await supabase.from('live_classes').select('*, batches(name, teacher_id, courses(delivery_mode)), schedules(date, start_time, end_time, title, room)').order('scheduled_at', { ascending: false })
+        let scopedBatchIds: string[] | null = null
+        if (targetOrgId) {
+          const { data: ob } = await supabase.from('batches').select('id').eq('organization_id', targetOrgId)
+          scopedBatchIds = (ob ?? []).map((b: any) => b.id)
+          if (scopedBatchIds.length === 0) { result = []; break }
+        }
+        let lcQ: any = supabase.from('live_classes').select('*, batches(name, teacher_id, organization_id, courses(delivery_mode)), schedules(date, start_time, end_time, title, room)').order('scheduled_at', { ascending: false })
+        if (scopedBatchIds) lcQ = lcQ.in('batch_id', scopedBatchIds)
+        const { data } = await lcQ
         result = data ?? []
         break
       }
