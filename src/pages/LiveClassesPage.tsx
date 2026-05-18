@@ -125,14 +125,7 @@ export default function LiveClassesPage() {
         updatePayload.started_by = profile.id;
       }
 
-      if (isTeacher) {
-        const { error } = await supabase.from('live_classes')
-          .update({ status: 'live' as any, meeting_url: roomName })
-          .eq('id', cls.id);
-        if (error) throw error;
-      } else {
-        await adminQuery('update_live_class', { id: cls.id, ...updatePayload });
-      }
+      await adminQuery('update_live_class', { id: cls.id, ...updatePayload });
       toast.success('Class started!');
       setActiveClassroom(cls.id);
       load();
