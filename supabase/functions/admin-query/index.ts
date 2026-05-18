@@ -18,6 +18,12 @@ Deno.serve(async (req) => {
 
     const { action, params } = await req.json()
 
+    // SuperAdmin org-scoping override. When the client sets `target_org_id`,
+    // we treat the request as if it were issued by an admin scoped to that org.
+    const targetOrgId: string | null = (params && typeof params.target_org_id === 'string')
+      ? params.target_org_id
+      : null
+
     let result: any = null
 
     switch (action) {
