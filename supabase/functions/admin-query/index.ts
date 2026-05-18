@@ -616,10 +616,34 @@ Deno.serve(async (req) => {
         if (ids.length === 0) { result = []; break }
 
         if (action === 'list_teachers' || action === 'list_all_students') {
+          // Optionally hide teachers already assigned to any batch in this org
+          // (used by the "Assign Teacher" dialog so admins pick from free ones).
+          if (action === 'list_teachers' && params?.exclude_assigned && callerOrgId) {
+            const { data: assigned } = await supabase
+              .from('batches')
+              .select('teacher_id')
+              .eq('organization_id', callerOrgId)
+              .not('teacher_id', 'is', null)
+            const assignedSet = new Set<string>((assigned ?? []).map((r: any) => r.teacher_id))
+            // keep the teacher currently assigned to *this* batch (so the dialog
+            // can pre-select / re-pick them); plus all unassigned teachers.
+            let keepBatchTeacher: string | null = null
+            if (params?.batch_id) {
+              const { data: b } = await supabase
+                .from('batches').select('teacher_id').eq('id', params.batch_id).maybeSingle()
+              keepBatchTeacher = b?.teacher_id ?? null
+            }
+            const filtered = [...candidateIds].filter(
+              (id) => !assignedSet.has(id) || id === keepBatchTeacher
+            )
+            candidateIds = new Set(filtered)
+          }
+          const finalIds = [...candidateIds]
+          if (finalIds.length === 0) { result = []; break }
           const { data: profiles } = await supabase
             .from('profiles')
             .select('user_id, display_name, email')
-            .in('user_id', ids)
+            .in('user_id', finalIds)
           result = profiles ?? []
           break
         }
@@ -763,13 +787,34 @@ Deno.serve(async (req) => {
       }
       case 'add_batch_student': {
         // Enforce max_students seat limit
-        const { data: batchInfo } = await supabase.from('batches').select('max_students').eq('id', params.batch_id).single()
+        if (!params?.batch_id || !params?.student_id) {
+          throw new Error('batch_id and student_id are required')
+        }
+        const { data: batchInfo } = await supabase
+          .from('batches')
+          .select('max_students, organization_id')
+          .eq('id', params.batch_id)
+          .maybeSingle()
         if (!batchInfo) throw new Error('Batch not found')
+        // Org scope check (non-superadmin only)
+        if (!callerIsSuperadmin && targetOrgId && batchInfo.organization_id !== targetOrgId) {
+          throw new Error('Batch is outside your organization')
+        }
         const { count: currentCount } = await supabase.from('batch_students').select('id', { count: 'exact', head: true }).eq('batch_id', params.batch_id)
         if ((currentCount ?? 0) >= batchInfo.max_students) {
           throw new Error(`Batch is full (${batchInfo.max_students}/${batchInfo.max_students} seats taken)`)
         }
-        const { error } = await supabase.from('batch_students').insert({ batch_id: params.batch_id, student_id: params.student_id })
+        // Prevent duplicate enrollment with a friendly message
+        const { data: existing } = await supabase
+          .from('batch_students')
+          .select('id')
+          .eq('batch_id', params.batch_id)
+          .eq('student_id', params.student_id)
+          .maybeSingle()
+        if (existing) throw new Error('Student is already enrolled in this batch')
+        const { error } = await supabase
+          .from('batch_students')
+          .insert({ batch_id: params.batch_id, student_id: params.student_id })
         if (error) throw error
         result = { success: true }
         break
@@ -1501,8 +1546,10 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
+    // Return 200 with the error payload so the Supabase JS client surfaces
+    // the actual message instead of the opaque "non-2xx status code" wrapper.
+    return new Response(JSON.stringify({ error: err?.message || String(err) }), {
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }

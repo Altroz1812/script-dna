@@ -148,8 +148,12 @@ export const batchService = {
     await adminQuery("remove_batch_student", { batch_id: batchId, student_id: studentId });
   },
 
-  async listTeachers(): Promise<{ user_id: string; display_name: string | null; email: string | null }[]> {
-    const data = await adminQuery("list_teachers");
+  async listTeachers(opts?: { excludeAssigned?: boolean; batchId?: string }):
+    Promise<{ user_id: string; display_name: string | null; email: string | null }[]> {
+    const data = await adminQuery("list_teachers", {
+      exclude_assigned: opts?.excludeAssigned ? true : undefined,
+      batch_id: opts?.batchId,
+    });
     return (data ?? []) as any[];
   },
 
