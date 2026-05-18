@@ -29,6 +29,20 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to="/unauthorized" replace />;
   }
 
+  // Multi-org roles (admin / support / teacher) MUST belong to at least one
+  // organization. If they have zero memberships we send them to /unauthorized
+  // instead of falling through to a possibly unfiltered view.
+  const orgRequiredRoles: AppRole[] = ['admin', 'support', 'teacher'];
+  if (
+    profile &&
+    orgRequiredRoles.includes(profile.role) &&
+    !orgsLoading &&
+    availableOrgs.length === 0 &&
+    location.pathname !== '/unauthorized'
+  ) {
+    return <Navigate to="/unauthorized" replace state={{ reason: 'no-organization' }} />;
+  }
+
   // Tenant scoping gate:
   //  - SuperAdmin must always pick (or hit Global) before entering.
   //  - Other roles only need to pick when they belong to multiple orgs.
