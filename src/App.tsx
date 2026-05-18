@@ -49,6 +49,7 @@ import ParentProgressPage from "@/pages/ParentProgressPage";
 import OrderHistoryPage from "@/pages/OrderHistoryPage";
 import ProfilePage from "@/pages/ProfilePage";
 import SelectOrganizationPage from "@/pages/SelectOrganizationPage";
+import Unauthorized from "@/pages/Unauthorized";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -68,7 +69,15 @@ const App = () => (
               <Route path="/checkout" element={<CheckoutPage />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
-              <Route path="/select-organization" element={<ProtectedRoute allowedRoles={['superadmin']}><SelectOrganizationPage /></ProtectedRoute>} />
+              <Route path="/unauthorized" element={<Unauthorized />} />
+              <Route
+                path="/select-organization"
+                element={
+                  <ProtectedRoute allowedRoles={['superadmin', 'admin', 'support', 'teacher']}>
+                    <SelectOrganizationPage />
+                  </ProtectedRoute>
+                }
+              />
 
               {/* Protected app routes */}
               <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
