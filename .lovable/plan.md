@@ -1,64 +1,95 @@
-# SuperAdmin Org Scoping
+# Multi-tenant audit & hardening — strict org scoping for all roles
 
-After a SuperAdmin signs in, route them to an **Organization Selector**. The chosen org becomes the active tenant — all subsequent pages (dashboard, students, teachers, batches, courses, payments, leads, etc.) display, save and modify data filtered to that org by default. A switcher in the header lets them change org or return to "All Orgs" (global view).
+Today's setup is incomplete: only SuperAdmin has a real org picker, half the tables don't even carry `organization_id`, and admin/support/teacher users that belong to several orgs silently see data merged across all of them. This plan closes those gaps in three layers — database, edge function, and UI — without changing any business logic.
 
-## User-facing changes
+## 1. Database — make every tenant-owned table org-aware
 
-1. **Org Selector page** (`/select-organization`)
-   - Shown automatically after SuperAdmin login if no org is selected yet.
-   - Grid of org cards (logo, name, member count) + an "All Organizations (Global)" option.
-   - Clicking an org persists the choice and redirects to `/dashboard`.
+### Tables missing `organization_id`
+Add a non-null `organization_id uuid` column (with index + FK to `organizations`) and backfill via the parent batch / student profile:
 
-2. **Header switcher** (`AppHeader`)
-   - SuperAdmin-only dropdown showing current active org with a "Switch organization" action.
-   - Visible badge: "Viewing: Sunrise Academy" or "Global view".
+- `leads`
+- `payments`
+- `payroll`
+- `attendance`         (backfill from `batches.organization_id`)
+- `live_classes`       (backfill from `batches.organization_id`)
+- `schedules`          (backfill from `batches.organization_id`)
+- `materials`          (backfill from `courses.organization_id`)
+- `practice_assignments` (from `batches`)
+- `student_submissions`  (from `practice_assignments → batches`)
+- `student_progress`     (from `batches`)
+- `notifications`        (already has `target_org_id` → rename/normalize to `organization_id` + keep `user_id` for direct delivery)
+- `orders`               (denormalize from first enrolled batch's org)
+- `coupons`              (nullable — `NULL` = global coupon)
 
-3. **Scoped data everywhere**
-   - All list pages and create/update flows default `organization_id = activeOrgId`.
-   - Global view (`null`) keeps current unrestricted behavior.
+### Replace blanket "Admins manage X" policies with org-scoped policies
+For every table above (plus existing `batches`, `courses`, `org_subscriptions`, `organization_members`), the admin/support policies must use `user_in_org(auth.uid(), organization_id)` instead of unconditional `has_role('admin')`. SuperAdmin keeps the global bypass. Teacher policies stay batch-scoped (already correct). This is the single biggest leak today.
 
-## Technical implementation
+### New helper functions (SECURITY DEFINER, avoid recursion)
+- `public.user_org_ids(_user_id uuid) → setof uuid` — list every org a user belongs to.
+- `public.user_has_org_access(_user_id, _org_id) → boolean` — convenience wrapper used by the edge function and RLS.
 
-### Active org context
-- New `ActiveOrgContext` (`src/contexts/ActiveOrgContext.tsx`) storing `{ activeOrgId, activeOrgName, setActiveOrg, clearActiveOrg }`.
-- Persisted in `localStorage` (`aurapen.active_org`) so reloads keep selection.
-- Provider mounted in `App.tsx` inside `AuthProvider`.
-- Hook: `useActiveOrg()`.
+## 2. Edge function `admin-query`
 
-### Routing gate
-- New `<RequireOrgSelection>` wrapper in `ProtectedRoute` (or App routes): if `role === 'superadmin'` and `activeOrgId === undefined` (never chosen), redirect to `/select-organization`. `null` = explicit Global selection (allowed).
+- Stop assuming `first_org_for_user` for admins. Read `target_org_id` from params for **all** roles (not just SuperAdmin). 
+- Before honoring it, validate: SuperAdmin → any org; admin/support/teacher → must appear in `user_org_ids`.
+- All `list_*` actions become uniformly org-filtered when `target_org_id` is set, otherwise (for multi-org admin without selection) return data for every org the caller belongs to.
+- All `create_*` actions auto-fill `organization_id = target_org_id` and reject if the caller can't access it.
 
-### New page
-- `src/pages/SelectOrganizationPage.tsx` — fetches orgs via `adminQuery('list_organizations')` (already exists) and renders cards. Includes a "Global (All Orgs)" tile.
+## 3. Frontend — universal active-org context + picker
 
-### Header switcher
-- Update `src/components/layout/AppHeader.tsx` to show a `DropdownMenu` for SuperAdmin: current org name + "Switch organization" (navigates to `/select-organization`) + "Global view".
+### Generalise `ActiveOrgContext`
+- Promote from SuperAdmin-only to every role.
+- New behaviour:
+  - `availableOrgs` — loaded from `organization_members` (or `list_organizations` for SuperAdmin).
+  - If user has exactly **1** org → auto-select it on login (no picker shown).
+  - If user has **>1** orgs → force `/select-organization` after login (same page, restricted list).
+  - SuperAdmin keeps the "Global view" tile; other roles do not get it.
+- Storage key stays `aurapen.active_org`; add `aurapen.active_org_name`.
 
-### Scoping queries
-- Extend `adminQuery` calls: where applicable, pass `organization_id: activeOrgId` param.
-- Update `admin-query` edge function: for SuperAdmin, when `organization_id` param present, filter `list_students_with_batches`, `list_teachers`, `list_all_students`, `list_organizations` results, batches, courses, etc., by that org.
-- Client pages (Batches, Courses, Leads, Payments, Payroll, Live Classes, Enrollments) — read `activeOrgId` and add `.eq('organization_id', activeOrgId)` where the table has that column.
+### `ProtectedRoute`
+Replace the SuperAdmin-only redirect with:
+```
+needsPicker = profile && availableOrgs.length > 1 && activeOrgId === undefined
+```
 
-### Default values on create
-- Batch/Course/Material/Lead forms: pre-fill `organization_id = activeOrgId` for SuperAdmin when an org is active.
+### `AppHeader`
+Show the org switcher to any user with `availableOrgs.length > 1` (today only SuperAdmin sees it).
 
-### Tables with `organization_id`
-`batches`, `courses`, `organization_members`, `org_subscriptions`, profile (via membership). Tables without a direct org column (students, teachers, payments, attendance) are filtered through joins on `batches`/`organization_members` inside the edge function.
+### `adminService.adminQuery`
+Already auto-injects `target_org_id` from storage — keep it, but stop the `__skip_org_filter` shortcut for non-SuperAdmin callers.
 
-## Out of scope
-- Admin/Support/Teacher/Student/Parent users — their org is already auto-scoped via RLS; no UI changes.
-- No schema migrations needed.
+### Direct Supabase queries on pages
+Audit every page that hits Supabase directly and add `.eq('organization_id', activeOrgId)` (when set). Pages to update:
 
-## Files
+`BatchesPage`, `CoursesPage`, `StudentsPage`, `LeadsPage`, `PaymentsPage`, `PayrollPage`, `LiveClassesPage`, `AttendancePage`, `MaterialsPage`, `EnrollmentsPage`, `SchedulePage`, `CouponsPage`, `NotificationsPage`, `OrderHistoryPage`, `PracticeAssignmentsPage`, `StudentSubmissionsPage`, `StudentProgressPage`, `ReportsPage`, `Dashboard` (live metrics RPC already org-scoped — verify).
 
-**New**
-- `src/contexts/ActiveOrgContext.tsx`
-- `src/pages/SelectOrganizationPage.tsx`
+### Create/update forms
+For every create form (batch, course, lead, material, assignment, payment, payroll entry, live class), pre-fill and lock `organization_id = activeOrgId`. If `activeOrgId` is null (Global view, SuperAdmin only) and table requires org, show a "Pick an organization first" inline state.
 
-**Edited**
-- `src/App.tsx` — mount provider + route
-- `src/components/auth/ProtectedRoute.tsx` — redirect SuperAdmin without selection
-- `src/components/layout/AppHeader.tsx` — org switcher
-- `src/services/api/adminService.ts` — pass `organization_id` through
-- `supabase/functions/admin-query/index.ts` — honor `organization_id` for SuperAdmin in list actions
-- A handful of pages (Batches, Courses, Leads, Payments, Students, Teachers) — apply active-org filter
+## 4. Sequencing (so nothing breaks mid-flight)
+
+```text
+Step A  DB migration #1 — add nullable organization_id columns + backfill
+Step B  DB migration #2 — set NOT NULL + add indexes + new helper funcs
+Step C  DB migration #3 — rewrite RLS policies on the 12 tables
+Step D  Edge function admin-query — honor target_org_id for all roles + membership check
+Step E  Generalise ActiveOrgContext + ProtectedRoute + AppHeader
+Step F  Page-by-page query/scoping audit (one PR slice per domain: academics, finance, CRM, content)
+Step G  Manual smoke test matrix — see §5
+```
+
+## 5. Manual test matrix (post-implementation)
+
+| Role             | Single org | Multi org | Expected |
+|------------------|-----------|-----------|----------|
+| SuperAdmin       | n/a       | n/a       | Picker + Global tile; switch works on every page |
+| Admin            | Auto-enter org | Picker on login + header switcher | Sees only active org's data, create writes to it |
+| Support          | Auto-enter | Picker | Read-only, scoped |
+| Teacher          | Auto-enter | Picker (org of their batches) | Sees only batches in active org |
+| Student / Parent | Auto-enter | n/a (single org by design) | No picker, no header switcher |
+
+## 6. Out of scope
+
+- No business-logic changes (pricing, attendance flow, payroll calc).
+- No new UI screens beyond reusing existing `SelectOrganizationPage`.
+- Student / parent users remain single-org (current product assumption).
