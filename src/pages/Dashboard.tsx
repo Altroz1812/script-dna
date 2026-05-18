@@ -28,6 +28,7 @@ import {
   Headphones,
 } from "lucide-react";
 import { readActiveOrgFromStorage } from "@/contexts/ActiveOrgContext";
+import { useActiveOrg } from "@/contexts/ActiveOrgContext";
 
 interface Stats {
   totalUsers: number;
@@ -103,6 +104,7 @@ const itemVariants = {
 export default function Dashboard() {
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const { activeOrgId, activeOrgName } = useActiveOrg(); // Add this
 
   const role = profile?.role;
   const isStudent = role === "student";
@@ -112,9 +114,20 @@ export default function Dashboard() {
   const isSuperadmin = role === "superadmin";
   const organizationId = profile?.organizationId ?? null;
 
-  // ✅ THESE GO INSIDE THE COMPONENT, NOT ABOVE IT
-  const storedOrgId = readActiveOrgFromStorage();
-  const effectiveOrgId = isSuperadmin ? (storedOrgId ?? null) : organizationId;
+  // Then replace the effectiveOrgId logic:
+  // For superadmin, use the selected org from context; for regular users, use their org
+  const effectiveOrgId = isSuperadmin
+    ? activeOrgId === null
+      ? null
+      : activeOrgId // null = global view
+    : organizationId;
+
+  console.log("Dashboard Debug:", {
+    isSuperadmin,
+    activeOrgId,
+    effectiveOrgId,
+    organizationId,
+  });
 
   // Student dashboard data
   const { data: studentData, isLoading: studentLoading } = useQuery({
@@ -184,16 +197,7 @@ export default function Dashboard() {
     staleTime: 1000 * 60 * 2,
   });
 
-  const { data: orgName } = useQuery({
-    queryKey: ["org_name", organizationId],
-    queryFn: async () => {
-      if (!organizationId) return null;
-      const { organizationService } = await import("@/services/api/organizationService");
-      const org = await organizationService.getOrganization(organizationId);
-      return org?.name ?? null;
-    },
-    enabled: !!organizationId && !isStudent && !isParent && !isTeacher && !isSupport,
-  });
+  // Check current user
 
   // Teacher dashboard data
   const { data: teacherData, isLoading: teacherLoading } = useQuery({
@@ -250,31 +254,25 @@ export default function Dashboard() {
     staleTime: 1000 * 60 * 2,
   });
 
-  // ✅ FIX THIS - remove "subtitle" and add comma
+  // In Dashboard.tsx, right before the stats query:
+  console.log("Dashboard Debug:", {
+    isSuperadmin,
+    activeOrgId,
+    effectiveOrgId,
+    organizationId,
+  });
+
   const { data: stats, isLoading } = useQuery<Stats>({
     queryKey: ["admin_stats", effectiveOrgId, isSuperadmin],
     queryFn: () =>
       adminQuery("get_stats", {
-        target_org_id: effectiveOrgId, // ✅ The value goes to target_org_id
+        organizationId: effectiveOrgId, // This can be string, null, or undefined
         isSuperadmin,
       }) as Promise<Stats>,
     staleTime: 1000 * 60 * 5,
     retry: 2,
     enabled: !!profile && !isStudent && !isParent && !isTeacher && !isSupport,
   });
-
-  // ✅ subtitle goes AFTER the query, as its own variable
-  const subtitle = isSuperadmin
-    ? effectiveOrgId === null
-      ? "Platform Overview · All Organizations"
-      : effectiveOrgId
-        ? orgName
-          ? `${orgName} Overview`
-          : "Organization Overview"
-        : "Select an organization"
-    : orgName
-      ? `${orgName} Overview`
-      : "Organization Overview";
 
   const cards = useMemo(() => {
     if (!stats) return [];
@@ -827,6 +825,21 @@ export default function Dashboard() {
       </div>
     );
   }
+
+  const subtitle = isSuperadmin
+    ? activeOrgId === null
+      ? "Platform Overview · All Organizations"
+      : `${activeOrgName} Overview`
+    : organizationId
+      ? "Organization Overview"
+      : "Overview"; // For non-superadmin, you might want to fetch their org name once or just show generic
+
+  // Optional: If you still need org name for non-superadmin users, fetch it once globally or keep it simple
+  const displaySubtitle = isSuperadmin
+    ? activeOrgId === null
+      ? "Platform Overview · All Organizations"
+      : `${activeOrgName} Overview`
+    : "Dashboard";
 
   return (
     <div className="relative min-h-full">
