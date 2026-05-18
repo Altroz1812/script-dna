@@ -177,8 +177,8 @@ export default function CoursesPage() {
         max_students: b.max_students,
         teacher_id: b.teacher_id,
         course_id: b.course_id,
-        enrolled_count: 0,
-        teacher_name: null,
+        enrolled_count: b.enrolled_count ?? 0,
+        teacher_name: b.teacher_name ?? null,
       }));
     },
     enabled: courseIds.length > 0,
