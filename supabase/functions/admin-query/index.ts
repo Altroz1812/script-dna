@@ -598,7 +598,14 @@ Deno.serve(async (req) => {
                 .from('batch_students')
                 .select('student_id')
                 .in('batch_id', batchIds)
-              for (const r of enrollRows ?? []) orgStudentIds.add(r.student_id)
+              const enrolledProfileIds = [...new Set((enrollRows ?? []).map((r: any) => r.student_id))]
+              if (enrolledProfileIds.length > 0) {
+                const { data: enrolledProfiles } = await supabase
+                  .from('profiles')
+                  .select('id, user_id')
+                  .in('id', enrolledProfileIds)
+                for (const p of enrolledProfiles ?? []) orgStudentIds.add(p.user_id)
+              }
             }
             // Also include students who are explicit org members (e.g. created in org but not yet enrolled)
             const { data: members } = await supabase
@@ -650,10 +657,11 @@ Deno.serve(async (req) => {
 
         // list_students_with_batches
         const { data: profiles } = await supabase.from('profiles').select('*').in('user_id', ids)
+        const profileIds = (profiles ?? []).map((p: any) => p.id)
         const { data: enrollments } = await supabase
           .from('batch_students')
           .select('student_id, batch_id, batches(name, organization_id, courses(name))')
-          .in('student_id', ids)
+          .in('student_id', profileIds)
         const enrollMap: Record<string, any[]> = {}
         for (const e of enrollments ?? []) {
           // Restrict enrollments to the scoped org (admin's org, or SuperAdmin's picked org)
@@ -661,7 +669,7 @@ Deno.serve(async (req) => {
           if (!enrollMap[e.student_id]) enrollMap[e.student_id] = []
           enrollMap[e.student_id].push(e)
         }
-        result = (profiles ?? []).map((p: any) => ({ ...p, enrollments: enrollMap[p.user_id] || [] }))
+        result = (profiles ?? []).map((p: any) => ({ ...p, enrollments: enrollMap[p.id] || [] }))
         break
       }
 
