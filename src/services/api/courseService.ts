@@ -39,7 +39,7 @@ export interface BatchStudent {
   batch_id: string;
   student_id: string;
   enrolled_at: string;
-  profile?: { display_name: string | null; email: string | null };
+  profile?: { id?: string; user_id?: string; display_name: string | null; email: string | null };
 }
 
 export interface CreateCourseParams {
