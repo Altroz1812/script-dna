@@ -787,13 +787,34 @@ Deno.serve(async (req) => {
       }
       case 'add_batch_student': {
         // Enforce max_students seat limit
-        const { data: batchInfo } = await supabase.from('batches').select('max_students').eq('id', params.batch_id).single()
+        if (!params?.batch_id || !params?.student_id) {
+          throw new Error('batch_id and student_id are required')
+        }
+        const { data: batchInfo } = await supabase
+          .from('batches')
+          .select('max_students, organization_id')
+          .eq('id', params.batch_id)
+          .maybeSingle()
         if (!batchInfo) throw new Error('Batch not found')
+        // Org scope check (non-superadmin only)
+        if (!callerIsSuperadmin && targetOrgId && batchInfo.organization_id !== targetOrgId) {
+          throw new Error('Batch is outside your organization')
+        }
         const { count: currentCount } = await supabase.from('batch_students').select('id', { count: 'exact', head: true }).eq('batch_id', params.batch_id)
         if ((currentCount ?? 0) >= batchInfo.max_students) {
           throw new Error(`Batch is full (${batchInfo.max_students}/${batchInfo.max_students} seats taken)`)
         }
-        const { error } = await supabase.from('batch_students').insert({ batch_id: params.batch_id, student_id: params.student_id })
+        // Prevent duplicate enrollment with a friendly message
+        const { data: existing } = await supabase
+          .from('batch_students')
+          .select('id')
+          .eq('batch_id', params.batch_id)
+          .eq('student_id', params.student_id)
+          .maybeSingle()
+        if (existing) throw new Error('Student is already enrolled in this batch')
+        const { error } = await supabase
+          .from('batch_students')
+          .insert({ batch_id: params.batch_id, student_id: params.student_id })
         if (error) throw error
         result = { success: true }
         break
