@@ -157,7 +157,7 @@ export const batchService = {
     return (data ?? []) as any[];
   },
 
-  async listStudents(): Promise<{ user_id: string; display_name: string | null; email: string | null }[]> {
+  async listStudents(): Promise<{ id: string; user_id: string; display_name: string | null; email: string | null }[]> {
     const data = await adminQuery("list_all_students");
     return (data ?? []) as any[];
   },
