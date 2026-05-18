@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
+import { useActiveOrg } from '@/contexts/ActiveOrgContext';
 import { useRBAC } from '@/hooks/useRBAC';
 import { courseService, batchService, type Course, type Batch } from '@/services/api/courseService';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,7 @@ import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
 
 export default function BatchesPage() {
   const { profile } = useAuth();
+  const { activeOrgId } = useActiveOrg();
   const { isAdmin } = useRBAC();
   const queryClient = useQueryClient();
 
@@ -60,7 +62,11 @@ export default function BatchesPage() {
   };
 
   const createMutation = useMutation({
-    mutationFn: () => batchService.createBatch(selectedCourse, batchName.trim(), maxStudents),
+    mutationFn: () => {
+      const orgId = activeOrgId ?? profile?.organizationId;
+      if (!orgId) throw new Error('Pick an organization first');
+      return batchService.createBatch(orgId, selectedCourse, batchName.trim(), maxStudents);
+    },
     onSuccess: () => {
       toast.success('Batch created');
       setBatchName(''); setSelectedCourse(''); setMaxStudents(25); setOpen(false);

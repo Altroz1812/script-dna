@@ -13,7 +13,7 @@ import { MorphingBlob } from '@/components/ui/morphing-blob';
 
 export default function SelectOrganizationPage() {
   const navigate = useNavigate();
-  const { setActiveOrg } = useActiveOrg();
+  const { setActiveOrg, availableOrgs, orgsLoading } = useActiveOrg();
   const { profile, loading: authLoading } = useAuth();
   const { isSuperAdmin } = useRBAC();
 
@@ -23,12 +23,23 @@ export default function SelectOrganizationPage() {
   useEffect(() => {
     if (authLoading) return;
     if (!profile) { navigate('/login', { replace: true }); return; }
-    if (!isSuperAdmin) { navigate('/dashboard', { replace: true }); return; }
-    adminQuery('list_organizations', { __skip_org_filter: true })
-      .then(setOrgs)
-      .catch((e) => toast.error(e.message))
-      .finally(() => setLoading(false));
-  }, [authLoading, profile, isSuperAdmin, navigate]);
+    if (isSuperAdmin) {
+      adminQuery('list_organizations', { __skip_org_filter: true })
+        .then(setOrgs)
+        .catch((e) => toast.error(e.message))
+        .finally(() => setLoading(false));
+    } else {
+      // Non-SuperAdmin: pick only from their memberships
+      if (orgsLoading) return;
+      if (availableOrgs.length <= 1) {
+        // Single-org user shouldn't see this page
+        navigate('/dashboard', { replace: true });
+        return;
+      }
+      setOrgs(availableOrgs.map(o => ({ id: o.id, name: o.name })));
+      setLoading(false);
+    }
+  }, [authLoading, profile, isSuperAdmin, navigate, availableOrgs, orgsLoading]);
 
   const pick = (id: string | null, name: string | null) => {
     setActiveOrg(id, name);
@@ -60,7 +71,8 @@ export default function SelectOrganizationPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* Global tile */}
+            {/* Global tile — SuperAdmin only */}
+            {isSuperAdmin && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
               <Card
                 onClick={() => pick(null, 'Global view')}
@@ -80,6 +92,7 @@ export default function SelectOrganizationPage() {
                 </CardContent>
               </Card>
             </motion.div>
+            )}
 
             {orgs.map((o, i) => (
               <motion.div

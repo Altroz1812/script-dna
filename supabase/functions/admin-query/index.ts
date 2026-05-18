@@ -20,14 +20,60 @@ Deno.serve(async (req) => {
     const action = body.action
     let params = body.params ?? {}
 
-    // SuperAdmin org-scoping override. When the client sets `target_org_id`,
-    // we treat the request as if it were issued by an admin scoped to that org.
-    const targetOrgId: string | null = (params && typeof params.target_org_id === 'string')
+    // Active organization scope. The client (any role) sets `target_org_id` to
+    // narrow the request to a single tenant. We validate it against the
+    // caller's memberships so admins / support / teachers cannot peek at orgs
+    // they don't belong to.
+    const requestedOrgId: string | null = (params && typeof params.target_org_id === 'string')
       ? params.target_org_id
       : null
     if (params && 'target_org_id' in params) {
       const { target_org_id: _omit, ...rest } = params
       params = rest
+    }
+
+    // Resolve caller identity + roles (best-effort; many actions also re-check)
+    let callerUserId: string | null = null
+    try {
+      const authHeader = req.headers.get('Authorization') ?? ''
+      const token = authHeader.replace(/^Bearer\s+/i, '')
+      if (token) {
+        const { data: u } = await supabase.auth.getUser(token)
+        callerUserId = u?.user?.id ?? null
+      }
+    } catch (_e) { /* anonymous fallback */ }
+
+    let callerIsSuperadmin = false
+    let callerOrgMemberships: string[] = []
+    if (callerUserId) {
+      const { data: roleRows } = await supabase
+        .from('user_roles').select('role').eq('user_id', callerUserId)
+      callerIsSuperadmin = (roleRows ?? []).some((r: any) => r.role === 'superadmin')
+      if (!callerIsSuperadmin) {
+        const { data: memb } = await supabase
+          .from('organization_members').select('organization_id').eq('user_id', callerUserId)
+        callerOrgMemberships = (memb ?? []).map((m: any) => m.organization_id)
+      }
+    }
+
+    // Final resolved scope used by every "if (targetOrgId)" branch below.
+    // - SuperAdmin: trust requestedOrgId verbatim (null = global view).
+    // - Other roles: must be one of their memberships. If they sent something
+    //   they don't own, reject. If they sent nothing and have exactly one org,
+    //   auto-scope to it (preserves single-tenant convenience).
+    let targetOrgId: string | null = null
+    if (callerIsSuperadmin) {
+      targetOrgId = requestedOrgId
+    } else if (requestedOrgId) {
+      if (!callerOrgMemberships.includes(requestedOrgId)) {
+        return new Response(JSON.stringify({ error: 'Forbidden: organization not accessible' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      targetOrgId = requestedOrgId
+    } else if (callerOrgMemberships.length === 1) {
+      targetOrgId = callerOrgMemberships[0]
     }
 
     let result: any = null

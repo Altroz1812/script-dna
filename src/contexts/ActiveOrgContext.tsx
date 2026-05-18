@@ -1,11 +1,17 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 // undefined = never picked (must choose), null = explicit Global view, string = scoped org id
 type OrgId = string | null | undefined;
 
+export interface AvailableOrg { id: string; name: string }
+
 interface ActiveOrgState {
   activeOrgId: OrgId;
   activeOrgName: string | null;
+  availableOrgs: AvailableOrg[];
+  orgsLoading: boolean;
   setActiveOrg: (id: string | null, name?: string | null) => void;
   clearActiveOrg: () => void;
 }
@@ -16,6 +22,7 @@ const STORAGE_NAME_KEY = 'aurapen.active_org_name';
 const ActiveOrgContext = createContext<ActiveOrgState | null>(null);
 
 export function ActiveOrgProvider({ children }: { children: React.ReactNode }) {
+  const { session, profile } = useAuth();
   const [activeOrgId, setActiveOrgId] = useState<OrgId>(() => {
     if (typeof window === 'undefined') return undefined;
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -27,6 +34,8 @@ export function ActiveOrgProvider({ children }: { children: React.ReactNode }) {
     if (typeof window === 'undefined') return null;
     return window.localStorage.getItem(STORAGE_NAME_KEY);
   });
+  const [availableOrgs, setAvailableOrgs] = useState<AvailableOrg[]>([]);
+  const [orgsLoading, setOrgsLoading] = useState<boolean>(false);
 
   const setActiveOrg = useCallback((id: string | null, name?: string | null) => {
     setActiveOrgId(id);
@@ -41,6 +50,55 @@ export function ActiveOrgProvider({ children }: { children: React.ReactNode }) {
     window.localStorage.removeItem(STORAGE_KEY);
     window.localStorage.removeItem(STORAGE_NAME_KEY);
   }, []);
+
+  // Load the list of orgs the user belongs to. SuperAdmin loads all.
+  useEffect(() => {
+    let alive = true;
+    if (!session?.user || !profile) { setAvailableOrgs([]); return; }
+    setOrgsLoading(true);
+    (async () => {
+      try {
+        if (profile.role === 'superadmin') {
+          const { data } = await supabase
+            .from('organizations').select('id, name').order('name');
+          if (!alive) return;
+          setAvailableOrgs((data ?? []) as AvailableOrg[]);
+        } else {
+          const { data } = await supabase
+            .from('organization_members')
+            .select('organization_id, organizations(id, name)')
+            .eq('user_id', session.user.id);
+          if (!alive) return;
+          const orgs: AvailableOrg[] = [];
+          for (const r of (data ?? []) as any[]) {
+            if (r.organizations?.id) orgs.push({ id: r.organizations.id, name: r.organizations.name });
+          }
+          // Teachers may not be org_members yet but own batches in an org — include those too
+          if (profile.role === 'teacher') {
+            const { data: bs } = await supabase
+              .from('batches')
+              .select('organization_id, organizations(id, name)')
+              .eq('teacher_id', session.user.id);
+            for (const b of (bs ?? []) as any[]) {
+              if (b.organizations?.id && !orgs.find(o => o.id === b.organizations.id)) {
+                orgs.push({ id: b.organizations.id, name: b.organizations.name });
+              }
+            }
+          }
+          setAvailableOrgs(orgs);
+
+          // Auto-select for single-org users
+          if (orgs.length === 1 && activeOrgId === undefined) {
+            setActiveOrg(orgs[0].id, orgs[0].name);
+          }
+        }
+      } finally {
+        if (alive) setOrgsLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.id, profile?.role]);
 
   // Keep localStorage in sync (for cross-tab signals to adminService param injection)
   useEffect(() => {
@@ -58,7 +116,7 @@ export function ActiveOrgProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <ActiveOrgContext.Provider value={{ activeOrgId, activeOrgName, setActiveOrg, clearActiveOrg }}>
+    <ActiveOrgContext.Provider value={{ activeOrgId, activeOrgName, availableOrgs, orgsLoading, setActiveOrg, clearActiveOrg }}>
       {children}
     </ActiveOrgContext.Provider>
   );

@@ -53,6 +53,7 @@ export type Database = {
           created_at: string
           date: string
           id: string
+          organization_id: string | null
           schedule_id: string | null
           status: Database["public"]["Enums"]["attendance_status"]
           student_id: string
@@ -62,6 +63,7 @@ export type Database = {
           created_at?: string
           date: string
           id?: string
+          organization_id?: string | null
           schedule_id?: string | null
           status?: Database["public"]["Enums"]["attendance_status"]
           student_id: string
@@ -71,6 +73,7 @@ export type Database = {
           created_at?: string
           date?: string
           id?: string
+          organization_id?: string | null
           schedule_id?: string | null
           status?: Database["public"]["Enums"]["attendance_status"]
           student_id?: string
@@ -187,6 +190,7 @@ export type Database = {
           is_active: boolean
           max_uses: number | null
           min_amount: number | null
+          organization_id: string | null
           used_count: number
           valid_from: string | null
           valid_until: string | null
@@ -201,6 +205,7 @@ export type Database = {
           is_active?: boolean
           max_uses?: number | null
           min_amount?: number | null
+          organization_id?: string | null
           used_count?: number
           valid_from?: string | null
           valid_until?: string | null
@@ -215,6 +220,7 @@ export type Database = {
           is_active?: boolean
           max_uses?: number | null
           min_amount?: number | null
+          organization_id?: string | null
           used_count?: number
           valid_from?: string | null
           valid_until?: string | null
@@ -454,6 +460,7 @@ export type Database = {
           id: string
           name: string
           notes: string | null
+          organization_id: string | null
           phone: string | null
           source: string | null
           status: Database["public"]["Enums"]["lead_status"]
@@ -465,6 +472,7 @@ export type Database = {
           id?: string
           name: string
           notes?: string | null
+          organization_id?: string | null
           phone?: string | null
           source?: string | null
           status?: Database["public"]["Enums"]["lead_status"]
@@ -476,6 +484,7 @@ export type Database = {
           id?: string
           name?: string
           notes?: string | null
+          organization_id?: string | null
           phone?: string | null
           source?: string | null
           status?: Database["public"]["Enums"]["lead_status"]
@@ -537,6 +546,7 @@ export type Database = {
           duration_minutes: number
           id: string
           meeting_url: string | null
+          organization_id: string | null
           schedule_id: string | null
           scheduled_at: string
           started_by: string | null
@@ -550,6 +560,7 @@ export type Database = {
           duration_minutes?: number
           id?: string
           meeting_url?: string | null
+          organization_id?: string | null
           schedule_id?: string | null
           scheduled_at: string
           started_by?: string | null
@@ -563,6 +574,7 @@ export type Database = {
           duration_minutes?: number
           id?: string
           meeting_url?: string | null
+          organization_id?: string | null
           schedule_id?: string | null
           scheduled_at?: string
           started_by?: string | null
@@ -619,6 +631,7 @@ export type Database = {
           file_url: string | null
           id: string
           material_type: string | null
+          organization_id: string | null
           title: string
           updated_at: string
           uploaded_by: string | null
@@ -630,6 +643,7 @@ export type Database = {
           file_url?: string | null
           id?: string
           material_type?: string | null
+          organization_id?: string | null
           title: string
           updated_at?: string
           uploaded_by?: string | null
@@ -641,6 +655,7 @@ export type Database = {
           file_url?: string | null
           id?: string
           material_type?: string | null
+          organization_id?: string | null
           title?: string
           updated_at?: string
           uploaded_by?: string | null
@@ -711,6 +726,7 @@ export type Database = {
           discount_amount: number
           final_amount: number
           id: string
+          organization_id: string | null
           payment_session_id: string | null
           status: string
           student_details: Json
@@ -725,6 +741,7 @@ export type Database = {
           discount_amount?: number
           final_amount: number
           id?: string
+          organization_id?: string | null
           payment_session_id?: string | null
           status?: string
           student_details?: Json
@@ -739,6 +756,7 @@ export type Database = {
           discount_amount?: number
           final_amount?: number
           id?: string
+          organization_id?: string | null
           payment_session_id?: string | null
           status?: string
           student_details?: Json
@@ -919,6 +937,7 @@ export type Database = {
           currency: string
           description: string | null
           id: string
+          organization_id: string | null
           payment_date: string
           status: Database["public"]["Enums"]["payment_status"]
           student_id: string
@@ -930,6 +949,7 @@ export type Database = {
           currency?: string
           description?: string | null
           id?: string
+          organization_id?: string | null
           payment_date?: string
           status?: Database["public"]["Enums"]["payment_status"]
           student_id: string
@@ -941,6 +961,7 @@ export type Database = {
           currency?: string
           description?: string | null
           id?: string
+          organization_id?: string | null
           payment_date?: string
           status?: Database["public"]["Enums"]["payment_status"]
           student_id?: string
@@ -954,6 +975,7 @@ export type Database = {
           created_at: string
           id: string
           month: number
+          organization_id: string | null
           paid_at: string | null
           status: Database["public"]["Enums"]["payroll_status"]
           teacher_id: string
@@ -965,6 +987,7 @@ export type Database = {
           created_at?: string
           id?: string
           month: number
+          organization_id?: string | null
           paid_at?: string | null
           status?: Database["public"]["Enums"]["payroll_status"]
           teacher_id: string
@@ -976,6 +999,7 @@ export type Database = {
           created_at?: string
           id?: string
           month?: number
+          organization_id?: string | null
           paid_at?: string | null
           status?: Database["public"]["Enums"]["payroll_status"]
           teacher_id?: string
@@ -993,6 +1017,7 @@ export type Database = {
           due_date: string | null
           file_url: string | null
           id: string
+          organization_id: string | null
           teacher_id: string
           title: string
           updated_at: string
@@ -1005,6 +1030,7 @@ export type Database = {
           due_date?: string | null
           file_url?: string | null
           id?: string
+          organization_id?: string | null
           teacher_id: string
           title: string
           updated_at?: string
@@ -1017,6 +1043,7 @@ export type Database = {
           due_date?: string | null
           file_url?: string | null
           id?: string
+          organization_id?: string | null
           teacher_id?: string
           title?: string
           updated_at?: string
@@ -1090,6 +1117,7 @@ export type Database = {
           day_of_week: number
           end_time: string
           id: string
+          organization_id: string | null
           room: string | null
           start_time: string
           title: string
@@ -1102,6 +1130,7 @@ export type Database = {
           day_of_week: number
           end_time: string
           id?: string
+          organization_id?: string | null
           room?: string | null
           start_time: string
           title: string
@@ -1114,6 +1143,7 @@ export type Database = {
           day_of_week?: number
           end_time?: string
           id?: string
+          organization_id?: string | null
           room?: string | null
           start_time?: string
           title?: string
@@ -1180,6 +1210,7 @@ export type Database = {
           completion_pct: number
           course_id: string
           id: string
+          organization_id: string | null
           sessions_attended: number
           started_at: string
           status: string
@@ -1193,6 +1224,7 @@ export type Database = {
           completion_pct?: number
           course_id: string
           id?: string
+          organization_id?: string | null
           sessions_attended?: number
           started_at?: string
           status?: string
@@ -1206,6 +1238,7 @@ export type Database = {
           completion_pct?: number
           course_id?: string
           id?: string
+          organization_id?: string | null
           sessions_attended?: number
           started_at?: string
           status?: string
@@ -1236,6 +1269,7 @@ export type Database = {
           created_at: string
           file_url: string | null
           id: string
+          organization_id: string | null
           score: number | null
           status: Database["public"]["Enums"]["submission_status"]
           student_id: string
@@ -1247,6 +1281,7 @@ export type Database = {
           created_at?: string
           file_url?: string | null
           id?: string
+          organization_id?: string | null
           score?: number | null
           status?: Database["public"]["Enums"]["submission_status"]
           student_id: string
@@ -1258,6 +1293,7 @@ export type Database = {
           created_at?: string
           file_url?: string | null
           id?: string
+          organization_id?: string | null
           score?: number | null
           status?: Database["public"]["Enums"]["submission_status"]
           student_id?: string
@@ -1392,10 +1428,15 @@ export type Database = {
         Args: { _batch_id: string; _teacher_id: string }
         Returns: boolean
       }
+      user_has_org_access: {
+        Args: { _org_id: string; _user_id: string }
+        Returns: boolean
+      }
       user_in_org: {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
       }
+      user_org_ids: { Args: { _user_id: string }; Returns: string[] }
     }
     Enums: {
       app_role:

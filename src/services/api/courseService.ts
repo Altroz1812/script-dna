@@ -30,7 +30,7 @@ export interface Batch {
   teacher_id: string | null;
   created_at: string;
   updated_at: string;
-  courses?: { name: string; delivery_mode?: string };
+  courses?: { name: string; delivery_mode?: string; duration_days?: number; daily_hours?: number; total_hours?: number };
 }
 
 export interface BatchStudent {

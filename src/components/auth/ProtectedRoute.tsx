@@ -10,7 +10,7 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   const { session, profile, loading } = useAuth();
-  const { activeOrgId } = useActiveOrg();
+  const { activeOrgId, availableOrgs, orgsLoading } = useActiveOrg();
   const location = useLocation();
 
   if (loading) {
@@ -29,12 +29,16 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to="/unauthorized" replace />;
   }
 
-  // SuperAdmin must pick an organization (or Global) before entering the app.
-  if (
-    profile?.role === 'superadmin' &&
+  // Tenant scoping gate:
+  //  - SuperAdmin must always pick (or hit Global) before entering.
+  //  - Other roles only need to pick when they belong to multiple orgs.
+  const needsPicker =
+    profile &&
+    location.pathname !== '/select-organization' &&
     activeOrgId === undefined &&
-    location.pathname !== '/select-organization'
-  ) {
+    !orgsLoading &&
+    (profile.role === 'superadmin' || availableOrgs.length > 1);
+  if (needsPicker) {
     return <Navigate to="/select-organization" replace />;
   }
 
