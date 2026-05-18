@@ -544,51 +544,17 @@ Deno.serve(async (req) => {
       case 'list_students_with_batches':
       case 'list_all_students':
       case 'list_teachers': {
-        // Resolve caller from JWT
-        const authHeader = req.headers.get('Authorization') || ''
-        const jwt = authHeader.replace('Bearer ', '').trim()
-        let callerId: string | null = null
-        if (jwt) {
-          const { data: userData } = await supabase.auth.getUser(jwt)
-          callerId = userData?.user?.id ?? null
-        }
-        if (!callerId) {
+        if (!callerUserId) {
           return new Response(JSON.stringify({ error: 'Unauthorized' }), {
             status: 401,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           })
         }
-
-        const { data: rolesData } = await supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', callerId)
-        const roleSet = new Set((rolesData ?? []).map((r: any) => r.role))
-        const isSuperadmin = roleSet.has('superadmin')
-        const isAdmin = roleSet.has('admin')
-        if (!isSuperadmin && !isAdmin) {
-          return new Response(JSON.stringify({ error: 'Forbidden' }), {
-            status: 403,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          })
-        }
-
-        // Resolve admin's org (first org membership). Null for superadmin (no scoping).
-        let callerOrgId: string | null = null
-        if (!isSuperadmin) {
-          const { data: memberRow } = await supabase
-            .from('organization_members')
-            .select('organization_id, joined_at')
-            .eq('user_id', callerId)
-            .order('joined_at', { ascending: true })
-            .limit(1)
-            .maybeSingle()
-          callerOrgId = memberRow?.organization_id ?? null
-        }
-        // SuperAdmin explicit org pick overrides "no scoping"
-        if (isSuperadmin && targetOrgId) {
-          callerOrgId = targetOrgId
-        }
+        const isSuperadmin = callerIsSuperadmin
+        // Authoritative org scope: always use the upstream-resolved targetOrgId
+        // (validated against the caller's memberships). Never fall back to
+        // "first joined org" — that's exactly what was leaking other orgs.
+        const callerOrgId: string | null = targetOrgId
         const applyOrgScope = !isSuperadmin || !!targetOrgId
 
         // Determine candidate user_ids based on role + org scope
@@ -820,22 +786,9 @@ Deno.serve(async (req) => {
         result = count ?? 0
         break
       }
-      case 'list_teachers': {
-        const { data: roles } = await supabase.from('user_roles').select('user_id').eq('role', 'teacher')
-        if (!roles?.length) { result = []; break }
-        const ids = roles.map((r: any) => r.user_id)
-        const { data: profiles } = await supabase.from('profiles').select('user_id, display_name, email').in('user_id', ids)
-        result = profiles ?? []
-        break
-      }
-      case 'list_all_students': {
-        const { data: roles } = await supabase.from('user_roles').select('user_id').eq('role', 'student')
-        if (!roles?.length) { result = []; break }
-        const ids = roles.map((r: any) => r.user_id)
-        const { data: profiles } = await supabase.from('profiles').select('user_id, display_name, email').in('user_id', ids)
-        result = profiles ?? []
-        break
-      }
+      // (duplicate ungated handlers for list_teachers / list_all_students
+      // were removed — they bypassed org scoping and are now consolidated in
+      // the combined handler above.)
 
       // ===== BULK SCHEDULES =====
       case 'bulk_create_schedules': {
