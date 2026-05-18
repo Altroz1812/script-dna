@@ -193,17 +193,103 @@ export const batchService = {
   },
 
   async listTeachers(): Promise<{ user_id: string; display_name: string | null; email: string | null }[]> {
-    const { data: roles } = await supabase.from("user_roles").select("user_id").eq("role", "teacher");
+    try {
+      console.log("🔵 Fetching teachers for current organization...");
 
-    if (!roles?.length) return [];
+      // Get current user
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        console.error("No authenticated user");
+        return [];
+      }
 
-    const ids = roles.map((r) => r.user_id);
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("user_id, display_name, email")
-      .in("user_id", ids);
+      // Get current user's organization from their profile
+      const { data: currentProfile, error: profileError } = await supabase
+        .from("profiles")
+        .select("organization_id")
+        .eq("user_id", user.id)
+        .single();
 
-    return profiles || [];
+      if (profileError) {
+        console.error("Error fetching user profile:", profileError);
+        return [];
+      }
+
+      const userOrgId = currentProfile?.organization_id;
+      if (!userOrgId) {
+        console.log("User has no organization assigned");
+        return [];
+      }
+
+      console.log("🔵 Current organization ID:", userOrgId);
+
+      // Step 1: Get all users who have 'teacher' role from user_roles
+      const { data: teacherRoles, error: roleError } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "teacher");
+
+      if (roleError) {
+        console.error("Error fetching teacher roles:", roleError);
+        return [];
+      }
+
+      if (!teacherRoles || teacherRoles.length === 0) {
+        console.log("No teachers found in user_roles");
+        return [];
+      }
+
+      const teacherIds = teacherRoles.map((r) => r.user_id);
+      console.log("🔵 All teacher IDs:", teacherIds);
+
+      // Step 2: Get profiles for these teachers, filtered by organization_id
+      const { data: teachers, error: teachersError } = await supabase
+        .from("profiles")
+        .select("user_id, display_name, email, organization_id")
+        .in("user_id", teacherIds)
+        .eq("organization_id", userOrgId);
+
+      if (teachersError) {
+        console.error("Error fetching teacher profiles:", teachersError);
+        return [];
+      }
+
+      console.log(`🔵 Found ${teachers?.length || 0} teachers in organization ${userOrgId}`);
+
+      // Optional: Also check organization_members for teachers
+      if (!teachers || teachers.length === 0) {
+        console.log("Checking organization_members for teachers...");
+
+        const { data: orgMembers, error: memberError } = await supabase
+          .from("organization_members")
+          .select("user_id")
+          .eq("organization_id", userOrgId);
+
+        if (!memberError && orgMembers && orgMembers.length > 0) {
+          const memberIds = orgMembers.map((m) => m.user_id);
+          const teachersInOrg = teacherIds.filter((id) => memberIds.includes(id));
+
+          if (teachersInOrg.length > 0) {
+            const { data: memberTeachers, error: memberTeacherError } = await supabase
+              .from("profiles")
+              .select("user_id, display_name, email")
+              .in("user_id", teachersInOrg);
+
+            if (!memberTeacherError && memberTeachers) {
+              console.log(`🔵 Found ${memberTeachers.length} teachers via organization_members`);
+              return memberTeachers;
+            }
+          }
+        }
+      }
+
+      return teachers || [];
+    } catch (error) {
+      console.error("🔴 Failed to list teachers:", error);
+      return [];
+    }
   },
 
   async listStudents(): Promise<{ user_id: string; display_name: string | null; email: string | null }[]> {
