@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 // undefined = never picked (must choose), null = explicit Global view, string = scoped org id
 type OrgId = string | null | undefined;
@@ -38,11 +39,21 @@ export function ActiveOrgProvider({ children }: { children: React.ReactNode }) {
   const [orgsLoading, setOrgsLoading] = useState<boolean>(false);
 
   const setActiveOrg = useCallback((id: string | null, name?: string | null) => {
+    // Validate against membership list before persisting. The validation only
+    // runs after the membership list has loaded; first-paint single-org
+    // auto-select still works because availableOrgs is empty at that moment.
+    const isSuperadmin = profile?.role === 'superadmin';
+    if (id !== null && availableOrgs.length > 0 && !isSuperadmin) {
+      if (!availableOrgs.find((o) => o.id === id)) {
+        toast.error('Selected organization is not available to your account');
+        return;
+      }
+    }
     setActiveOrgId(id);
     setActiveOrgName(name ?? (id === null ? 'Global view' : null));
     window.localStorage.setItem(STORAGE_KEY, id === null ? '__global__' : id);
     window.localStorage.setItem(STORAGE_NAME_KEY, name ?? (id === null ? 'Global view' : ''));
-  }, []);
+  }, [availableOrgs, profile?.role]);
 
   const clearActiveOrg = useCallback(() => {
     setActiveOrgId(undefined);
@@ -89,7 +100,25 @@ export function ActiveOrgProvider({ children }: { children: React.ReactNode }) {
 
           // Auto-select for single-org users
           if (orgs.length === 1 && activeOrgId === undefined) {
-            setActiveOrg(orgs[0].id, orgs[0].name);
+            setActiveOrgId(orgs[0].id);
+            setActiveOrgName(orgs[0].name);
+            window.localStorage.setItem(STORAGE_KEY, orgs[0].id);
+            window.localStorage.setItem(STORAGE_NAME_KEY, orgs[0].name);
+          }
+
+          // Sanity check: if a stale activeOrgId is no longer in the user's
+          // available orgs, clear it and force re-selection. Prevents seeing
+          // an org after access has been revoked.
+          if (
+            typeof activeOrgId === 'string' &&
+            orgs.length > 0 &&
+            !orgs.find((o) => o.id === activeOrgId)
+          ) {
+            toast.error('Your access to the previously selected organization was revoked');
+            setActiveOrgId(undefined);
+            setActiveOrgName(null);
+            window.localStorage.removeItem(STORAGE_KEY);
+            window.localStorage.removeItem(STORAGE_NAME_KEY);
           }
         }
       } finally {
