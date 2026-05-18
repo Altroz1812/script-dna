@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -24,6 +25,7 @@ const ActiveOrgContext = createContext<ActiveOrgState | null>(null);
 
 export function ActiveOrgProvider({ children }: { children: React.ReactNode }) {
   const { session, profile } = useAuth();
+  const queryClient = useQueryClient();
   const [activeOrgId, setActiveOrgId] = useState<OrgId>(() => {
     if (typeof window === 'undefined') return undefined;
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -49,11 +51,28 @@ export function ActiveOrgProvider({ children }: { children: React.ReactNode }) {
         return;
       }
     }
+    // Non-SuperAdmin must never see the "Global" view.
+    if (id === null && !isSuperadmin) {
+      toast.error('Global view is restricted to SuperAdmin');
+      return;
+    }
     setActiveOrgId(id);
     setActiveOrgName(name ?? (id === null ? 'Global view' : null));
     window.localStorage.setItem(STORAGE_KEY, id === null ? '__global__' : id);
     window.localStorage.setItem(STORAGE_NAME_KEY, name ?? (id === null ? 'Global view' : ''));
-  }, [availableOrgs, profile?.role]);
+    // Wipe all cached server data so the next render fetches fresh data
+    // scoped to the new organization. Critical to prevent showing stale
+    // cross-tenant data after a switch.
+    queryClient.clear();
+    // Hard-navigate so any page using local state / useEffect (not React Query)
+    // also remounts under the new tenant scope. Skip when this is the very
+    // first selection (no previous org) to avoid an unnecessary refresh.
+    const previous = window.localStorage.getItem('aurapen.active_org_prev');
+    window.localStorage.setItem('aurapen.active_org_prev', id === null ? '__global__' : id);
+    if (previous && previous !== (id === null ? '__global__' : id)) {
+      window.location.assign('/dashboard');
+    }
+  }, [availableOrgs, profile?.role, queryClient]);
 
   const clearActiveOrg = useCallback(() => {
     setActiveOrgId(undefined);

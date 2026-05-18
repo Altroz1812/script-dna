@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRBAC } from '@/hooks/useRBAC';
 import { courseService, type Course, type CreateCourseParams } from '@/services/api/courseService';
+import { adminQuery } from '@/services/api/adminService';
+import { useActiveOrg } from '@/contexts/ActiveOrgContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -22,6 +24,7 @@ export default function CoursesPage() {
   const { profile } = useAuth();
   const { isAdmin, role } = useRBAC();
   const isStudent = role === 'student';
+  const { activeOrgId } = useActiveOrg();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
@@ -32,7 +35,7 @@ export default function CoursesPage() {
   const [activeTab, setActiveTab] = useState('all');
 
   const { data: courses = [], isLoading } = useQuery<Course[]>({
-    queryKey: ['courses', isStudent],
+    queryKey: ['courses', isStudent, activeOrgId],
     queryFn: async () => {
       if (isStudent) {
         const { data: enrollments } = await supabase
@@ -45,7 +48,7 @@ export default function CoursesPage() {
         if (error) throw error;
         return data || [];
       }
-      return courseService.listCourses();
+      return adminQuery('list_courses');
     },
     staleTime: 1000 * 60 * 5,
     enabled: !!profile,
@@ -163,28 +166,19 @@ export default function CoursesPage() {
   // Fetch batches with student counts for all courses
   const courseIds = courses.map(c => c.id);
   const { data: allBatches = [] } = useQuery({
-    queryKey: ['course_batches', courseIds],
+    queryKey: ['course_batches', courseIds, activeOrgId],
     queryFn: async () => {
       if (courseIds.length === 0) return [];
-      const { data } = await supabase
-        .from('batches')
-        .select('id, name, max_students, teacher_id, course_id, batch_students(count)')
-        .in('course_id', courseIds);
-      // Fetch teacher names
-      const teacherIds = [...new Set((data ?? []).filter((b: any) => b.teacher_id).map((b: any) => b.teacher_id))];
-      let nameMap: Record<string, string> = {};
-      if (teacherIds.length > 0) {
-        const { data: profiles } = await supabase.from('profiles').select('user_id, display_name').in('user_id', teacherIds);
-        for (const p of profiles ?? []) nameMap[p.user_id] = p.display_name ?? '';
-      }
-      return (data ?? []).map((b: any) => ({
+      const data: any[] = await adminQuery('list_batches');
+      const filtered = (data ?? []).filter((b: any) => courseIds.includes(b.course_id));
+      return filtered.map((b: any) => ({
         id: b.id,
         name: b.name,
         max_students: b.max_students,
         teacher_id: b.teacher_id,
         course_id: b.course_id,
-        enrolled_count: b.batch_students?.[0]?.count ?? 0,
-        teacher_name: b.teacher_id ? nameMap[b.teacher_id] || null : null,
+        enrolled_count: 0,
+        teacher_name: null,
       }));
     },
     enabled: courseIds.length > 0,

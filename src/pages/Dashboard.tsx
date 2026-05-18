@@ -237,17 +237,17 @@ export default function Dashboard() {
 
   // Support dashboard data
   const { data: supportData, isLoading: supportLoading } = useQuery({
-    queryKey: ["support_dashboard", profile?.id],
+    queryKey: ["support_dashboard", profile?.id, activeOrgId],
     queryFn: async () => {
-      const [leadRes, enrollRes, payRes] = await Promise.all([
-        supabase.from("leads").select("id", { count: "exact", head: true }),
-        supabase.from("batch_students").select("id", { count: "exact", head: true }),
-        supabase.from("payments").select("id", { count: "exact", head: true }).eq("status", "pending"),
+      const [leads, enrolls, payments] = await Promise.all([
+        adminQuery("list_leads").catch(() => []),
+        adminQuery("list_enrollments").catch(() => []),
+        adminQuery("list_payments").catch(() => []),
       ]);
       return {
-        totalLeads: leadRes.count || 0,
-        totalEnrollments: enrollRes.count || 0,
-        openPayments: payRes.count || 0,
+        totalLeads: (leads ?? []).length,
+        totalEnrollments: (enrolls ?? []).length,
+        openPayments: (payments ?? []).filter((p: any) => p.status === "pending").length,
       };
     },
     enabled: !!profile && isSupport,
@@ -266,8 +266,7 @@ export default function Dashboard() {
     queryKey: ["admin_stats", effectiveOrgId, isSuperadmin],
     queryFn: () =>
       adminQuery("get_stats", {
-        organizationId: effectiveOrgId, // This can be string, null, or undefined
-        isSuperadmin,
+        target_org_id: effectiveOrgId, // string => scoped, null => SA global
       }) as Promise<Stats>,
     staleTime: 1000 * 60 * 5,
     retry: 2,

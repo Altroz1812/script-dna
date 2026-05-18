@@ -103,6 +103,8 @@ Deno.serve(async (req) => {
       'list_batch_students', 'add_batch_student', 'remove_batch_student', 'batch_student_count',
       'revenue_analytics', 'org_performance', 'student_trends',
       'system_health',
+      'list_practice_assignments', 'create_practice_assignment', 'update_practice_assignment', 'delete_practice_assignment',
+      'list_student_submissions', 'review_student_submission',
     ])
     if (!callerIsSuperadmin && ORG_SCOPED_ACTIONS.has(action) && !targetOrgId) {
       return new Response(JSON.stringify({ error: 'Forbidden: no active organization scope' }), {
@@ -1401,6 +1403,105 @@ Deno.serve(async (req) => {
           break
         }
 
+        break
+      }
+
+      // ===== PRACTICE ASSIGNMENTS =====
+      case 'list_practice_assignments': {
+        let q: any = supabase
+          .from('practice_assignments')
+          .select('*, batches(name)')
+          .order('created_at', { ascending: false })
+        if (targetOrgId) q = q.eq('organization_id', targetOrgId)
+        if (params?.batch_id) q = q.eq('batch_id', params.batch_id)
+        const { data, error } = await q
+        if (error) throw error
+        result = data ?? []
+        break
+      }
+      case 'create_practice_assignment': {
+        const row: any = { ...params }
+        if (!row.organization_id && targetOrgId) row.organization_id = targetOrgId
+        const { data, error } = await supabase
+          .from('practice_assignments')
+          .insert(row)
+          .select()
+          .single()
+        if (error) throw error
+        result = data
+        break
+      }
+      case 'update_practice_assignment': {
+        const { id, ...updates } = params
+        if (!callerIsSuperadmin && targetOrgId) {
+          const { data: existing } = await supabase
+            .from('practice_assignments')
+            .select('organization_id')
+            .eq('id', id)
+            .maybeSingle()
+          if (!existing || existing.organization_id !== targetOrgId) {
+            return new Response(JSON.stringify({ error: 'Forbidden: assignment outside organization' }), {
+              status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+          }
+        }
+        const { error } = await supabase.from('practice_assignments').update(updates).eq('id', id)
+        if (error) throw error
+        result = { success: true }
+        break
+      }
+      case 'delete_practice_assignment': {
+        const { id } = params
+        if (!callerIsSuperadmin && targetOrgId) {
+          const { data: existing } = await supabase
+            .from('practice_assignments')
+            .select('organization_id')
+            .eq('id', id)
+            .maybeSingle()
+          if (!existing || existing.organization_id !== targetOrgId) {
+            return new Response(JSON.stringify({ error: 'Forbidden: assignment outside organization' }), {
+              status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+          }
+        }
+        const { error } = await supabase.from('practice_assignments').delete().eq('id', id)
+        if (error) throw error
+        result = { success: true }
+        break
+      }
+
+      // ===== STUDENT SUBMISSIONS =====
+      case 'list_student_submissions': {
+        let q: any = supabase
+          .from('student_submissions')
+          .select('*, practice_assignments(title, batch_id, batches(name))')
+          .order('created_at', { ascending: false })
+        if (targetOrgId) q = q.eq('organization_id', targetOrgId)
+        const { data, error } = await q
+        if (error) throw error
+        result = data ?? []
+        break
+      }
+      case 'review_student_submission': {
+        const { id, score, teacher_feedback, status } = params
+        if (!callerIsSuperadmin && targetOrgId) {
+          const { data: existing } = await supabase
+            .from('student_submissions')
+            .select('organization_id')
+            .eq('id', id)
+            .maybeSingle()
+          if (!existing || existing.organization_id !== targetOrgId) {
+            return new Response(JSON.stringify({ error: 'Forbidden: submission outside organization' }), {
+              status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+          }
+        }
+        const { error } = await supabase
+          .from('student_submissions')
+          .update({ score: score ?? null, teacher_feedback: teacher_feedback ?? null, status: status ?? 'reviewed' })
+          .eq('id', id)
+        if (error) throw error
+        result = { success: true }
         break
       }
 
