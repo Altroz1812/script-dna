@@ -1,12 +1,31 @@
 import { useEffect, useState } from "react";
 import { adminQuery } from "@/services/api/adminService";
-import { useOrganization } from "@/hooks/useOrganization"; // Add this
-import { useAuth } from "@/hooks/useAuth"; // Add this
-// ... other imports
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
+import { Pencil, Trash2, Search, Users, Plus, UserX, UserCheck, KeyRound, Link2 } from "lucide-react";
+import { ROLE_LABELS, type AppRole } from "@/types/roles";
+import { TableSkeleton } from "@/components/ui/loading-skeletons";
+import { ParentChildLinkDialog } from "@/components/admin/ParentChildLinkDialog";
+import { PasswordStrengthMeter } from "@/components/auth/PasswordStrengthMeter";
+import { checkPasswordStrength } from "@/lib/security";
+
+interface UserRow {
+  user_id: string;
+  email: string | null;
+  display_name: string | null;
+  role: string;
+  organization_id: string | null;
+  is_active?: boolean;
+}
 
 export default function UsersPage() {
-  const { currentOrganization } = useOrganization(); // Get current org context
-  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -29,27 +48,16 @@ export default function UsersPage() {
   const [resetConfirm, setResetConfirm] = useState("");
   const [resetting, setResetting] = useState(false);
 
-  // Load users with organization context
   const load = () => {
-    if (!currentOrganization?.organization_id) {
-      toast.error("No organization selected");
-      return;
-    }
-
     setLoading(true);
-    adminQuery("list_users", {
-      organization_id: currentOrganization.organization_id,
-    })
+    adminQuery("list_users")
       .then(setUsers)
       .catch((e) => toast.error(e.message))
       .finally(() => setLoading(false));
   };
-
   useEffect(() => {
-    if (currentOrganization?.organization_id) {
-      load();
-    }
-  }, [currentOrganization?.organization_id]);
+    load();
+  }, []);
 
   const filtered = users.filter((u) => {
     const matchSearch =
@@ -62,19 +70,8 @@ export default function UsersPage() {
 
   const handleUpdate = async () => {
     if (!editUser) return;
-
-    // Security check: Ensure user belongs to current organization
-    if (editUser.organization_id !== currentOrganization?.organization_id) {
-      toast.error("Cannot edit users from other organizations");
-      return;
-    }
-
     try {
-      await adminQuery("update_user", {
-        user_id: editUser.user_id,
-        display_name: editName,
-        organization_id: currentOrganization?.organization_id, // Pass for verification
-      });
+      await adminQuery("update_user", { user_id: editUser.user_id, display_name: editName });
       toast.success("User updated");
       setEditUser(null);
       load();
@@ -84,19 +81,9 @@ export default function UsersPage() {
   };
 
   const handleDelete = async (userId: string) => {
-    const user = users.find((u) => u.user_id === userId);
-    if (user?.organization_id !== currentOrganization?.organization_id) {
-      toast.error("Cannot delete users from other organizations");
-      return;
-    }
-
-    if (!confirm(`Delete ${user?.display_name || user?.email} permanently? This action cannot be undone.`)) return;
-
+    if (!confirm("Delete this user permanently?")) return;
     try {
-      await adminQuery("delete_user", {
-        user_id: userId,
-        organization_id: currentOrganization?.organization_id,
-      });
+      await adminQuery("delete_user", { user_id: userId });
       toast.success("User deleted");
       load();
     } catch (e: any) {
@@ -105,25 +92,9 @@ export default function UsersPage() {
   };
 
   const handleToggleActive = async (user: UserRow) => {
-    // Check organization permission
-    if (user.organization_id !== currentOrganization?.organization_id) {
-      toast.error("Cannot modify users from other organizations");
-      return;
-    }
-
-    // Prevent self-deactivation
-    if (user.user_id === currentUser?.id && user.is_active !== false) {
-      toast.error("You cannot deactivate your own account");
-      return;
-    }
-
     const newActive = !(user.is_active !== false);
     try {
-      await adminQuery("toggle_user_active", {
-        user_id: user.user_id,
-        is_active: newActive,
-        organization_id: currentOrganization?.organization_id,
-      });
+      await adminQuery("toggle_user_active", { user_id: user.user_id, is_active: newActive });
       toast.success(newActive ? "User reactivated" : "User deactivated");
       load();
     } catch (e: any) {
@@ -132,26 +103,8 @@ export default function UsersPage() {
   };
 
   const handleRoleChange = async (userId: string, role: string) => {
-    const user = users.find((u) => u.user_id === userId);
-
-    // Check organization permission
-    if (user?.organization_id !== currentOrganization?.organization_id) {
-      toast.error("Cannot modify users from other organizations");
-      return;
-    }
-
-    // Prevent changing own role if you're not super admin
-    if (user?.user_id === currentUser?.id && currentUser?.role !== "super_admin") {
-      toast.error("You cannot change your own role");
-      return;
-    }
-
     try {
-      await adminQuery("change_role", {
-        user_id: userId,
-        role,
-        organization_id: currentOrganization?.organization_id,
-      });
+      await adminQuery("change_role", { user_id: userId, role });
       toast.success("Role updated");
       load();
     } catch (e: any) {
@@ -161,13 +114,6 @@ export default function UsersPage() {
 
   const handleResetPassword = async () => {
     if (!resetUser) return;
-
-    // Check organization permission
-    if (resetUser.organization_id !== currentOrganization?.organization_id) {
-      toast.error("Cannot reset passwords for users from other organizations");
-      return;
-    }
-
     if (!resetPassword) {
       toast.error("Please enter a new password");
       return;
@@ -187,11 +133,7 @@ export default function UsersPage() {
     }
     setResetting(true);
     try {
-      await adminQuery("admin_reset_password", {
-        user_id: resetUser.user_id,
-        new_password: resetPassword,
-        organization_id: currentOrganization?.organization_id,
-      });
+      await adminQuery("admin_reset_password", { user_id: resetUser.user_id, new_password: resetPassword });
       toast.success(`Password reset successfully for ${resetUser.display_name || resetUser.email}`);
       setResetUser(null);
       setResetPassword("");
@@ -204,11 +146,6 @@ export default function UsersPage() {
   };
 
   const handleCreateUser = async () => {
-    if (!currentOrganization?.organization_id) {
-      toast.error("No organization selected");
-      return;
-    }
-
     if (!newEmail.trim() || !newPassword.trim()) {
       toast.error("Email and password required");
       return;
@@ -217,7 +154,6 @@ export default function UsersPage() {
       toast.error("Password must be at least 6 characters");
       return;
     }
-
     setCreating(true);
     try {
       await adminQuery("create_user", {
@@ -225,8 +161,6 @@ export default function UsersPage() {
         password: newPassword,
         display_name: newName.trim() || newEmail.split("@")[0],
         role: newRole,
-        organization_id: currentOrganization.organization_id, // Explicitly assign to current org
-        created_by: currentUser?.id, // Audit trail
       });
       toast.success("User created");
       setCreateOpen(false);
@@ -242,27 +176,12 @@ export default function UsersPage() {
     }
   };
 
-  // Show error if no organization context
-  if (!currentOrganization) {
-    return (
-      <div className="p-6">
-        <Card>
-          <CardContent className="py-8 text-center">
-            <AlertTriangle className="mx-auto h-12 w-12 text-destructive mb-4" />
-            <h2 className="text-lg font-semibold mb-2">No Organization Selected</h2>
-            <p className="text-muted-foreground">Please select an organization to manage users.</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Users</h1>
-          <p className="text-muted-foreground text-sm">Manage users in {currentOrganization.name}</p>
+          <p className="text-muted-foreground text-sm">Manage all user accounts</p>
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
