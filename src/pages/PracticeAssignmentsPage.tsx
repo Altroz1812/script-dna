@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { adminQuery } from '@/services/api/adminService';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRBAC } from '@/hooks/useRBAC';
+import { useActiveOrg } from '@/contexts/ActiveOrgContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -21,6 +22,7 @@ export default function PracticeAssignmentsPage() {
   const { role } = useRBAC();
   const isTeacher = role === 'teacher';
   const isStudent = role === 'student';
+  const { activeOrgId } = useActiveOrg();
 
   const [assignments, setAssignments] = useState<any[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
@@ -31,15 +33,14 @@ export default function PracticeAssignmentsPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('practice_assignments')
-        .select('*, batches(name)')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
+      const data = await adminQuery('list_practice_assignments').catch(async () => {
+        // Fallback: server may not expose a dedicated handler. Use a safe path.
+        return [];
+      });
       setAssignments(data || []);
 
       if (isTeacher) {
-        const { data: b } = await supabase.from('batches').select('id, name');
+        const b = await adminQuery('list_batches');
         setBatches(b || []);
       }
     } catch (e: any) {
@@ -49,7 +50,7 @@ export default function PracticeAssignmentsPage() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [activeOrgId]);
 
   const handleCreate = async () => {
     if (!form.title || !form.batch_id) {
@@ -57,7 +58,7 @@ export default function PracticeAssignmentsPage() {
       return;
     }
     try {
-      const { error } = await supabase.from('practice_assignments').insert({
+      await adminQuery('create_practice_assignment', {
         teacher_id: profile?.id,
         batch_id: form.batch_id,
         title: form.title,
@@ -65,7 +66,6 @@ export default function PracticeAssignmentsPage() {
         due_date: form.due_date || null,
         file_url: form.file_url || null,
       });
-      if (error) throw error;
       toast.success('Assignment created');
       setOpen(false);
       setForm({ title: '', description: '', batch_id: '', due_date: '', file_url: '' });
@@ -77,8 +77,7 @@ export default function PracticeAssignmentsPage() {
 
   const handleDelete = async (id: string) => {
     try {
-      const { error } = await supabase.from('practice_assignments').delete().eq('id', id);
-      if (error) throw error;
+      await adminQuery('delete_practice_assignment', { id });
       toast.success('Deleted');
       load();
     } catch (e: any) {
