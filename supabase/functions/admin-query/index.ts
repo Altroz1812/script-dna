@@ -16,13 +16,19 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    const { action, params } = await req.json()
+    const body = await req.json()
+    const action = body.action
+    let params = body.params ?? {}
 
     // SuperAdmin org-scoping override. When the client sets `target_org_id`,
     // we treat the request as if it were issued by an admin scoped to that org.
     const targetOrgId: string | null = (params && typeof params.target_org_id === 'string')
       ? params.target_org_id
       : null
+    if (params && 'target_org_id' in params) {
+      const { target_org_id: _omit, ...rest } = params
+      params = rest
+    }
 
     let result: any = null
 
