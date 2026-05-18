@@ -116,18 +116,28 @@ Deno.serve(async (req) => {
     switch (action) {
       // ===== STATS =====
       case 'get_stats': {
+        const scope = <T extends any>(q: T): T => (targetOrgId ? (q as any).eq('organization_id', targetOrgId) : q)
         const [profiles, courses, batches, orgs, leads, payments] = await Promise.all([
-          supabase.from('profiles').select('id', { count: 'exact', head: true }),
-          supabase.from('courses').select('id', { count: 'exact', head: true }),
-          supabase.from('batches').select('id', { count: 'exact', head: true }),
+          scope(supabase.from('profiles').select('id', { count: 'exact', head: true })),
+          scope(supabase.from('courses').select('id', { count: 'exact', head: true })),
+          scope(supabase.from('batches').select('id', { count: 'exact', head: true })),
           supabase.from('organizations').select('id', { count: 'exact', head: true }),
-          supabase.from('leads').select('id', { count: 'exact', head: true }),
-          supabase.from('payments').select('id', { count: 'exact', head: true }),
+          scope(supabase.from('leads').select('id', { count: 'exact', head: true })),
+          scope(supabase.from('payments').select('id', { count: 'exact', head: true })),
         ])
-        const roles = await supabase.from('user_roles').select('role')
         const roleCounts: Record<string, number> = {}
-        for (const r of roles.data ?? []) {
-          roleCounts[r.role] = (roleCounts[r.role] || 0) + 1
+        if (targetOrgId) {
+          const { data: members } = await supabase
+            .from('organization_members').select('user_id').eq('organization_id', targetOrgId)
+          const memberIds = (members ?? []).map((m: any) => m.user_id)
+          if (memberIds.length) {
+            const { data: roles } = await supabase
+              .from('user_roles').select('role').in('user_id', memberIds)
+            for (const r of roles ?? []) roleCounts[r.role] = (roleCounts[r.role] || 0) + 1
+          }
+        } else {
+          const roles = await supabase.from('user_roles').select('role')
+          for (const r of roles.data ?? []) roleCounts[r.role] = (roleCounts[r.role] || 0) + 1
         }
         result = {
           totalUsers: profiles.count ?? 0,
@@ -233,18 +243,23 @@ Deno.serve(async (req) => {
 
       // ===== LEADS =====
       case 'list_leads': {
-        const { data } = await supabase.from('leads').select('*').order('created_at', { ascending: false })
+        let q: any = supabase.from('leads').select('*').order('created_at', { ascending: false })
+        if (targetOrgId) q = q.eq('organization_id', targetOrgId)
+        const { data } = await q
         result = data ?? []
         break
       }
       case 'create_lead': {
-        const { data, error } = await supabase.from('leads').insert(params).select().single()
+        const row = { ...params }
+        if (!row.organization_id && targetOrgId) row.organization_id = targetOrgId
+        const { data, error } = await supabase.from('leads').insert(row).select().single()
         if (error) throw error
         result = data
         break
       }
       case 'update_lead': {
         const { id, ...updates } = params
+        if (!callerIsSuperadmin) delete (updates as any).organization_id
         const { error } = await supabase.from('leads').update(updates).eq('id', id)
         if (error) throw error
         result = { success: true }
@@ -294,14 +309,17 @@ Deno.serve(async (req) => {
 
       // ===== SCHEDULES =====
       case 'list_schedules': {
-        let query = supabase.from('schedules').select('*, batches(name, courses(name))').order('day_of_week').order('start_time')
+        let query: any = supabase.from('schedules').select('*, batches(name, courses(name))').order('day_of_week').order('start_time')
         if (params?.batch_id) query = query.eq('batch_id', params.batch_id)
+        if (targetOrgId) query = query.eq('organization_id', targetOrgId)
         const { data } = await query
         result = data ?? []
         break
       }
       case 'create_schedule': {
-        const { data, error } = await supabase.from('schedules').insert(params).select().single()
+        const row = { ...params }
+        if (!row.organization_id && targetOrgId) row.organization_id = targetOrgId
+        const { data, error } = await supabase.from('schedules').insert(row).select().single()
         if (error) throw error
         result = data
         break
@@ -322,9 +340,10 @@ Deno.serve(async (req) => {
 
       // ===== ATTENDANCE =====
       case 'list_attendance': {
-        let query = supabase.from('attendance').select('*').order('date', { ascending: false })
+        let query: any = supabase.from('attendance').select('*').order('date', { ascending: false })
         if (params?.batch_id) query = query.eq('batch_id', params.batch_id)
         if (params?.date) query = query.eq('date', params.date)
+        if (targetOrgId) query = query.eq('organization_id', targetOrgId)
         const { data } = await query
         // enrich with student names
         const sIds = [...new Set((data ?? []).map((a: any) => a.student_id))]
@@ -341,6 +360,14 @@ Deno.serve(async (req) => {
       case 'save_attendance': {
         // params: { batch_id, date, records: [{ student_id, status }] }
         const { batch_id, date, records } = params
+        if (!callerIsSuperadmin) {
+          const { data: b } = await supabase.from('batches').select('organization_id').eq('id', batch_id).maybeSingle()
+          if (!b || !b.organization_id || !callerOrgMemberships.includes(b.organization_id)) {
+            return new Response(JSON.stringify({ error: 'Forbidden: batch outside your organization' }), {
+              status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+          }
+        }
         // delete existing for this batch+date
         await supabase.from('attendance').delete().eq('batch_id', batch_id).eq('date', date)
         if (records.length > 0) {
@@ -388,14 +415,17 @@ Deno.serve(async (req) => {
 
       // ===== MATERIALS =====
       case 'list_materials': {
-        let query = supabase.from('materials').select('*, courses(name)').order('created_at', { ascending: false })
+        let query: any = supabase.from('materials').select('*, courses(name)').order('created_at', { ascending: false })
         if (params?.course_id) query = query.eq('course_id', params.course_id)
+        if (targetOrgId) query = query.eq('organization_id', targetOrgId)
         const { data } = await query
         result = data ?? []
         break
       }
       case 'create_material': {
-        const { data, error } = await supabase.from('materials').insert(params).select().single()
+        const row = { ...params }
+        if (!row.organization_id && targetOrgId) row.organization_id = targetOrgId
+        const { data, error } = await supabase.from('materials').insert(row).select().single()
         if (error) throw error
         result = data
         break
@@ -409,7 +439,9 @@ Deno.serve(async (req) => {
 
       // ===== PAYMENTS =====
       case 'list_payments': {
-        const { data } = await supabase.from('payments').select('*').order('created_at', { ascending: false })
+        let q: any = supabase.from('payments').select('*').order('created_at', { ascending: false })
+        if (targetOrgId) q = q.eq('organization_id', targetOrgId)
+        const { data } = await q
         const sIds = [...new Set((data ?? []).map((p: any) => p.student_id))]
         let profs: any[] = []
         if (sIds.length) {
@@ -422,7 +454,15 @@ Deno.serve(async (req) => {
         break
       }
       case 'create_payment': {
-        const { data, error } = await supabase.from('payments').insert(params).select().single()
+        const row = { ...params }
+        if (!row.organization_id && targetOrgId) row.organization_id = targetOrgId
+        if (!row.organization_id && row.student_id) {
+          const { data: m } = await supabase
+            .from('organization_members').select('organization_id')
+            .eq('user_id', row.student_id).order('joined_at').limit(1).maybeSingle()
+          if (m?.organization_id) row.organization_id = m.organization_id
+        }
+        const { data, error } = await supabase.from('payments').insert(row).select().single()
         if (error) throw error
         result = data
         break
@@ -437,7 +477,9 @@ Deno.serve(async (req) => {
 
       // ===== PAYROLL =====
       case 'list_payroll': {
-        const { data } = await supabase.from('payroll').select('*').order('year', { ascending: false }).order('month', { ascending: false })
+        let q: any = supabase.from('payroll').select('*').order('year', { ascending: false }).order('month', { ascending: false })
+        if (targetOrgId) q = q.eq('organization_id', targetOrgId)
+        const { data } = await q
         const tIds = [...new Set((data ?? []).map((p: any) => p.teacher_id))]
         let profs: any[] = []
         if (tIds.length) {
@@ -450,7 +492,9 @@ Deno.serve(async (req) => {
         break
       }
       case 'create_payroll': {
-        const { data, error } = await supabase.from('payroll').insert(params).select().single()
+        const row = { ...params }
+        if (!row.organization_id && targetOrgId) row.organization_id = targetOrgId
+        const { data, error } = await supabase.from('payroll').insert(row).select().single()
         if (error) throw error
         result = data
         break
@@ -465,12 +509,18 @@ Deno.serve(async (req) => {
 
       // ===== NOTIFICATIONS =====
       case 'list_notifications': {
-        const { data } = await supabase.from('notifications').select('*').order('created_at', { ascending: false })
+        let q: any = supabase.from('notifications').select('*').order('created_at', { ascending: false })
+        if (targetOrgId) {
+          q = q.or(`organization_id.eq.${targetOrgId},target_org_id.eq.${targetOrgId}`)
+        }
+        const { data } = await q
         result = data ?? []
         break
       }
       case 'create_notification': {
-        const { data, error } = await supabase.from('notifications').insert(params).select().single()
+        const row = { ...params }
+        if (!row.organization_id && !row.target_org_id && targetOrgId) row.organization_id = targetOrgId
+        const { data, error } = await supabase.from('notifications').insert(row).select().single()
         if (error) throw error
         result = data
         break
@@ -625,7 +675,9 @@ Deno.serve(async (req) => {
 
       // ===== COURSES =====
       case 'list_courses': {
-        const { data } = await supabase.from('courses').select('*').order('created_at', { ascending: false })
+        let q: any = supabase.from('courses').select('*').order('created_at', { ascending: false })
+        if (targetOrgId) q = q.eq('organization_id', targetOrgId)
+        const { data } = await q
         result = data ?? []
         break
       }
@@ -872,12 +924,18 @@ Deno.serve(async (req) => {
 
       // ===== COUPONS =====
       case 'list_coupons': {
-        const { data } = await supabase.from('coupons').select('*').order('created_at', { ascending: false })
+        let q: any = supabase.from('coupons').select('*').order('created_at', { ascending: false })
+        if (targetOrgId) {
+          q = q.or(`organization_id.is.null,organization_id.eq.${targetOrgId}`)
+        }
+        const { data } = await q
         result = data ?? []
         break
       }
       case 'create_coupon': {
-        const { data, error } = await supabase.from('coupons').insert(params).select().single()
+        const row = { ...params }
+        if (row.organization_id === undefined && targetOrgId) row.organization_id = targetOrgId
+        const { data, error } = await supabase.from('coupons').insert(row).select().single()
         if (error) throw error
         result = data
         break
@@ -913,6 +971,14 @@ Deno.serve(async (req) => {
 
       // ===== CURRICULUM (MODULES & LESSONS) =====
       case 'list_course_modules': {
+        if (!callerIsSuperadmin && targetOrgId && params.course_id) {
+          const { data: c } = await supabase.from('courses').select('organization_id').eq('id', params.course_id).maybeSingle()
+          if (!c || c.organization_id !== targetOrgId) {
+            return new Response(JSON.stringify({ error: 'Forbidden: course outside your organization' }), {
+              status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+          }
+        }
         const { data } = await supabase.from('course_modules').select('*, lessons(*)').eq('course_id', params.course_id).order('sort_order')
         for (const m of data ?? []) {
           if (m.lessons) m.lessons.sort((a: any, b: any) => a.sort_order - b.sort_order)
@@ -961,11 +1027,21 @@ Deno.serve(async (req) => {
 
       // ===== ACTIVITY LOGS (extended) =====
       case 'list_activity_logs': {
+        let scopedUserIds: string[] | null = null
+        if (targetOrgId) {
+          const { data: members } = await supabase
+            .from('organization_members').select('user_id').eq('organization_id', targetOrgId)
+          scopedUserIds = (members ?? []).map((m: any) => m.user_id)
+          if (scopedUserIds.length === 0) { result = { activity_logs: [], login_attempts: [] }; break }
+        }
+        let actQ: any = supabase.from('activity_logs').select('*').not('user_id', 'is', null).order('created_at', { ascending: false }).limit(200)
+        if (scopedUserIds) actQ = actQ.in('user_id', scopedUserIds)
         const [activityRes, loginRes] = await Promise.all([
-          supabase.from('activity_logs').select('*').not('user_id', 'is', null).order('created_at', { ascending: false }).limit(200),
-          supabase.from('login_attempts').select('*').order('attempted_at', { ascending: false }).limit(200),
+          actQ,
+          callerIsSuperadmin
+            ? supabase.from('login_attempts').select('*').order('attempted_at', { ascending: false }).limit(200)
+            : Promise.resolve({ data: [] as any[] }),
         ])
-        // enrich activity logs with user names and emails
         const userIds = [...new Set((activityRes.data ?? []).map((a: any) => a.user_id))]
         let profileMap: Record<string, { name: string; email: string }> = {}
         if (userIds.length) {
@@ -983,21 +1059,26 @@ Deno.serve(async (req) => {
 
       // ===== SYSTEM MONITORING =====
       case 'system_health': {
+        const orgFilter = (q: any) => (targetOrgId ? q.eq('organization_id', targetOrgId) : q)
         const [
           usersRes, coursesRes, batchesRes, orgsRes, paymentsRes, leadsRes,
           rolesRes, logsRes, loginsRes, subsRes, couponsRes, modulesRes, lessonsRes
         ] = await Promise.all([
-          supabase.from('profiles').select('id', { count: 'exact', head: true }),
-          supabase.from('courses').select('id', { count: 'exact', head: true }),
-          supabase.from('batches').select('id', { count: 'exact', head: true }),
+          orgFilter(supabase.from('profiles').select('id', { count: 'exact', head: true })),
+          orgFilter(supabase.from('courses').select('id', { count: 'exact', head: true })),
+          orgFilter(supabase.from('batches').select('id', { count: 'exact', head: true })),
           supabase.from('organizations').select('id, is_active', { count: 'exact' }),
-          supabase.from('payments').select('id, amount, status', { count: 'exact' }),
-          supabase.from('leads').select('id', { count: 'exact', head: true }),
+          orgFilter(supabase.from('payments').select('id, amount, status', { count: 'exact' })),
+          orgFilter(supabase.from('leads').select('id', { count: 'exact', head: true })),
           supabase.from('user_roles').select('role'),
           supabase.from('activity_logs').select('id', { count: 'exact', head: true }),
-          supabase.from('login_attempts').select('id, success, attempted_at').order('attempted_at', { ascending: false }).limit(100),
-          supabase.from('org_subscriptions').select('id, status', { count: 'exact' }),
-          supabase.from('coupons').select('id, is_active', { count: 'exact' }),
+          callerIsSuperadmin
+            ? supabase.from('login_attempts').select('id, success, attempted_at').order('attempted_at', { ascending: false }).limit(100)
+            : Promise.resolve({ data: [] as any[], count: 0 }),
+          targetOrgId
+            ? supabase.from('org_subscriptions').select('id, status', { count: 'exact' }).eq('organization_id', targetOrgId)
+            : supabase.from('org_subscriptions').select('id, status', { count: 'exact' }),
+          orgFilter(supabase.from('coupons').select('id, is_active', { count: 'exact' })),
           supabase.from('course_modules').select('id', { count: 'exact', head: true }),
           supabase.from('lessons').select('id', { count: 'exact', head: true }),
         ])
