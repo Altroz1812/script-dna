@@ -598,7 +598,14 @@ Deno.serve(async (req) => {
                 .from('batch_students')
                 .select('student_id')
                 .in('batch_id', batchIds)
-              for (const r of enrollRows ?? []) orgStudentIds.add(r.student_id)
+              const enrolledProfileIds = [...new Set((enrollRows ?? []).map((r: any) => r.student_id))]
+              if (enrolledProfileIds.length > 0) {
+                const { data: enrolledProfiles } = await supabase
+                  .from('profiles')
+                  .select('id, user_id')
+                  .in('id', enrolledProfileIds)
+                for (const p of enrolledProfiles ?? []) orgStudentIds.add(p.user_id)
+              }
             }
             // Also include students who are explicit org members (e.g. created in org but not yet enrolled)
             const { data: members } = await supabase
@@ -642,7 +649,7 @@ Deno.serve(async (req) => {
           if (finalIds.length === 0) { result = []; break }
           const { data: profiles } = await supabase
             .from('profiles')
-            .select('user_id, display_name, email')
+            .select('id, user_id, display_name, email')
             .in('user_id', finalIds)
           result = profiles ?? []
           break
@@ -650,10 +657,11 @@ Deno.serve(async (req) => {
 
         // list_students_with_batches
         const { data: profiles } = await supabase.from('profiles').select('*').in('user_id', ids)
+        const profileIds = (profiles ?? []).map((p: any) => p.id)
         const { data: enrollments } = await supabase
           .from('batch_students')
           .select('student_id, batch_id, batches(name, organization_id, courses(name))')
-          .in('student_id', ids)
+          .in('student_id', profileIds)
         const enrollMap: Record<string, any[]> = {}
         for (const e of enrollments ?? []) {
           // Restrict enrollments to the scoped org (admin's org, or SuperAdmin's picked org)
@@ -661,7 +669,7 @@ Deno.serve(async (req) => {
           if (!enrollMap[e.student_id]) enrollMap[e.student_id] = []
           enrollMap[e.student_id].push(e)
         }
-        result = (profiles ?? []).map((p: any) => ({ ...p, enrollments: enrollMap[p.user_id] || [] }))
+        result = (profiles ?? []).map((p: any) => ({ ...p, enrollments: enrollMap[p.id] || [] }))
         break
       }
 
@@ -777,11 +785,11 @@ Deno.serve(async (req) => {
         const sIds = (data ?? []).map((d: any) => d.student_id)
         let profs: any[] = []
         if (sIds.length) {
-          const { data: p } = await supabase.from('profiles').select('user_id, display_name, email').in('user_id', sIds)
+          const { data: p } = await supabase.from('profiles').select('id, user_id, display_name, email').in('id', sIds)
           profs = p ?? []
         }
         const pm: Record<string, any> = {}
-        for (const p of profs) pm[p.user_id] = p
+        for (const p of profs) pm[p.id] = p
         result = (data ?? []).map((d: any) => ({ ...d, profile: pm[d.student_id] || null }))
         break
       }
@@ -790,6 +798,23 @@ Deno.serve(async (req) => {
         if (!params?.batch_id || !params?.student_id) {
           throw new Error('batch_id and student_id are required')
         }
+        let studentProfileId = params.student_id
+        let { data: studentProfile } = await supabase
+          .from('profiles')
+          .select('id, user_id')
+          .eq('id', params.student_id)
+          .maybeSingle()
+        if (!studentProfile) {
+          const { data: byUserId } = await supabase
+            .from('profiles')
+            .select('id, user_id')
+            .eq('user_id', params.student_id)
+            .maybeSingle()
+          studentProfile = byUserId
+        }
+        if (!studentProfile) throw new Error('Student profile not found')
+        studentProfileId = studentProfile.id
+
         const { data: batchInfo } = await supabase
           .from('batches')
           .select('max_students, organization_id')
@@ -800,6 +825,13 @@ Deno.serve(async (req) => {
         if (!callerIsSuperadmin && targetOrgId && batchInfo.organization_id !== targetOrgId) {
           throw new Error('Batch is outside your organization')
         }
+        const { data: member } = await supabase
+          .from('organization_members')
+          .select('id')
+          .eq('organization_id', batchInfo.organization_id)
+          .eq('user_id', studentProfile.user_id)
+          .maybeSingle()
+        if (!member) throw new Error('Student is not assigned to this organization')
         const { count: currentCount } = await supabase.from('batch_students').select('id', { count: 'exact', head: true }).eq('batch_id', params.batch_id)
         if ((currentCount ?? 0) >= batchInfo.max_students) {
           throw new Error(`Batch is full (${batchInfo.max_students}/${batchInfo.max_students} seats taken)`)
@@ -809,12 +841,12 @@ Deno.serve(async (req) => {
           .from('batch_students')
           .select('id')
           .eq('batch_id', params.batch_id)
-          .eq('student_id', params.student_id)
+          .eq('student_id', studentProfileId)
           .maybeSingle()
         if (existing) throw new Error('Student is already enrolled in this batch')
         const { error } = await supabase
           .from('batch_students')
-          .insert({ batch_id: params.batch_id, student_id: params.student_id })
+          .insert({ batch_id: params.batch_id, student_id: studentProfileId })
         if (error) throw error
         result = { success: true }
         break
