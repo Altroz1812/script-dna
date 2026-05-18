@@ -527,8 +527,8 @@ Deno.serve(async (req) => {
           .in('student_id', ids)
         const enrollMap: Record<string, any[]> = {}
         for (const e of enrollments ?? []) {
-          // For admins, only include enrollments within their org
-          if (!isSuperadmin && callerOrgId && e.batches?.organization_id !== callerOrgId) continue
+          // Restrict enrollments to the scoped org (admin's org, or SuperAdmin's picked org)
+          if (applyOrgScope && callerOrgId && e.batches?.organization_id !== callerOrgId) continue
           if (!enrollMap[e.student_id]) enrollMap[e.student_id] = []
           enrollMap[e.student_id].push(e)
         }
