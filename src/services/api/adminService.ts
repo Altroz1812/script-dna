@@ -518,7 +518,10 @@ async function deleteNotification(params: any) {
 
 // ===== COURSES =====
 async function listCourses() {
-  const { data, error } = await (supabase.from('courses' as any).select('*').order('created_at', { ascending: false }) as any);
+  const targetOrgId = readActiveOrgFromStorage();
+  let q: any = supabase.from('courses' as any).select('*').order('created_at', { ascending: false });
+  if (typeof targetOrgId === 'string') q = q.eq('organization_id', targetOrgId);
+  const { data, error } = await q;
   if (error) throw error;
   return data ?? [];
 }
