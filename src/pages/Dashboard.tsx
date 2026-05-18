@@ -199,10 +199,10 @@ export default function Dashboard() {
   });
 
   const { data: stats, isLoading } = useQuery<Stats>({
-    queryKey: ['admin_stats', organizationId, isSuperadmin],
-    queryFn: () => adminQuery('get_stats', { organizationId, isSuperadmin }) as Promise<Stats>,
+    queryKey: ['admin_stats', effectiveOrgId, isSuperadmin],
+    queryFn: () => adminQuery('get_stats', { organizationId: effectiveOrgId, isSuperadmin }) as Promise<Stats>,
     staleTime: 1000 * 60 * 5,
-    retry: 2,
+    retry: 2,subtitle 
     enabled: !!profile && !isStudent && !isParent && !isTeacher && !isSupport,
   });
 
