@@ -64,6 +64,14 @@ export function ActiveOrgProvider({ children }: { children: React.ReactNode }) {
     // scoped to the new organization. Critical to prevent showing stale
     // cross-tenant data after a switch.
     queryClient.clear();
+    // Hard-navigate so any page using local state / useEffect (not React Query)
+    // also remounts under the new tenant scope. Skip when this is the very
+    // first selection (no previous org) to avoid an unnecessary refresh.
+    const previous = window.localStorage.getItem('aurapen.active_org_prev');
+    window.localStorage.setItem('aurapen.active_org_prev', id === null ? '__global__' : id);
+    if (previous && previous !== (id === null ? '__global__' : id)) {
+      window.location.assign('/dashboard');
+    }
   }, [availableOrgs, profile?.role, queryClient]);
 
   const clearActiveOrg = useCallback(() => {
