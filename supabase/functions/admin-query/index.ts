@@ -579,13 +579,17 @@ Deno.serve(async (req) => {
       case 'list_batches': {
         let query = supabase.from('batches').select('*, courses(name, duration_days, daily_hours, total_hours, delivery_mode)')
         if (params?.course_id) query = query.eq('course_id', params.course_id)
+        if (targetOrgId) query = query.eq('organization_id', targetOrgId)
         const { data } = await query.order('created_at', { ascending: false })
         result = data ?? []
         break
       }
       case 'create_batch': {
-        const { course_id, name, max_students } = params
-        const { data, error } = await supabase.from('batches').insert({ course_id, name, max_students: max_students ?? 25 }).select().single()
+        const { course_id, name, max_students, organization_id } = params
+        const orgIdForInsert = organization_id || targetOrgId || null
+        const insertRow: any = { course_id, name, max_students: max_students ?? 25 }
+        if (orgIdForInsert) insertRow.organization_id = orgIdForInsert
+        const { data, error } = await supabase.from('batches').insert(insertRow).select().single()
         if (error) throw error
         result = data
         break
