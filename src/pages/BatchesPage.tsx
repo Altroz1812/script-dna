@@ -39,7 +39,7 @@ export default function BatchesPage() {
 
   // assign student dialog
   const [studentDialogBatch, setStudentDialogBatch] = useState<Batch | null>(null);
-  const [students, setStudents] = useState<{ user_id: string; display_name: string | null; email: string | null }[]>([]);
+  const [students, setStudents] = useState<{ id: string; user_id: string; display_name: string | null; email: string | null }[]>([]);
   const [enrolledStudents, setEnrolledStudents] = useState<{ id: string; student_id: string; display_name?: string | null; email?: string | null }[]>([]);
   const [selectedStudent, setSelectedStudent] = useState('');
   const [studentCount, setStudentCount] = useState(0);
@@ -187,7 +187,7 @@ export default function BatchesPage() {
   );
 
   const enrolledIds = new Set(enrolledStudents.map(e => e.student_id));
-  const availableStudents = students.filter(s => !enrolledIds.has(s.user_id));
+  const availableStudents = students.filter(s => !enrolledIds.has(s.id));
 
   return (
     <div className="p-6 space-y-6">
@@ -356,8 +356,8 @@ export default function BatchesPage() {
                 <SelectTrigger className="flex-1"><SelectValue placeholder="Select student to add" /></SelectTrigger>
                 <SelectContent>
                   {availableStudents.map(s => (
-                    <SelectItem key={s.user_id} value={s.user_id}>
-                      {s.display_name || s.email || s.user_id}
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.display_name || s.email || s.id}
                     </SelectItem>
                   ))}
                 </SelectContent>
