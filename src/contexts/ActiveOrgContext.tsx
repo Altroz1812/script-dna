@@ -24,7 +24,7 @@ const STORAGE_NAME_KEY = 'aurapen.active_org_name';
 const ActiveOrgContext = createContext<ActiveOrgState | null>(null);
 
 export function ActiveOrgProvider({ children }: { children: React.ReactNode }) {
-  const { session, profile } = useAuth();
+  const { session, profile, loading: authLoading } = useAuth();
   const queryClient = useQueryClient();
   const [activeOrgId, setActiveOrgId] = useState<OrgId>(() => {
     if (typeof window === 'undefined') return undefined;
@@ -38,7 +38,7 @@ export function ActiveOrgProvider({ children }: { children: React.ReactNode }) {
     return window.localStorage.getItem(STORAGE_NAME_KEY);
   });
   const [availableOrgs, setAvailableOrgs] = useState<AvailableOrg[]>([]);
-  const [orgsLoading, setOrgsLoading] = useState<boolean>(false);
+  const [orgsLoading, setOrgsLoading] = useState<boolean>(true);
 
   const setActiveOrg = useCallback((id: string | null, name?: string | null) => {
     // Validate against membership list before persisting. The validation only
@@ -84,7 +84,12 @@ export function ActiveOrgProvider({ children }: { children: React.ReactNode }) {
   // Load the list of orgs the user belongs to. SuperAdmin loads all.
   useEffect(() => {
     let alive = true;
-    if (!session?.user || !profile) { setAvailableOrgs([]); return; }
+    if (authLoading) return;
+    if (!session?.user || !profile) {
+      setAvailableOrgs([]);
+      setOrgsLoading(false);
+      return;
+    }
     setOrgsLoading(true);
     (async () => {
       try {
@@ -146,7 +151,7 @@ export function ActiveOrgProvider({ children }: { children: React.ReactNode }) {
     })();
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.user?.id, profile?.role]);
+  }, [authLoading, session?.user?.id, profile?.role]);
 
   // Keep localStorage in sync (for cross-tab signals to adminService param injection)
   useEffect(() => {

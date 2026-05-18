@@ -13,7 +13,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   const { activeOrgId, availableOrgs, orgsLoading } = useActiveOrg();
   const location = useLocation();
 
-  if (loading) {
+  if (loading || (session && !profile)) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -25,7 +25,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to="/login" replace />;
   }
 
-  if (allowedRoles && profile && !allowedRoles.includes(profile.role)) {
+  if (allowedRoles && !allowedRoles.includes(profile!.role)) {
     return <Navigate to="/unauthorized" replace />;
   }
 
@@ -34,8 +34,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   // instead of falling through to a possibly unfiltered view.
   const orgRequiredRoles: AppRole[] = ['admin', 'support', 'teacher'];
   if (
-    profile &&
-    orgRequiredRoles.includes(profile.role) &&
+    orgRequiredRoles.includes(profile!.role) &&
     !orgsLoading &&
     availableOrgs.length === 0 &&
     location.pathname !== '/unauthorized'
@@ -47,11 +46,10 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   //  - SuperAdmin must always pick (or hit Global) before entering.
   //  - Other roles only need to pick when they belong to multiple orgs.
   const needsPicker =
-    profile &&
     location.pathname !== '/select-organization' &&
     activeOrgId === undefined &&
     !orgsLoading &&
-    (profile.role === 'superadmin' || availableOrgs.length > 1);
+    (profile!.role === 'superadmin' || availableOrgs.length > 1);
   if (needsPicker) {
     return <Navigate to="/select-organization" replace />;
   }
