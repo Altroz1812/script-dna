@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { adminQuery } from '@/services/api/adminService';
+import { useActiveOrg } from '@/contexts/ActiveOrgContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRBAC } from '@/hooks/useRBAC';
 import { Button } from '@/components/ui/button';
@@ -20,6 +22,7 @@ export default function StudentSubmissionsPage() {
   const { role } = useRBAC();
   const isTeacher = role === 'teacher';
   const isStudent = role === 'student';
+  const { activeOrgId } = useActiveOrg();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [submissions, setSubmissions] = useState<any[]>([]);
@@ -35,19 +38,24 @@ export default function StudentSubmissionsPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('student_submissions')
-        .select('*, practice_assignments(title, batch_id, batches(name))')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      setSubmissions(data || []);
-
       if (isStudent) {
-        const { data: a } = await supabase
-          .from('practice_assignments')
-          .select('id, title, batches(name)')
-          .order('created_at', { ascending: false });
+        // Student keeps direct RLS-scoped reads (own submissions / batch assignments).
+        const [{ data: subs }, { data: a }] = await Promise.all([
+          supabase
+            .from('student_submissions')
+            .select('*, practice_assignments(title, batch_id, batches(name))')
+            .eq('student_id', profile!.id)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('practice_assignments')
+            .select('id, title, batches(name)')
+            .order('created_at', { ascending: false }),
+        ]);
+        setSubmissions(subs || []);
         setAssignments(a || []);
+      } else {
+        const data = await adminQuery('list_student_submissions');
+        setSubmissions(data || []);
       }
     } catch (e: any) {
       toast.error(e.message);
@@ -56,7 +64,7 @@ export default function StudentSubmissionsPage() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [activeOrgId, isStudent]);
 
   const handleSubmit = async () => {
     if (!submitForm.assignment_id) { toast.error('Select an assignment'); return; }
@@ -101,14 +109,12 @@ export default function StudentSubmissionsPage() {
   const handleReview = async () => {
     if (!selectedSubmission) return;
     try {
-      const { error } = await supabase.from('student_submissions')
-        .update({
-          score: reviewForm.score ? parseFloat(reviewForm.score) : null,
-          teacher_feedback: reviewForm.feedback || null,
-          status: 'reviewed' as any,
-        })
-        .eq('id', selectedSubmission.id);
-      if (error) throw error;
+      await adminQuery('review_student_submission', {
+        id: selectedSubmission.id,
+        score: reviewForm.score ? parseFloat(reviewForm.score) : null,
+        teacher_feedback: reviewForm.feedback || null,
+        status: 'reviewed',
+      });
       toast.success('Review saved');
       setReviewOpen(false);
       load();
