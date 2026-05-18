@@ -119,6 +119,13 @@ export type Database = {
             referencedRelation: "batches"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "batch_students_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       batches: {
@@ -653,7 +660,9 @@ export type Database = {
           created_at: string
           id: string
           message: string
+          organization_id: string | null
           read: boolean
+          target_org_id: string | null
           title: string
           user_id: string | null
         }
@@ -661,7 +670,9 @@ export type Database = {
           created_at?: string
           id?: string
           message: string
+          organization_id?: string | null
           read?: boolean
+          target_org_id?: string | null
           title: string
           user_id?: string | null
         }
@@ -669,11 +680,28 @@ export type Database = {
           created_at?: string
           id?: string
           message?: string
+          organization_id?: string | null
           read?: boolean
+          target_org_id?: string | null
           title?: string
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "notifications_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_target_org_id_fkey"
+            columns: ["target_org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       orders: {
         Row: {
