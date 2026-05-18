@@ -62,15 +62,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Set up listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, sess) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, sess) => {
       setLoading(true);
       setSession(sess);
       if (sess?.user) {
-        await loadProfile(sess.user.id);
+        // Use setTimeout to avoid Supabase auth callback deadlocks, but keep
+        // auth loading true until the role/profile has actually loaded.
+        setTimeout(async () => {
+          await loadProfile(sess.user.id);
+          setLoading(false);
+        }, 0);
       } else {
         setProfile(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     // Then check existing session
