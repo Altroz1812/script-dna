@@ -56,7 +56,9 @@ Deno.serve(async (req) => {
 
       // ===== USERS =====
       case 'list_users': {
-        const { data: profiles } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
+        let profilesQ: any = supabase.from('profiles').select('*').order('created_at', { ascending: false })
+        if (targetOrgId) profilesQ = profilesQ.eq('organization_id', targetOrgId)
+        const { data: profiles } = await profilesQ
         const { data: roles } = await supabase.from('user_roles').select('user_id, role')
         const roleMap: Record<string, string> = {}
         for (const r of roles ?? []) roleMap[r.user_id] = r.role
@@ -170,7 +172,15 @@ Deno.serve(async (req) => {
 
       // ===== ENROLLMENTS =====
       case 'list_enrollments': {
-        const { data: enrollments } = await supabase.from('batch_students').select('*').order('enrolled_at', { ascending: false })
+        let scopedBatchIds: string[] | null = null
+        if (targetOrgId) {
+          const { data: ob } = await supabase.from('batches').select('id').eq('organization_id', targetOrgId)
+          scopedBatchIds = (ob ?? []).map((b: any) => b.id)
+          if (scopedBatchIds.length === 0) { result = []; break }
+        }
+        let enrollQ: any = supabase.from('batch_students').select('*').order('enrolled_at', { ascending: false })
+        if (scopedBatchIds) enrollQ = enrollQ.in('batch_id', scopedBatchIds)
+        const { data: enrollments } = await enrollQ
         const studentIds = [...new Set((enrollments ?? []).map((e: any) => e.student_id))]
         const batchIds = [...new Set((enrollments ?? []).map((e: any) => e.batch_id))]
         let profiles: any[] = []
