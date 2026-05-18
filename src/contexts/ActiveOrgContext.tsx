@@ -38,7 +38,7 @@ export function ActiveOrgProvider({ children }: { children: React.ReactNode }) {
     return window.localStorage.getItem(STORAGE_NAME_KEY);
   });
   const [availableOrgs, setAvailableOrgs] = useState<AvailableOrg[]>([]);
-  const [orgsLoading, setOrgsLoading] = useState<boolean>(false);
+  const [orgsLoading, setOrgsLoading] = useState<boolean>(true);
 
   const setActiveOrg = useCallback((id: string | null, name?: string | null) => {
     // Validate against membership list before persisting. The validation only
