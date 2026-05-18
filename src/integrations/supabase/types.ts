@@ -128,7 +128,7 @@ export type Database = {
           id: string
           max_students: number
           name: string
-          organization_id: string | null
+          organization_id: string
           teacher_id: string | null
           updated_at: string
         }
@@ -138,7 +138,7 @@ export type Database = {
           id?: string
           max_students?: number
           name: string
-          organization_id?: string | null
+          organization_id: string
           teacher_id?: string | null
           updated_at?: string
         }
@@ -148,7 +148,7 @@ export type Database = {
           id?: string
           max_students?: number
           name?: string
-          organization_id?: string | null
+          organization_id?: string
           teacher_id?: string | null
           updated_at?: string
         }
@@ -1336,6 +1336,10 @@ export type Database = {
     }
     Functions: {
       first_org_for_user: { Args: { _user_id: string }; Returns: string }
+      get_user_organization_name: {
+        Args: { user_uuid: string }
+        Returns: string
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
