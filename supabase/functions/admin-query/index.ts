@@ -723,7 +723,39 @@ Deno.serve(async (req) => {
         if (params?.course_id) query = query.eq('course_id', params.course_id)
         if (targetOrgId) query = query.eq('organization_id', targetOrgId)
         const { data } = await query.order('created_at', { ascending: false })
-        result = data ?? []
+        const batches = data ?? []
+        const batchIds = batches.map((b: any) => b.id)
+        const teacherIds = Array.from(new Set(batches.map((b: any) => b.teacher_id).filter(Boolean)))
+
+        // Enrolled counts per batch
+        const counts: Record<string, number> = {}
+        if (batchIds.length) {
+          const { data: bs } = await supabase
+            .from('batch_students')
+            .select('batch_id')
+            .in('batch_id', batchIds)
+          for (const row of bs ?? []) {
+            counts[row.batch_id] = (counts[row.batch_id] ?? 0) + 1
+          }
+        }
+
+        // Teacher names
+        const teacherMap: Record<string, string> = {}
+        if (teacherIds.length) {
+          const { data: profs } = await supabase
+            .from('profiles')
+            .select('user_id, display_name, email')
+            .in('user_id', teacherIds)
+          for (const p of profs ?? []) {
+            teacherMap[p.user_id] = p.display_name || p.email || ''
+          }
+        }
+
+        result = batches.map((b: any) => ({
+          ...b,
+          enrolled_count: counts[b.id] ?? 0,
+          teacher_name: b.teacher_id ? (teacherMap[b.teacher_id] ?? null) : null,
+        }))
         break
       }
       case 'create_batch': {
