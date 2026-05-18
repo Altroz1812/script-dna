@@ -1,6 +1,7 @@
 // src/services/api/courseService.ts
 
 import { supabase } from "@/integrations/supabase/client";
+import { adminQuery } from "@/services/api/adminService";
 
 // ===== INTERFACES =====
 export interface Course {
@@ -60,164 +61,101 @@ export interface CreateCourseParams {
 // ===== COURSE SERVICE =====
 export const courseService = {
   async listCourses(): Promise<Course[]> {
-    const { data, error } = await supabase.from("courses").select("*").order("created_at", { ascending: false });
-
-    if (error) throw error;
-    return data || [];
+    // Goes through admin-query so SuperAdmins/Admins see only the active org.
+    // Students/teachers/parents fall back to direct RLS-scoped read.
+    try {
+      const data = await adminQuery("list_courses");
+      return (data ?? []) as Course[];
+    } catch {
+      const { data, error } = await supabase.from("courses").select("*").order("created_at", { ascending: false });
+      if (error) throw error;
+      return data || [];
+    }
   },
 
   async createCourse(params: CreateCourseParams): Promise<Course> {
-    const { data, error } = await supabase
-      .from("courses")
-      .insert({
-        name: params.name,
-        description: params.description,
-        created_by: params.created_by,
-        grade_level: params.grade_level,
-        duration_days: params.duration_days,
-        total_hours: params.total_hours,
-        daily_hours: params.daily_hours,
-        language: params.language,
-        writing_style: params.writing_style,
-        includes_speed: params.includes_speed || false,
-        fee: params.fee || 0,
-        delivery_mode: params.delivery_mode || "online",
-        center: params.center,
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
+    return (await adminQuery("create_course", params)) as Course;
   },
 
   async updateCourse(id: string, updates: Partial<CreateCourseParams>): Promise<Course> {
-    const { data, error } = await supabase.from("courses").update(updates).eq("id", id).select().single();
-
-    if (error) throw error;
-    return data;
+    return (await adminQuery("update_course", { id, ...updates })) as Course;
   },
 
   async deleteCourse(id: string): Promise<void> {
-    const { error } = await supabase.from("courses").delete().eq("id", id);
-
-    if (error) throw error;
+    await adminQuery("delete_course", { id });
   },
 };
 
 // ===== BATCH SERVICE =====
 export const batchService = {
   async listBatches(courseId?: string): Promise<Batch[]> {
-    let query = supabase
-      .from("batches")
-      .select("*, courses(name, delivery_mode)")
-      .order("created_at", { ascending: false });
-
-    if (courseId) {
-      query = query.eq("course_id", courseId);
+    try {
+      const data = await adminQuery("list_batches", courseId ? { course_id: courseId } : {});
+      return (data ?? []) as Batch[];
+    } catch {
+      // Fallback for non-admin roles (teachers/students) – RLS does the scoping
+      let q = supabase
+        .from("batches")
+        .select("*, courses(name, delivery_mode)")
+        .order("created_at", { ascending: false });
+      if (courseId) q = q.eq("course_id", courseId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data || [];
     }
-
-    const { data, error } = await query;
-    if (error) throw error;
-    return data || [];
   },
 
   async createBatch(organizationId: string, courseId: string, name: string, maxStudents: number = 25): Promise<Batch> {
-    const { data, error } = await supabase
-      .from("batches")
-      .insert({
-        course_id: courseId,
-        name: name,
-        max_students: maxStudents,
-        organization_id: organizationId,
-      })
-      .select("*, courses(name, delivery_mode)")
-      .single();
-
-    if (error) throw error;
-    return data;
+    return (await adminQuery("create_batch", {
+      course_id: courseId,
+      name,
+      max_students: maxStudents,
+      organization_id: organizationId,
+    })) as Batch;
   },
 
   async assignTeacher(batchId: string, teacherId: string | null): Promise<void> {
-    const { error } = await supabase.from("batches").update({ teacher_id: teacherId }).eq("id", batchId);
-
-    if (error) throw error;
+    await adminQuery("update_batch", { id: batchId, teacher_id: teacherId });
   },
 
   async updateBatch(id: string, name: string, maxStudents: number): Promise<void> {
-    const { error } = await supabase.from("batches").update({ name, max_students: maxStudents }).eq("id", id);
-
-    if (error) throw error;
+    await adminQuery("update_batch", { id, name, max_students: maxStudents });
   },
 
   async deleteBatch(id: string): Promise<void> {
-    await supabase.from("batch_students").delete().eq("batch_id", id);
-    const { error } = await supabase.from("batches").delete().eq("id", id);
-    if (error) throw error;
+    await adminQuery("delete_batch", { id });
   },
 
   async getStudents(batchId: string): Promise<BatchStudent[]> {
-    const { data, error } = await supabase
-      .from("batch_students")
-      .select("*, profiles(display_name, email)")
-      .eq("batch_id", batchId);
-
-    if (error) throw error;
-    return data || [];
+    const data = await adminQuery("list_batch_students", { batch_id: batchId });
+    // Normalize {profile} -> {profiles} so existing UI mapping continues to work
+    return ((data ?? []) as any[]).map((row) => ({
+      ...row,
+      profiles: row.profile ?? row.profiles ?? null,
+    })) as BatchStudent[];
   },
 
   async getStudentCount(batchId: string): Promise<number> {
-    const { count, error } = await supabase
-      .from("batch_students")
-      .select("id", { count: "exact", head: true })
-      .eq("batch_id", batchId);
-
-    if (error) throw error;
-    return count || 0;
+    const c = await adminQuery("batch_student_count", { batch_id: batchId });
+    return typeof c === "number" ? c : 0;
   },
 
   async addStudent(batchId: string, studentId: string): Promise<void> {
-    const { error } = await supabase.from("batch_students").insert({ batch_id: batchId, student_id: studentId });
-
-    if (error) throw error;
+    await adminQuery("add_batch_student", { batch_id: batchId, student_id: studentId });
   },
 
   async removeStudent(batchId: string, studentId: string): Promise<void> {
-    const { error } = await supabase
-      .from("batch_students")
-      .delete()
-      .eq("batch_id", batchId)
-      .eq("student_id", studentId);
-
-    if (error) throw error;
+    await adminQuery("remove_batch_student", { batch_id: batchId, student_id: studentId });
   },
 
   async listTeachers(): Promise<{ user_id: string; display_name: string | null; email: string | null }[]> {
-    const { data: roles } = await supabase.from("user_roles").select("user_id").eq("role", "teacher");
-
-    if (!roles?.length) return [];
-
-    const ids = roles.map((r) => r.user_id);
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("user_id, display_name, email")
-      .in("user_id", ids);
-
-    return profiles || [];
+    const data = await adminQuery("list_teachers");
+    return (data ?? []) as any[];
   },
 
   async listStudents(): Promise<{ user_id: string; display_name: string | null; email: string | null }[]> {
-    const { data: roles } = await supabase.from("user_roles").select("user_id").eq("role", "student");
-
-    if (!roles?.length) return [];
-
-    const ids = roles.map((r) => r.user_id);
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("user_id, display_name, email")
-      .in("user_id", ids);
-
-    return profiles || [];
+    const data = await adminQuery("list_all_students");
+    return (data ?? []) as any[];
   },
 };
 
