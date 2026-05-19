@@ -1768,6 +1768,75 @@ Deno.serve(async (req) => {
         break
       }
 
+      case 'check_slot_conflicts': {
+        if (!callerUserId) {
+          return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+            status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+        const {
+          teacher_id, student_ids, date, day_of_week,
+          start_time, end_time, exclude_batch_id,
+        } = params as {
+          teacher_id?: string | null
+          student_ids?: string[]
+          date?: string | null
+          day_of_week?: number
+          start_time?: string
+          end_time?: string
+          exclude_batch_id?: string | null
+        }
+        if (!start_time || !end_time || (day_of_week === undefined && !date)) {
+          result = { teacher_conflicts: [], student_conflicts: [] }
+          break
+        }
+        const aS = start_time.slice(0,5), aE = end_time.slice(0,5)
+
+        const collectFromBatches = async (batchIds: string[]) => {
+          if (!batchIds.length) return [] as any[]
+          const [{ data: batchRows }, { data: schRows }] = await Promise.all([
+            supabase.from('batches').select('id, name').in('id', batchIds),
+            supabase.from('schedules').select('batch_id, date, day_of_week, start_time, end_time').in('batch_id', batchIds),
+          ])
+          const nameMap: Record<string, string> = {}
+          for (const b of batchRows ?? []) nameMap[b.id] = b.name
+          const out: any[] = []
+          for (const s of schRows ?? []) {
+            const sameWhen = date && s.date ? date === s.date : s.day_of_week === day_of_week
+            if (!sameWhen) continue
+            const bS = (s.start_time || '').slice(0,5), bE = (s.end_time || '').slice(0,5)
+            if (aS < bE && bS < aE) {
+              out.push({
+                date: s.date, day_of_week: s.day_of_week,
+                start_time: s.start_time, end_time: s.end_time,
+                other_batch_id: s.batch_id, other_batch_name: nameMap[s.batch_id] || 'Unknown batch',
+              })
+            }
+          }
+          return out
+        }
+
+        let teacher_conflicts: any[] = []
+        if (teacher_id) {
+          let q = supabase.from('batches').select('id').eq('teacher_id', teacher_id)
+          if (exclude_batch_id) q = q.neq('id', exclude_batch_id)
+          const { data: tBatches } = await q
+          teacher_conflicts = await collectFromBatches((tBatches ?? []).map((b: any) => b.id))
+        }
+
+        let student_conflicts: any[] = []
+        if (Array.isArray(student_ids) && student_ids.length) {
+          let q = supabase.from('batch_students').select('batch_id, student_id').in('student_id', student_ids)
+          if (exclude_batch_id) q = q.neq('batch_id', exclude_batch_id)
+          const { data: enrollments } = await q
+          const ids = [...new Set((enrollments ?? []).map((e: any) => e.batch_id))]
+          student_conflicts = await collectFromBatches(ids)
+        }
+
+        result = { teacher_conflicts, student_conflicts }
+        break
+      }
+
       default:
         return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
           status: 400,
