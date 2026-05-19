@@ -367,8 +367,9 @@ export default function BatchesPage() {
     </div>
   );
 
+  // batch_students.student_id stores the auth user_id
   const enrolledIds = new Set(enrolledStudents.map(e => e.student_id));
-  const availableStudents = students.filter(s => !enrolledIds.has(s.id));
+  const availableStudents = students.filter(s => !enrolledIds.has(s.user_id));
 
   return (
     <div className="p-6 space-y-6">
