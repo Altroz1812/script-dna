@@ -161,6 +161,25 @@ export const batchService = {
     const data = await adminQuery("list_all_students");
     return (data ?? []) as any[];
   },
+
+  async checkTeacherConflicts(teacherId: string, batchId: string): Promise<ConflictInfo[]> {
+    const data = await adminQuery("check_teacher_conflicts", { teacher_id: teacherId, batch_id: batchId });
+    return (data ?? []) as ConflictInfo[];
+  },
+
+  async checkStudentConflicts(studentId: string, batchId: string): Promise<ConflictInfo[]> {
+    const data = await adminQuery("check_student_conflicts", { student_id: studentId, batch_id: batchId });
+    return (data ?? []) as ConflictInfo[];
+  },
+};
+
+export type ConflictInfo = {
+  date: string | null;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  other_batch_id: string;
+  other_batch_name: string;
 };
 
 // ===== SCHEDULE SERVICE =====
