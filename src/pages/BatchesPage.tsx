@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { useActiveOrg } from '@/contexts/ActiveOrgContext';
 import { useRBAC } from '@/hooks/useRBAC';
-import { courseService, batchService, type Course, type Batch } from '@/services/api/courseService';
+import { courseService, batchService, type Course, type Batch, type ConflictInfo } from '@/services/api/courseService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -12,8 +12,35 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Trash2, Users, UserPlus, UserMinus, Layers, Wifi, Building2, Pencil } from 'lucide-react';
+import { Plus, Trash2, Users, UserPlus, UserMinus, Layers, Wifi, Building2, Pencil, AlertCircle } from 'lucide-react';
 import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
+
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+function ConflictBanner({ title, conflicts }: { title: string; conflicts: ConflictInfo[] }) {
+  if (!conflicts.length) return null;
+  const shown = conflicts.slice(0, 5);
+  const extra = conflicts.length - shown.length;
+  return (
+    <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm space-y-2">
+      <p className="font-medium text-destructive flex items-center gap-1.5">
+        <AlertCircle className="h-4 w-4" /> {title}
+      </p>
+      <ul className="text-xs space-y-1 text-muted-foreground">
+        {shown.map((c, i) => (
+          <li key={i}>
+            <span className="font-medium text-foreground">
+              {c.date ? new Date(c.date).toLocaleDateString() : DAYS[c.day_of_week]}
+            </span>{' '}
+            {c.start_time?.slice(0,5)}–{c.end_time?.slice(0,5)} in{' '}
+            <span className="font-medium text-foreground">{c.other_batch_name}</span>
+          </li>
+        ))}
+        {extra > 0 && <li className="italic">…and {extra} more</li>}
+      </ul>
+    </div>
+  );
+}
 
 export default function BatchesPage() {
   const { profile } = useAuth();
@@ -36,6 +63,8 @@ export default function BatchesPage() {
   const [teacherDialogBatch, setTeacherDialogBatch] = useState<string | null>(null);
   const [teachers, setTeachers] = useState<{ user_id: string; display_name: string | null; email: string | null }[]>([]);
   const [selectedTeacher, setSelectedTeacher] = useState('');
+  const [teacherConflicts, setTeacherConflicts] = useState<ConflictInfo[]>([]);
+  const [checkingTeacher, setCheckingTeacher] = useState(false);
 
   // assign student dialog
   const [studentDialogBatch, setStudentDialogBatch] = useState<Batch | null>(null);
@@ -43,6 +72,8 @@ export default function BatchesPage() {
   const [enrolledStudents, setEnrolledStudents] = useState<{ id: string; student_id: string; display_name?: string | null; email?: string | null }[]>([]);
   const [selectedStudent, setSelectedStudent] = useState('');
   const [studentCount, setStudentCount] = useState(0);
+  const [studentConflicts, setStudentConflicts] = useState<ConflictInfo[]>([]);
+  const [checkingStudent, setCheckingStudent] = useState(false);
 
   const { data: courses = [] } = useQuery<Course[]>({
     queryKey: ['courses', activeOrgId],
@@ -106,14 +137,40 @@ export default function BatchesPage() {
   };
 
   const assignTeacherMutation = useMutation({
-    mutationFn: () => batchService.assignTeacher(teacherDialogBatch!, selectedTeacher === '__none__' ? null : selectedTeacher),
+    mutationFn: async () => {
+      const teacherId = selectedTeacher === '__none__' ? null : selectedTeacher;
+      if (teacherId) {
+        const conflicts = await batchService.checkTeacherConflicts(teacherId, teacherDialogBatch!);
+        if (conflicts.length > 0) {
+          setTeacherConflicts(conflicts);
+          throw new Error('Teacher already has another batch assigned for the selected time slot. Please choose another teacher or time slot.');
+        }
+      }
+      return batchService.assignTeacher(teacherDialogBatch!, teacherId);
+    },
     onSuccess: () => {
       toast.success('Teacher assigned');
-      setTeacherDialogBatch(null); setSelectedTeacher('');
+      setTeacherDialogBatch(null); setSelectedTeacher(''); setTeacherConflicts([]);
       invalidate();
     },
     onError: (e: any) => toast.error(e.message),
   });
+
+  // Live check when teacher is selected
+  const onTeacherChange = async (value: string) => {
+    setSelectedTeacher(value);
+    setTeacherConflicts([]);
+    if (!teacherDialogBatch || value === '__none__' || !value) return;
+    setCheckingTeacher(true);
+    try {
+      const conflicts = await batchService.checkTeacherConflicts(value, teacherDialogBatch);
+      setTeacherConflicts(conflicts);
+    } catch (e: any) {
+      // soft-fail; user can still try to save which will re-check
+    } finally {
+      setCheckingTeacher(false);
+    }
+  };
 
   const handleCreateBatch = () => {
     if (!batchName.trim()) { toast.error('Batch name is required'); return; }
@@ -124,6 +181,7 @@ export default function BatchesPage() {
 
   const openTeacherDialog = async (batchId: string) => {
     setTeacherDialogBatch(batchId);
+    setSelectedTeacher(''); setTeacherConflicts([]);
     try {
       setTeachers(await batchService.listTeachers({ excludeAssigned: true, batchId }));
     } catch (e: any) {
@@ -133,6 +191,7 @@ export default function BatchesPage() {
 
   const openStudentDialog = useCallback(async (batch: Batch) => {
     setStudentDialogBatch(batch);
+    setSelectedStudent(''); setStudentConflicts([]);
     try {
       const [studs, enrolled, count] = await Promise.all([
         batchService.listStudents(),
@@ -152,16 +211,40 @@ export default function BatchesPage() {
     }
   }, []);
 
+  const onStudentChange = async (value: string) => {
+    setSelectedStudent(value);
+    setStudentConflicts([]);
+    if (!studentDialogBatch || !value) return;
+    setCheckingStudent(true);
+    try {
+      const conflicts = await batchService.checkStudentConflicts(value, studentDialogBatch.id);
+      setStudentConflicts(conflicts);
+    } catch (e: any) {
+      // soft-fail
+    } finally {
+      setCheckingStudent(false);
+    }
+  };
+
   const handleAddStudent = async () => {
     if (!studentDialogBatch || !selectedStudent) return;
     if (studentCount >= studentDialogBatch.max_students) {
       toast.error(`Maximum ${studentDialogBatch.max_students} students reached`);
       return;
     }
+    // Final re-check on submit
+    try {
+      const conflicts = await batchService.checkStudentConflicts(selectedStudent, studentDialogBatch.id);
+      if (conflicts.length > 0) {
+        setStudentConflicts(conflicts);
+        toast.error('One or more students are already assigned to another batch during the selected time slot.');
+        return;
+      }
+    } catch (_e) { /* if check fails, fall through to attempt add */ }
     try {
       await batchService.addStudent(studentDialogBatch.id, selectedStudent);
       toast.success('Student added');
-      setSelectedStudent('');
+      setSelectedStudent(''); setStudentConflicts([]);
       await openStudentDialog(studentDialogBatch);
     } catch (e: any) {
       toast.error(e.message);
@@ -323,7 +406,7 @@ export default function BatchesPage() {
         <DialogContent>
           <DialogHeader><DialogTitle>Assign Teacher</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <Select value={selectedTeacher} onValueChange={setSelectedTeacher}>
+            <Select value={selectedTeacher} onValueChange={onTeacherChange}>
               <SelectTrigger><SelectValue placeholder="Select teacher" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__none__">No teacher</SelectItem>
@@ -334,8 +417,17 @@ export default function BatchesPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Button onClick={() => assignTeacherMutation.mutate()} disabled={assignTeacherMutation.isPending} className="w-full">
-              {assignTeacherMutation.isPending ? 'Saving...' : 'Save'}
+            {checkingTeacher && <p className="text-xs text-muted-foreground">Checking schedule conflicts…</p>}
+            <ConflictBanner
+              title="Teacher already has another batch assigned for the selected time slot. Please choose another teacher or time slot."
+              conflicts={teacherConflicts}
+            />
+            <Button
+              onClick={() => assignTeacherMutation.mutate()}
+              disabled={assignTeacherMutation.isPending || checkingTeacher || teacherConflicts.length > 0}
+              className="w-full"
+            >
+              {assignTeacherMutation.isPending ? 'Saving...' : teacherConflicts.length > 0 ? 'Resolve conflicts to continue' : 'Save'}
             </Button>
           </div>
         </DialogContent>
@@ -352,7 +444,7 @@ export default function BatchesPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex gap-2">
-              <Select value={selectedStudent} onValueChange={setSelectedStudent}>
+              <Select value={selectedStudent} onValueChange={onStudentChange}>
                 <SelectTrigger className="flex-1"><SelectValue placeholder="Select student to add" /></SelectTrigger>
                 <SelectContent>
                   {availableStudents.map(s => (
@@ -362,10 +454,18 @@ export default function BatchesPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <Button onClick={handleAddStudent} disabled={!selectedStudent || studentCount >= (studentDialogBatch?.max_students ?? 25)}>
+              <Button
+                onClick={handleAddStudent}
+                disabled={!selectedStudent || checkingStudent || studentConflicts.length > 0 || studentCount >= (studentDialogBatch?.max_students ?? 25)}
+              >
                 <UserPlus className="h-4 w-4" />
               </Button>
             </div>
+            {checkingStudent && <p className="text-xs text-muted-foreground">Checking schedule conflicts…</p>}
+            <ConflictBanner
+              title="This student is already assigned to another batch during the selected time slot."
+              conflicts={studentConflicts}
+            />
 
             <div className="space-y-2 max-h-60 overflow-y-auto">
               {enrolledStudents.length === 0 ? (
