@@ -1,184 +1,65 @@
-# AuraPen Enterprise Scale & Refactor Plan (Parked)
+## Root cause — confirmed bug, not just missing data
 
-> Status: **Parked for later.** User will ping when ready to execute. Review again after testing.
+`batch_students.student_id` is supposed to store the **auth `user_id`** (that's what every student-side RLS policy and every student-side query filters on — `student_id = auth.uid()`). But the admin "Add Student" flow is inserting **`profiles.id`** instead.
 
-## Goals
-1. Refactor `admin-query` + `auth-proxy` into modular, fast edge functions.
-2. Cut continuous DB load from live classes (polling → realtime).
-3. Architect for **1000+ daily concurrent students**, parallel batches, continuous Canvas writing — without melting Postgres.
-4. Cleanly separate three heavy workloads onto **dedicated services**:
-   - Video classroom (LiveKit cluster)
-   - Canvas / handwriting capture + replay
-   - Document uploads + OCR
-5. Web app (Lovable Cloud + React) becomes a **thin coordinator** — auth, metadata, orchestration only.
+Evidence from the live DB:
 
----
-
-## Target Architecture
-
-```text
-                    ┌─────────────────────────────────────┐
-                    │         AuraPen Web App             │
-                    │   (React + Lovable Cloud edge fns)  │
-                    │   Auth · Metadata · Coordination    │
-                    └──────────────┬──────────────────────┘
-                                   │ JWT (short-lived)
-          ┌────────────────────────┼────────────────────────┐
-          │                        │                        │
-          ▼                        ▼                        ▼
-  ┌───────────────┐       ┌────────────────┐      ┌──────────────────┐
-  │ Video Service │       │ Canvas Service │      │  OCR / Uploads   │
-  │  (LiveKit +   │       │ (Stroke ingest │      │  (Object store + │
-  │  signaling)   │       │  + replay CDN) │      │   OCR workers)   │
-  └───────┬───────┘       └───────┬────────┘      └────────┬─────────┘
-          │                       │                        │
-          │ events                │ aggregated writes      │ result events
-          └───────────────────────┴────────┬───────────────┘
-                                           ▼
-                                  ┌─────────────────┐
-                                  │  Postgres (RLS) │
-                                  │  metadata only  │
-                                  └─────────────────┘
+```
+batch_students.student_id = db03f395-…  (profiles.id of student@demo.com)
+profiles.user_id          = 17e2a982-…  (the real auth user id)
 ```
 
-Principle: **hot per-tick data never touches Postgres directly.** Only summaries, results, and metadata persist via Lovable Cloud.
+So:
+- Admin UI shows the student as enrolled (correct — admin queries join via `profiles.id`).
+- When `student@demo.com` logs in, `auth.uid()` is `17e2a982-…`, which doesn't match `db03f395-…`, so RLS returns nothing → all student screens blank.
+
+### Where the bug lives
+
+1. `supabase/functions/admin-query/index.ts`
+   - **Branch A — lines 838-894 (`add_batch_student`)**: resolves the param to `studentProfile.id` and inserts that. Should insert `studentProfile.user_id`.
+   - **Branch B — lines 1556-1564 (`add_batch_student` second handler)**: blindly inserts `params.student_id`. Needs the same normalization.
+   - **`list_batch_students` (lines ~820-836)**: joins `profiles.id = student_id` — only "works" because of this same bug. Must join `profiles.user_id = batch_students.student_id`.
+
+2. `src/pages/BatchesPage.tsx`
+   - Line 343 calls `batchService.addStudent(batch.id, selectedStudent)` where `selectedStudent` is the dropdown's `s.id` (profile.id). Must pass `s.user_id`.
+   - Line 370-371: `enrolledIds = new Set(enrolledStudents.map(e => e.student_id))` then `students.filter(s => !enrolledIds.has(s.id))` — comparison mixes user_id vs profile.id. Must compare against `s.user_id`.
+
+3. Other places that may carry the same mistake (audit, fix if found):
+   - `src/components/courses/BatchPickerDialog.tsx`
+   - `src/components/classroom/EndClassAttendanceDialog.tsx`
+   - `src/pages/ReportsPage.tsx`
+   - `src/pages/ParentChildrenPage.tsx`
+
+### Why this matches your symptom exactly
+"Student added by super admin shows as added in front end" — yes, because admin-side join uses `profiles.id`. But for the student, RLS uses `auth.uid()`, which is `user_id`, so they see nothing.
 
 ---
 
-## Workstream 1 — Edge function refactor (admin-query + auth-proxy)
+## Fix plan (4 steps, isolated, zero impact on admin/teacher/parent existing flows)
 
-Final layout:
+### Step 1 — Patch edge function `admin-query`
+- **`add_batch_student` (Branch A)**: keep profile lookup, but insert `studentProfile.user_id`, not `studentProfile.id`. Duplicate check by `user_id` too.
+- **`add_batch_student` (Branch B)**: same normalization (accept either profile.id or user_id, persist user_id).
+- **`list_batch_students` (both branches)**: join `profiles.user_id = batch_students.student_id` and return the profile.
+- **`remove_batch_student`**: accept either, normalize to user_id before delete (safety).
+- **`check_student_conflicts`**: normalize too if it uses student_id.
 
-```text
-supabase/functions/
-├── _shared/
-│   ├── cors.ts
-│   ├── auth.ts            # JWT decode + role/org resolve (+60s in-memory cache)
-│   ├── org-scope.ts       # multi-tenant filters
-│   ├── db.ts              # request-scoped client + memoizer
-│   ├── query-helpers.ts   # pagination, overlap, common selects
-│   ├── roles.ts
-│   └── errors.ts
-├── admin-query/
-│   ├── index.ts           # ~60 lines, router only
-│   ├── router.ts          # typed Record<Action, Handler>
-│   ├── middleware.ts
-│   └── handlers/
-│       ├── users.ts  organizations.ts  courses.ts  batches.ts
-│       ├── enrollments.ts  schedules.ts  live-classes.ts
-│       ├── attendance.ts  payments.ts  payroll.ts  leads.ts
-│       ├── notifications.ts  curriculum.ts  practice.ts
-│       └── analytics.ts
-└── auth-proxy/
-    └── index.ts           # imports from _shared/
-```
+### Step 2 — Patch frontend `BatchesPage.tsx`
+- Pass `s.user_id` (not `s.id`) to `addStudent`.
+- Compute `enrolledIds` from `e.student_id` and filter `students` by `s.user_id`.
+- Audit `BatchPickerDialog`, `EndClassAttendanceDialog`, `ReportsPage`, `ParentChildrenPage` for the same swap.
 
-Expected impact (admin paths): cold start −20–25%, warm requests −30–40%, DB queries per request −~40%.
+### Step 3 — Backfill the 2 broken rows
+One-time data fix: for each `batch_students` row whose `student_id` doesn't match any `auth.users.id`, look it up via `profiles.id` and rewrite to the matching `profiles.user_id`. After this, the existing `db03f395-…` rows become valid enrollments for `student@demo.com`, who will immediately see their batches, schedule, live classes, attendance, etc.
 
----
-
-## Workstream 2 — Database load reduction (continuous load paths)
-
-| Path | Today | Change | DB load impact |
-|---|---|---|---|
-| `VideoClassroom` polls `live_classes` every 3s | ~1,200 q/hr per 20-student room | Replace with **Supabase Realtime** subscription | −~99% on this path |
-| Conflict checks in `BatchesPage` / `SchedulePage` | Full scans | Add indexes: `idx_schedules_batch_dow`, `idx_schedules_date`, `idx_batch_students_student` | 80ms → <15ms |
-| `user_roles` / `organization_members` re-read | Every request | 60s in-memory LRU in `_shared/auth.ts` | −20–30% global |
-| `auto_mark_attendance_on_class_end` trigger | Bulk insert per class end | Batch + defer via queue when >50 students | Smooths spikes |
-
----
-
-## Workstream 3 — Canvas service (continuous, unpredictable load) — BIGGEST SCALE RISK
-
-A student writing for 30 min produces 60–240 strokes/sec at 120–240 Hz. Writing per stroke to Postgres = guaranteed meltdown at 1000+ users.
-
-### Architecture
-```text
-Browser canvas
-  → batched stroke chunks (every 250ms, ~30KB)
-  → Canvas Ingest Service (Node/Bun on Fly.io / Render / VM)
-       ├─ buffer in Redis (per session key)
-       ├─ on session end / 30s idle → flush to Object Storage (S3/R2) as .ndjson.gz
-       └─ write *one* metadata row to Postgres (session id, char id, blob URL, summary)
-  → Replay served from CDN (signed URL, immutable)
-```
-
-### Why a separate server
-- Sustained WebSocket ingest at 1000+ concurrent writers is not what Supabase edge functions are sized for.
-- Object storage + CDN is ~100× cheaper than row storage for stroke blobs.
-- Postgres sees ~1 row per session instead of thousands per minute.
-
-### What stays in Lovable Cloud
-- `stroke_recordings` table: 1 row per completed session, points at blob URL.
-- `font_library` (training source of truth) — unchanged.
-- Auth + RLS still gate who can read which blob URL (signed by web app).
-
-### Per-tick scoring
-- Validation / shape detection stays **client-side** (`useStrokeValidator`, `useShapeDetector`).
-- Aggregated score sent with the session flush — not per stroke.
-
----
-
-## Workstream 4 — Video classroom service
-Already separate (LiveKit). Harden:
-- Move waiting-room presence off Postgres polling → LiveKit data channels or Realtime presence.
-- `heartbeat` function: batch writes once per 30s.
-- LiveKit cluster sized by **concurrent rooms** (~50 parallel batches target).
-
----
-
-## Workstream 5 — Documents + OCR service
-Independent worker pool:
-- Upload direct to Object Storage from browser via signed URL.
-- Worker subscribes to upload events → OCR (Tesseract / vendor) → writes result row + extracted text back via Lovable Cloud.
-- Web app never proxies file bytes.
-
----
-
-## Workstream 6 — Web app as coordinator
-
-Responsibilities (only these):
-- Auth (login, JWT, RBAC).
-- Metadata CRUD via `admin-query`.
-- **Sign URLs** for canvas blobs, uploads, OCR results, LiveKit tokens.
-- Realtime subscriptions for status changes.
-- Dashboards from cached + aggregated tables.
-
-Web app should NEVER:
-- Stream stroke data through itself.
-- Proxy video or uploaded file bytes.
-- Run OCR.
-
----
-
-## Phasing
-
-1. **Phase 1 (in-codebase)** — Edge function refactor (W1) + indexes + Realtime swap for `VideoClassroom` polling + 60s role cache. Lowest risk, ~25–35% admin speedup, ~95% live-class DB cut.
-2. **Phase 2** — Canvas Ingest Service spec + deploy (external). Migrate `stroke_recordings` writes to blob+metadata.
-3. **Phase 3** — OCR/Uploads worker, harden LiveKit presence, batch attendance triggers.
-
-Phases 2–3 require external provisioning (Fly.io / Render / Cloudflare R2 / Redis), coordinated from Lovable Cloud.
-
----
-
-## Expected end-state at 1000+ daily students
-- Postgres writes/day: ~60–75% lower than current trajectory.
-- Canvas data cost: ~100× cheaper (object storage vs rows).
-- Admin UI: 25–35% faster.
-- Live-class status updates: ~6× faster, ~95% less DB cost.
-- Each subsystem scales independently.
-
----
-
-## Open decisions (revisit when resuming)
-1. Confirm Phase 1 scope to ship first.
-2. Phase 2 host: Fly.io / Render / Cloudflare Workers + R2 / self-hosted VM?
-3. Phase 3 OCR: vendor (Google Vision / AWS Textract) or self-hosted Tesseract?
-
----
+### Step 4 — Verify
+- Log in as `student@demo.com` → Dashboard, Schedule, Live Classes, Practice Assignments, Courses must show the two batches and their classes.
+- Log in as Admin → Batches → Manage Students → list still shows the same enrolled students (no regression).
+- Add a new student via Admin UI → DB row now stores `user_id`, and that student sees it immediately.
 
 ## Out of scope
-- Changing public action names / response shapes.
-- DB schema changes beyond indexes in Phase 1.
-- Building external Phase 2/3 services in this PR.
-- Automated test suite.
+- The big refactor plan (still parked in `.lovable/plan.md`).
+- Any change to teacher, parent, payments, payroll, or superadmin flows beyond the small audit in Step 2.
+- Schema changes — `batch_students.student_id` stays as-is; we're just fixing what gets written to it.
+
+Approve and I'll implement Steps 1–4 in order.
