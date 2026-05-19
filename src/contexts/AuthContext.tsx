@@ -61,6 +61,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // Heartbeat: ping every 60s while logged in so Active Users stays fresh.
+    let heartbeatTimer: number | null = null;
+    const startHeartbeat = () => {
+      if (heartbeatTimer != null) return;
+      const ping = () => { supabase.functions.invoke('heartbeat', { body: {} }).catch(() => {}); };
+      ping();
+      heartbeatTimer = window.setInterval(ping, 60_000);
+    };
+    const stopHeartbeat = () => {
+      if (heartbeatTimer != null) { window.clearInterval(heartbeatTimer); heartbeatTimer = null; }
+    };
+
     // Set up listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, sess) => {
       setLoading(true);
@@ -71,10 +83,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setTimeout(async () => {
           await loadProfile(sess.user.id);
           setLoading(false);
+          startHeartbeat();
         }, 0);
       } else {
         setProfile(null);
         setLoading(false);
+        stopHeartbeat();
       }
     });
 
@@ -83,17 +97,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(sess);
       if (sess?.user) {
         await loadProfile(sess.user.id);
+        startHeartbeat();
       } else {
         setProfile(null);
       }
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => { subscription.unsubscribe(); stopHeartbeat(); };
   }, [loadProfile]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
+    // Fire-and-forget audit log
+    supabase.functions.invoke('record-login-attempt', {
+      body: { email, success: !error, error_code: error?.message ?? null },
+    }).catch(() => {});
     if (error) throw error;
   };
 
@@ -107,6 +126,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    // Best-effort: close server-side session row before token is dropped.
+    try { await supabase.functions.invoke('heartbeat', { body: { end: true } }); } catch {}
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
     setSession(null);
