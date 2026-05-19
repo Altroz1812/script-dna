@@ -68,9 +68,26 @@ export async function adminQuery(action: string, params: any = {}): Promise<any>
     params = rest;
   }
 
-  const { data, error } = await supabase.functions.invoke("admin-query", {
-    body: { action, params },
-  });
+  // Always send the current user's access token explicitly so the edge
+  // function can resolve identity (and therefore role). Some hosting
+  // environments / custom domains otherwise end up sending only the
+  // anon publishable key, which makes the function treat a SuperAdmin
+  // as anonymous and 403 tenant-scoped requests.
+  let accessToken: string | null = null;
+  try {
+    // @ts-ignore — internal sync cache
+    accessToken = (supabase.auth as any)?.currentSession?.access_token ?? null;
+  } catch { /* ignore */ }
+  if (!accessToken) {
+    const { data: s } = await supabase.auth.getSession();
+    accessToken = s.session?.access_token ?? null;
+  }
+
+  const invokeOpts: any = { body: { action, params } };
+  if (accessToken) {
+    invokeOpts.headers = { Authorization: `Bearer ${accessToken}` };
+  }
+  const { data, error } = await supabase.functions.invoke("admin-query", invokeOpts);
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
   return data;
