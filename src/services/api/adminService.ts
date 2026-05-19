@@ -5,7 +5,7 @@
 // data here — that bypasses the org scope and leaks cross-tenant data.
 
 import { supabase } from "@/integrations/supabase/client";
-import { readActiveOrgFromStorage } from "@/contexts/ActiveOrgContext";
+import { readActiveOrgForUser } from "@/contexts/ActiveOrgContext";
 
 const PUBLIC_GLOBAL_ACTIONS = new Set<string>([
   // SuperAdmin-only org management — never tenant-scoped
@@ -43,7 +43,18 @@ export async function adminQuery(action: string, params: any = {}): Promise<any>
     !params.__skip_org_filter &&
     params.target_org_id === undefined
   ) {
-    const active = readActiveOrgFromStorage();
+    // Resolve current auth user synchronously from the JS SDK cache so we
+    // never inject a target_org_id stored by a previous user.
+    let currentUserId: string | null = null;
+    try {
+      // @ts-ignore — internal sync accessor on supabase-js v2
+      currentUserId = (supabase.auth as any)?.currentSession?.user?.id ?? null;
+    } catch { /* ignore */ }
+    if (!currentUserId) {
+      const { data } = await supabase.auth.getSession();
+      currentUserId = data.session?.user?.id ?? null;
+    }
+    const active = readActiveOrgForUser(currentUserId);
     // string => scoped, null => SuperAdmin global view (pass through),
     // undefined => no selection yet (let edge function 403 non-SA).
     if (typeof active === "string") {
