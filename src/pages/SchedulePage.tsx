@@ -502,7 +502,7 @@ function ConflictPanel({
   conflicts,
   batches,
 }: {
-  conflicts: Array<{ entry: any; with: any; reason: 'batch' | 'room'; when: string }>;
+  conflicts: Array<{ entry: any; with: any; reason: 'batch' | 'room' | 'teacher' | 'student'; when: string; detail?: string }>;
   batches: Array<{ id: string; name: string }>;
 }) {
   const batchName = (id: string) => batches.find(b => b.id === id)?.name || 'Unknown batch';
@@ -523,13 +523,17 @@ function ConflictPanel({
             {' — '}
             {c.reason === 'batch'
               ? <span className="text-destructive">same batch double-booked</span>
-              : <span className="text-destructive">room "{c.with.room}" already booked</span>}
+              : c.reason === 'room'
+                ? <span className="text-destructive">room "{c.with.room}" already booked</span>
+                : c.reason === 'teacher'
+                  ? <span className="text-destructive">teacher already has another batch at this time</span>
+                  : <span className="text-destructive">{c.detail || 'student(s)'} already in another batch at this time</span>}
           </li>
         ))}
         {extra > 0 && <li className="text-muted-foreground italic">…and {extra} more</li>}
       </ul>
       <p className="text-xs text-muted-foreground">
-        Change time, room, or date to resolve conflicts.
+        Change time, room, date, teacher, or student assignments to resolve conflicts.
       </p>
     </div>
   );
