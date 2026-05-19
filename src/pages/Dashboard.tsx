@@ -63,7 +63,7 @@ const GRADIENT_PAIRS = [
 ];
 
 const ICON_GRADIENTS = [
-  "from-purple-300 to-purple-600",
+  // "from-purple-300 to-purple-600",
   "from-emerald-300 to-emerald-600",
   "from-orange-300 to-orange-600",
   "from-blue-300 to-blue-600",
@@ -74,7 +74,7 @@ const ICON_GRADIENTS = [
 ];
 
 const ICON_SHADOWS = [
-  "shadow-purple-500/30",
+  // "shadow-purple-500/30",
   "shadow-emerald-500/30",
   "shadow-orange-500/30",
   "shadow-blue-500/30",
