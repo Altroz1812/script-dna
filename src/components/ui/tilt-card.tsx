@@ -17,7 +17,7 @@ const spanClasses: Record<string, string> = {
   '2x2': 'md:col-span-2 md:row-span-2',
 };
 
-export function TiltCard({ children, className, glowColor = 'hsl(265 90% 65%)', span = '1x1' }: TiltCardProps) {
+export function TiltCard({ children, className, glowColor = 'hsl(195 100% 50%)', span = '1x1' }: TiltCardProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [isHovered, setIsHovered] = useState(false);
 
@@ -55,7 +55,7 @@ export function TiltCard({ children, className, glowColor = 'hsl(265 90% 65%)', 
       className={cn(
         'relative rounded-2xl border border-white/[0.12] overflow-hidden group',
         'bg-card transition-all duration-500',
-        isHovered && 'shadow-lg shadow-primary/10 border-white/[0.18]',
+        isHovered && 'shadow-lg shadow-[hsl(var(--glow)/0.18)] border-white/[0.2]',
         spanClasses[span],
         className,
       )}
@@ -88,7 +88,7 @@ export function TiltCard({ children, className, glowColor = 'hsl(265 90% 65%)', 
         style={{
           border: '1.5px solid transparent',
           backgroundImage: isHovered
-            ? 'linear-gradient(135deg, hsl(265 90% 65% / 0.35), hsl(12 90% 65% / 0.2), hsl(165 80% 45% / 0.35))'
+            ? 'linear-gradient(135deg, hsl(217 91% 60% / 0.4), hsl(195 100% 50% / 0.35), hsl(43 65% 52% / 0.4))'
             : 'none',
           backgroundOrigin: 'border-box',
           backgroundClip: 'border-box',
