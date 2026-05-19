@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
-import { Search, Activity, LogIn, Shield } from 'lucide-react';
+import { Search, Activity, LogIn, Shield, Users, History } from 'lucide-react';
 import { TableSkeleton } from '@/components/ui/loading-skeletons';
 
 interface ActivityLog {
@@ -26,23 +26,50 @@ interface LoginAttempt {
   email: string;
   success: boolean;
   ip_address: string | null;
+  user_agent?: string | null;
+  error_code?: string | null;
   attempted_at: string;
+}
+
+interface ActiveSession {
+  id: string;
+  user_id: string;
+  user_name: string;
+  user_email: string;
+  role: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  started_at: string;
+  last_seen_at: string;
+  ended_at: string | null;
 }
 
 export default function ActivityLogsPage() {
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [loginAttempts, setLoginAttempts] = useState<LoginAttempt[]>([]);
+  const [activeSessions, setActiveSessions] = useState<ActiveSession[]>([]);
+  const [sessionHistory, setSessionHistory] = useState<ActiveSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
+  const loadAll = () => {
+    Promise.all([
+      adminQuery('list_activity_logs').catch(() => ({})),
+      adminQuery('list_active_sessions').catch(() => ({})),
+      adminQuery('list_session_history', { limit: 200 }).catch(() => ({})),
+    ]).then(([logs, active, history]: any[]) => {
+      setActivityLogs(logs.activity_logs ?? []);
+      setLoginAttempts(logs.login_attempts ?? []);
+      setActiveSessions(active.sessions ?? []);
+      setSessionHistory(history.sessions ?? []);
+    }).finally(() => setLoading(false));
+  };
+
   useEffect(() => {
     setLoading(true);
-    adminQuery('list_activity_logs')
-      .then((data) => {
-        setActivityLogs(data.activity_logs ?? []);
-        setLoginAttempts(data.login_attempts ?? []);
-      })
-      .finally(() => setLoading(false));
+    loadAll();
+    const t = window.setInterval(loadAll, 30_000);
+    return () => window.clearInterval(t);
   }, []);
 
   const filteredLogins = loginAttempts.filter(
@@ -50,10 +77,32 @@ export default function ActivityLogsPage() {
   );
 
   const filteredActivity = activityLogs.filter(
-    (a) => !search || a.action.toLowerCase().includes(search.toLowerCase()) || a.entity_type?.toLowerCase().includes(search.toLowerCase())
+    (a) => !search ||
+      a.action.toLowerCase().includes(search.toLowerCase()) ||
+      a.entity_type?.toLowerCase().includes(search.toLowerCase()) ||
+      a.user_email?.toLowerCase().includes(search.toLowerCase())
   );
+  const filterSession = (s: ActiveSession) => !search ||
+    s.user_email.toLowerCase().includes(search.toLowerCase()) ||
+    s.user_name.toLowerCase().includes(search.toLowerCase());
+  const filteredActive = activeSessions.filter(filterSession);
+  const filteredHistory = sessionHistory.filter(filterSession);
 
   const formatDate = (d: string) => new Date(d).toLocaleString();
+  const formatDuration = (start: string, end: string | null) => {
+    const ms = (end ? new Date(end).getTime() : Date.now()) - new Date(start).getTime();
+    const mins = Math.floor(ms / 60000);
+    if (mins < 60) return `${mins}m`;
+    const h = Math.floor(mins / 60); const m = mins % 60;
+    return `${h}h ${m}m`;
+  };
+  const shortUA = (ua: string | null | undefined) => {
+    if (!ua) return '—';
+    const m = ua.match(/(Chrome|Firefox|Safari|Edge|Opera)\/[\d.]+/);
+    const os = ua.match(/\((?:[^)]*?)(Mac OS X [\d_]+|Windows NT [\d.]+|Android [\d.]+|iPhone OS [\d_]+|Linux[^)]*)/);
+    return [m?.[0], os?.[1]].filter(Boolean).join(' · ') || ua.slice(0, 40);
+  };
+  const isLive = (lastSeen: string) => Date.now() - new Date(lastSeen).getTime() < 60_000;
 
   return (
     <div className="p-6 space-y-6">
@@ -62,7 +111,7 @@ export default function ActivityLogsPage() {
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Shield className="h-6 w-6" /> Activity Logs
           </h1>
-          <p className="text-muted-foreground text-sm">Monitor login attempts and system activity</p>
+          <p className="text-muted-foreground text-sm">Active users, login attempts, session history and system activity</p>
         </div>
       </div>
 
@@ -74,8 +123,14 @@ export default function ActivityLogsPage() {
       {loading ? (
         <TableSkeleton columns={5} rows={8} />
       ) : (
-        <Tabs defaultValue="logins">
+        <Tabs defaultValue="active">
           <TabsList>
+            <TabsTrigger value="active" className="flex items-center gap-1">
+              <Users className="h-3 w-3" /> Active Users ({activeSessions.length})
+            </TabsTrigger>
+            <TabsTrigger value="history" className="flex items-center gap-1">
+              <History className="h-3 w-3" /> Sessions ({sessionHistory.length})
+            </TabsTrigger>
             <TabsTrigger value="logins" className="flex items-center gap-1">
               <LogIn className="h-3 w-3" /> Login Attempts ({loginAttempts.length})
             </TabsTrigger>
@@ -83,6 +138,81 @@ export default function ActivityLogsPage() {
               <Activity className="h-3 w-3" /> Activity ({activityLogs.length})
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="active">
+            <Card>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>User</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>IP</TableHead>
+                      <TableHead>Device</TableHead>
+                      <TableHead>Signed in</TableHead>
+                      <TableHead>Last seen</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredActive.length === 0 ? (
+                      <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No active users right now</TableCell></TableRow>
+                    ) : filteredActive.map((s) => (
+                      <TableRow key={s.id}>
+                        <TableCell className="font-medium flex items-center gap-2">
+                          <span className={`h-2 w-2 rounded-full ${isLive(s.last_seen_at) ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`} />
+                          {s.user_name}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{s.user_email}</TableCell>
+                        <TableCell>{s.role ? <Badge variant="secondary">{s.role}</Badge> : '—'}</TableCell>
+                        <TableCell className="text-muted-foreground">{s.ip_address || '—'}</TableCell>
+                        <TableCell className="text-muted-foreground text-xs">{shortUA(s.user_agent)}</TableCell>
+                        <TableCell className="text-muted-foreground">{formatDate(s.started_at)}</TableCell>
+                        <TableCell className="text-muted-foreground">{formatDuration(s.last_seen_at, null)} ago</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="history">
+            <Card>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>User</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Started</TableHead>
+                      <TableHead>Ended</TableHead>
+                      <TableHead>Duration</TableHead>
+                      <TableHead>IP</TableHead>
+                      <TableHead>Device</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredHistory.length === 0 ? (
+                      <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No sessions recorded yet</TableCell></TableRow>
+                    ) : filteredHistory.map((s) => (
+                      <TableRow key={s.id}>
+                        <TableCell className="font-medium">{s.user_name}</TableCell>
+                        <TableCell className="text-muted-foreground">{s.user_email}</TableCell>
+                        <TableCell>{s.role ? <Badge variant="secondary">{s.role}</Badge> : '—'}</TableCell>
+                        <TableCell className="text-muted-foreground">{formatDate(s.started_at)}</TableCell>
+                        <TableCell className="text-muted-foreground">{s.ended_at ? formatDate(s.ended_at) : <Badge variant="default">Active</Badge>}</TableCell>
+                        <TableCell>{formatDuration(s.started_at, s.ended_at)}</TableCell>
+                        <TableCell className="text-muted-foreground">{s.ip_address || '—'}</TableCell>
+                        <TableCell className="text-muted-foreground text-xs">{shortUA(s.user_agent)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           <TabsContent value="logins">
             <Card>
@@ -92,14 +222,16 @@ export default function ActivityLogsPage() {
                     <TableRow>
                       <TableHead>Email</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Reason</TableHead>
                       <TableHead>IP Address</TableHead>
+                      <TableHead>Device</TableHead>
                       <TableHead>Time</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredLogins.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-center text-muted-foreground py-8">No login attempts found</TableCell>
+                        <TableCell colSpan={6} className="text-center text-muted-foreground py-8">No login attempts found</TableCell>
                       </TableRow>
                     ) : (
                       filteredLogins.map((l) => (
@@ -110,7 +242,9 @@ export default function ActivityLogsPage() {
                               {l.success ? 'Success' : 'Failed'}
                             </Badge>
                           </TableCell>
+                          <TableCell className="text-muted-foreground text-xs">{l.error_code || '—'}</TableCell>
                           <TableCell className="text-muted-foreground">{l.ip_address || '—'}</TableCell>
+                          <TableCell className="text-muted-foreground text-xs">{shortUA(l.user_agent)}</TableCell>
                           <TableCell className="text-muted-foreground">{formatDate(l.attempted_at)}</TableCell>
                         </TableRow>
                       ))
@@ -143,7 +277,11 @@ export default function ActivityLogsPage() {
                     ) : (
                       filteredActivity.map((a) => (
                         <TableRow key={a.id}>
-                          <TableCell className="font-medium">{a.user_name || '—'}</TableCell>
+                          <TableCell className="font-medium">
+                            {a.user_name === 'System'
+                              ? <Badge variant="outline">System</Badge>
+                              : (a.user_name || '—')}
+                          </TableCell>
                           <TableCell className="text-muted-foreground">{a.user_email || '—'}</TableCell>
                           <TableCell className="font-medium">{a.action}</TableCell>
                           <TableCell>
