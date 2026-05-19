@@ -1755,12 +1755,21 @@ Deno.serve(async (req) => {
             status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           })
         }
-        // student_id here is profiles.id (matches batch_students.student_id)
+        // batch_students.student_id is the auth user_id. Accept either user_id
+        // or profiles.id from the caller and normalize.
         const { student_id, batch_id } = params as { student_id?: string; batch_id?: string }
         if (!student_id || !batch_id) { result = []; break }
+        let sid = student_id
+        const { data: byUser } = await supabase
+          .from('profiles').select('user_id').eq('user_id', sid).maybeSingle()
+        if (!byUser) {
+          const { data: byProf } = await supabase
+            .from('profiles').select('user_id').eq('id', sid).maybeSingle()
+          if (byProf?.user_id) sid = byProf.user_id
+        }
         const { data: enrollments } = await supabase
           .from('batch_students').select('batch_id')
-          .eq('student_id', student_id).neq('batch_id', batch_id)
+          .eq('student_id', sid).neq('batch_id', batch_id)
         const otherIds = [...new Set((enrollments ?? []).map((e: any) => e.batch_id))]
         if (!otherIds.length) { result = []; break }
         const [{ data: otherBatches }, { data: mySch }, { data: otherSch }] = await Promise.all([
@@ -1848,7 +1857,18 @@ Deno.serve(async (req) => {
 
         let student_conflicts: any[] = []
         if (Array.isArray(student_ids) && student_ids.length) {
-          let q = supabase.from('batch_students').select('batch_id, student_id').in('student_id', student_ids)
+          // Normalize: accept profiles.id or user_id, persist user_id in DB.
+          const { data: pByUser } = await supabase
+            .from('profiles').select('user_id').in('user_id', student_ids)
+          const userIds = new Set<string>((pByUser ?? []).map((p: any) => p.user_id))
+          const unknown = student_ids.filter((id) => !userIds.has(id))
+          if (unknown.length) {
+            const { data: pByProf } = await supabase
+              .from('profiles').select('user_id').in('id', unknown)
+            for (const p of pByProf ?? []) userIds.add(p.user_id)
+          }
+          const normalizedIds = [...userIds]
+          let q = supabase.from('batch_students').select('batch_id, student_id').in('student_id', normalizedIds)
           if (exclude_batch_id) q = q.neq('batch_id', exclude_batch_id)
           const { data: enrollments } = await q
           const ids = [...new Set((enrollments ?? []).map((e: any) => e.batch_id))]
