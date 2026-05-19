@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminQuery } from '@/services/api/adminService';
 import { batchService, scheduleService, type Batch } from '@/services/api/courseService';
@@ -11,9 +11,13 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Plus, Trash2, Wand2, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Wand2, AlertCircle, PlayCircle, Calendar as CalendarIcon, Star } from 'lucide-react';
 import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { format, addDays, getDay } from 'date-fns';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { useNavigate } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const WORKING_DAYS_OPTIONS = [
@@ -244,6 +248,14 @@ export default function SchedulePage() {
     },
     onError: (e: any) => toast.error(e.message),
   });
+
+  const navigate = useNavigate();
+  // Re-tick every 30s so live/upcoming/completed status stays fresh
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(t);
+  }, []);
 
   const toggleDay = (day: number) => {
     setAutoForm(f => ({
