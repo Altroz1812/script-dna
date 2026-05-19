@@ -63,7 +63,7 @@ const GRADIENT_PAIRS = [
 ];
 
 const ICON_GRADIENTS = [
-  // "from-purple-300 to-purple-600",
+  "from-purple-300 to-purple-600",
   "from-emerald-300 to-emerald-600",
   "from-orange-300 to-orange-600",
   "from-blue-300 to-blue-600",
@@ -74,7 +74,7 @@ const ICON_GRADIENTS = [
 ];
 
 const ICON_SHADOWS = [
-  // "shadow-purple-500/30",
+  "shadow-purple-500/30",
   "shadow-emerald-500/30",
   "shadow-orange-500/30",
   "shadow-blue-500/30",
@@ -121,6 +121,13 @@ export default function Dashboard() {
       ? null
       : activeOrgId // null = global view
     : organizationId;
+
+  console.log("Dashboard Debug:", {
+    isSuperadmin,
+    activeOrgId,
+    effectiveOrgId,
+    organizationId,
+  });
 
   // Student dashboard data
   const { data: studentData, isLoading: studentLoading } = useQuery({
@@ -247,6 +254,14 @@ export default function Dashboard() {
     staleTime: 1000 * 60 * 2,
   });
 
+  // In Dashboard.tsx, right before the stats query:
+  console.log("Dashboard Debug:", {
+    isSuperadmin,
+    activeOrgId,
+    effectiveOrgId,
+    organizationId,
+  });
+
   const { data: stats, isLoading } = useQuery<Stats>({
     queryKey: ["admin_stats", effectiveOrgId, isSuperadmin],
     queryFn: () =>
@@ -255,12 +270,7 @@ export default function Dashboard() {
       }) as Promise<Stats>,
     staleTime: 1000 * 60 * 5,
     retry: 2,
-    // For SuperAdmin, wait until activeOrgId has been resolved (string = scoped,
-    // null = explicit global). undefined means picker hasn't completed yet — we
-    // must not fire org-scoped requests during that window.
-    enabled:
-      !!profile && !isStudent && !isParent && !isTeacher && !isSupport &&
-      (isSuperadmin ? activeOrgId !== undefined : true),
+    enabled: !!profile && !isStudent && !isParent && !isTeacher && !isSupport,
   });
 
   const cards = useMemo(() => {

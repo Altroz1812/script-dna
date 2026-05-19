@@ -34,32 +34,14 @@ Deno.serve(async (req) => {
 
     // Resolve caller identity + roles (best-effort; many actions also re-check)
     let callerUserId: string | null = null
-    let authDiag: string = 'no_header'
     try {
       const authHeader = req.headers.get('Authorization') ?? ''
-      let token = authHeader.replace(/^Bearer\s+/i, '').trim()
-      // Fallback: some clients send the user JWT in `apikey` while
-      // Authorization carries the anon publishable key. If Authorization
-      // looks like the anon key (no user `sub`), try `apikey` instead.
-      const apikeyHeader = (req.headers.get('apikey') ?? '').trim()
-      const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
-      if (token && anonKey && token === anonKey && apikeyHeader && apikeyHeader !== anonKey) {
-        token = apikeyHeader
-        authDiag = 'used_apikey'
-      } else if (token) {
-        authDiag = 'used_authorization'
-      } else if (apikeyHeader && apikeyHeader !== anonKey) {
-        token = apikeyHeader
-        authDiag = 'used_apikey_only'
-      }
+      const token = authHeader.replace(/^Bearer\s+/i, '')
       if (token) {
         const { data: u } = await supabase.auth.getUser(token)
         callerUserId = u?.user?.id ?? null
-        if (!callerUserId) authDiag = `${authDiag}:getUser_null`
       }
-    } catch (e) {
-      authDiag = `error:${(e as Error)?.message ?? 'unknown'}`
-    }
+    } catch (_e) { /* anonymous fallback */ }
 
     let callerIsSuperadmin = false
     let callerOrgMemberships: string[] = []
@@ -74,17 +56,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Lightweight diagnostic so production 403s are traceable in logs.
-    console.log(JSON.stringify({
-      tag: 'admin-query.auth',
-      action,
-      authDiag,
-      callerUserId,
-      callerIsSuperadmin,
-      orgCount: callerOrgMemberships.length,
-      requestedOrgId,
-    }))
-
     // Final resolved scope used by every "if (targetOrgId)" branch below.
     // - SuperAdmin: trust requestedOrgId verbatim (null = global view).
     // - Other roles: must be one of their memberships. If they sent something
@@ -95,12 +66,7 @@ Deno.serve(async (req) => {
       targetOrgId = requestedOrgId
     } else if (requestedOrgId) {
       if (!callerOrgMemberships.includes(requestedOrgId)) {
-        return new Response(JSON.stringify({
-          error: callerUserId
-            ? 'Forbidden: organization not accessible'
-            : 'Unauthorized: missing or invalid auth token',
-          diag: authDiag,
-        }), {
+        return new Response(JSON.stringify({ error: 'Forbidden: organization not accessible' }), {
           status: 403,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })

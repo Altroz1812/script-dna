@@ -5,7 +5,7 @@
 // data here — that bypasses the org scope and leaks cross-tenant data.
 
 import { supabase } from "@/integrations/supabase/client";
-import { readActiveOrgForUser } from "@/contexts/ActiveOrgContext";
+import { readActiveOrgFromStorage } from "@/contexts/ActiveOrgContext";
 
 const PUBLIC_GLOBAL_ACTIONS = new Set<string>([
   // SuperAdmin-only org management — never tenant-scoped
@@ -43,18 +43,7 @@ export async function adminQuery(action: string, params: any = {}): Promise<any>
     !params.__skip_org_filter &&
     params.target_org_id === undefined
   ) {
-    // Resolve current auth user synchronously from the JS SDK cache so we
-    // never inject a target_org_id stored by a previous user.
-    let currentUserId: string | null = null;
-    try {
-      // @ts-ignore — internal sync accessor on supabase-js v2
-      currentUserId = (supabase.auth as any)?.currentSession?.user?.id ?? null;
-    } catch { /* ignore */ }
-    if (!currentUserId) {
-      const { data } = await supabase.auth.getSession();
-      currentUserId = data.session?.user?.id ?? null;
-    }
-    const active = readActiveOrgForUser(currentUserId);
+    const active = readActiveOrgFromStorage();
     // string => scoped, null => SuperAdmin global view (pass through),
     // undefined => no selection yet (let edge function 403 non-SA).
     if (typeof active === "string") {
@@ -68,26 +57,9 @@ export async function adminQuery(action: string, params: any = {}): Promise<any>
     params = rest;
   }
 
-  // Always send the current user's access token explicitly so the edge
-  // function can resolve identity (and therefore role). Some hosting
-  // environments / custom domains otherwise end up sending only the
-  // anon publishable key, which makes the function treat a SuperAdmin
-  // as anonymous and 403 tenant-scoped requests.
-  let accessToken: string | null = null;
-  try {
-    // @ts-ignore — internal sync cache
-    accessToken = (supabase.auth as any)?.currentSession?.access_token ?? null;
-  } catch { /* ignore */ }
-  if (!accessToken) {
-    const { data: s } = await supabase.auth.getSession();
-    accessToken = s.session?.access_token ?? null;
-  }
-
-  const invokeOpts: any = { body: { action, params } };
-  if (accessToken) {
-    invokeOpts.headers = { Authorization: `Bearer ${accessToken}` };
-  }
-  const { data, error } = await supabase.functions.invoke("admin-query", invokeOpts);
+  const { data, error } = await supabase.functions.invoke("admin-query", {
+    body: { action, params },
+  });
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
   return data;
