@@ -6,83 +6,96 @@
 
 @layer base {
   :root {
-    /* Vibrant 2025 Palette — Purple / Coral / Mint */
-    --background: 240 15% 5%;
-    --foreground: 220 20% 95%;
+    /* AuraPen 2026 — Royal Blue + Gold on Deep Navy */
+    --background: 226 47% 8%;          /* #0B1020 */
+    --foreground: 210 40% 98%;         /* #F8FAFC */
 
-    --card: 240 12% 8%;
-    --card-foreground: 220 20% 95%;
+    --card: 220 26% 12%;               /* #111827 */
+    --card-foreground: 210 40% 98%;
 
-    --popover: 240 12% 10%;
-    --popover-foreground: 220 20% 95%;
+    --popover: 220 26% 12%;
+    --popover-foreground: 210 40% 98%;
 
-    --primary: 265 90% 65%;
+    --primary: 217 91% 60%;            /* #3B82F6 royal blue */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 240 12% 14%;
-    --secondary-foreground: 220 20% 80%;
+    --secondary: 220 20% 18%;
+    --secondary-foreground: 210 30% 90%;
 
-    --muted: 240 12% 12%;
-    --muted-foreground: 240 10% 50%;
+    --muted: 220 20% 14%;
+    --muted-foreground: 215 16% 65%;
 
-    --accent: 165 80% 45%;
-    --accent-foreground: 240 15% 5%;
+    --accent: 43 65% 52%;              /* #D4AF37 gold */
+    --accent-foreground: 226 47% 8%;
 
-    --coral: 12 90% 65%;
-    --coral-foreground: 0 0% 100%;
+    /* Legacy alias — coral now mapped to gold so existing classes stay on-brand */
+    --coral: 43 65% 52%;
+    --coral-foreground: 226 47% 8%;
+
+    /* Cyan glow accent */
+    --glow: 195 100% 50%;              /* #00BFFF */
+    --glow-foreground: 226 47% 8%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 210 20% 98%;
 
-    --success: 155 70% 42%;
+    --success: 155 65% 45%;
     --success-foreground: 210 20% 98%;
 
     --warning: 38 92% 50%;
     --warning-foreground: 220 14% 6%;
 
-    --border: 240 12% 18%;
-    --input: 240 12% 14%;
-    --ring: 265 90% 65%;
+    --border: 220 14% 28%;             /* #374151 */
+    --input: 220 20% 16%;
+    --ring: 217 91% 60%;
 
     --radius: 0.75rem;
 
     /* Custom Design Tokens */
-    --canvas-bg: 240 15% 4%;
-    --canvas-grid: 240 12% 15%;
-    --metrics-panel: 240 12% 7%;
-    --stroke-primary: 265 90% 65%;
-    --stroke-accent: 165 80% 45%;
+    --canvas-bg: 226 47% 6%;
+    --canvas-grid: 220 20% 16%;
+    --metrics-panel: 220 26% 10%;
+    --stroke-primary: 217 91% 60%;
+    --stroke-accent: 43 65% 52%;
 
-    /* 2025 Gradients */
-    --gradient-panel: linear-gradient(180deg, hsl(240 12% 10%) 0%, hsl(240 12% 6%) 100%);
-    --gradient-glow: radial-gradient(ellipse at center, hsl(265 90% 65% / 0.12) 0%, transparent 70%);
-    --gradient-accent: linear-gradient(135deg, hsl(265 90% 65%) 0%, hsl(12 90% 65%) 50%, hsl(165 80% 45%) 100%);
-    --gradient-purple-coral: linear-gradient(135deg, hsl(265 90% 65%) 0%, hsl(12 90% 65%) 100%);
-    --gradient-coral-mint: linear-gradient(135deg, hsl(12 90% 65%) 0%, hsl(165 80% 45%) 100%);
-    --gradient-mint-purple: linear-gradient(135deg, hsl(165 80% 45%) 0%, hsl(265 90% 65%) 100%);
-    --gradient-glass: linear-gradient(135deg, hsl(240 12% 12% / 0.6) 0%, hsl(240 12% 8% / 0.4) 100%);
+    /* 2026 Gradients — blue · cyan · gold */
+    --gradient-panel: linear-gradient(180deg, hsl(220 26% 14%) 0%, hsl(220 26% 9%) 100%);
+    --gradient-glow: radial-gradient(ellipse at center, hsl(217 91% 60% / 0.18) 0%, transparent 70%);
+    --gradient-accent: linear-gradient(135deg, hsl(217 91% 60%) 0%, hsl(195 100% 50%) 50%, hsl(43 65% 52%) 100%);
+    --gradient-blue-glow: linear-gradient(135deg, hsl(217 91% 60%) 0%, hsl(195 100% 50%) 100%);
+    --gradient-gold: linear-gradient(135deg, hsl(43 65% 52%) 0%, hsl(43 80% 70%) 100%);
+    --gradient-gold-blue: linear-gradient(135deg, hsl(43 65% 52%) 0%, hsl(217 91% 60%) 100%);
+    /* Legacy aliases kept for any class still referencing them */
+    --gradient-purple-coral: var(--gradient-blue-glow);
+    --gradient-coral-mint: var(--gradient-gold);
+    --gradient-mint-purple: var(--gradient-gold-blue);
+    --gradient-glass: linear-gradient(135deg, hsl(220 26% 14% / 0.65) 0%, hsl(220 26% 9% / 0.45) 100%);
 
     /* Shadows */
-    --shadow-panel: 0 4px 24px -4px hsl(240 15% 0% / 0.6);
-    --shadow-glow-purple: 0 0 40px hsl(265 90% 65% / 0.15);
-    --shadow-glow-coral: 0 0 40px hsl(12 90% 65% / 0.15);
-    --shadow-glow-mint: 0 0 40px hsl(165 80% 45% / 0.15);
-    --shadow-inset: inset 0 1px 0 hsl(240 12% 20% / 0.5);
-    --shadow-depth: 0 20px 60px -15px hsl(265 90% 65% / 0.2), 0 10px 30px -10px hsl(0 0% 0% / 0.4);
+    --shadow-panel: 0 4px 24px -4px hsl(226 47% 2% / 0.7);
+    --shadow-glow-primary: 0 0 40px hsl(217 91% 60% / 0.25);
+    --shadow-glow-gold: 0 0 32px hsl(43 65% 52% / 0.25);
+    --shadow-glow-cyan: 0 0 40px hsl(195 100% 50% / 0.30);
+    /* Legacy alias */
+    --shadow-glow-purple: var(--shadow-glow-primary);
+    --shadow-glow-coral: var(--shadow-glow-gold);
+    --shadow-glow-mint: var(--shadow-glow-cyan);
+    --shadow-inset: inset 0 1px 0 hsl(220 20% 30% / 0.5);
+    --shadow-depth: 0 20px 60px -15px hsl(217 91% 60% / 0.25), 0 10px 30px -10px hsl(226 47% 2% / 0.5);
 
-    --sidebar-background: 240 12% 6%;
-    --sidebar-foreground: 220 20% 94%;
-    --sidebar-primary: 265 90% 65%;
+    --sidebar-background: 226 40% 7%;
+    --sidebar-foreground: 210 30% 92%;
+    --sidebar-primary: 217 91% 60%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 12% 14%;
-    --sidebar-accent-foreground: 220 20% 94%;
-    --sidebar-border: 240 12% 14%;
-    --sidebar-ring: 265 90% 65%;
+    --sidebar-accent: 220 26% 14%;
+    --sidebar-accent-foreground: 210 30% 92%;
+    --sidebar-border: 220 20% 16%;
+    --sidebar-ring: 217 91% 60%;
   }
 
   .dark {
-    --background: 240 15% 5%;
-    --foreground: 220 20% 95%;
+    --background: 226 47% 8%;
+    --foreground: 210 40% 98%;
   }
 }
 
@@ -152,7 +165,7 @@
 
   .canvas-container {
     @apply bg-canvas rounded-xl border border-border/50 overflow-hidden;
-    box-shadow: var(--shadow-panel), var(--shadow-glow-purple);
+    box-shadow: var(--shadow-panel), var(--shadow-glow-primary);
   }
 
   .toolbar-button {
@@ -242,10 +255,10 @@
   /* Morphing gradient background */
   .morphing-gradient {
     background: linear-gradient(-45deg, 
-      hsl(265 90% 65% / 0.15), 
-      hsl(12 90% 65% / 0.1), 
-      hsl(165 80% 45% / 0.1), 
-      hsl(265 90% 65% / 0.15)
+      hsl(217 91% 60% / 0.14),
+      hsl(195 100% 50% / 0.10),
+      hsl(43 65% 52% / 0.10),
+      hsl(217 91% 60% / 0.14)
     );
     background-size: 400% 400%;
     animation: gradient-morph 15s ease infinite;
