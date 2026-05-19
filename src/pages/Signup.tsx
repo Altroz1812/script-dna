@@ -5,10 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { GraduationCap, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { PasswordStrengthMeter } from '@/components/auth/PasswordStrengthMeter';
 import { sanitizeEmail, checkRateLimit, formatRetryTime, checkPasswordStrength } from '@/lib/security';
+import aurapenLogo from '@/assets/aurapen-logo.png';
 
 function getErrorMessage(err: any): string {
   const msg = err?.message ?? '';
@@ -63,8 +64,9 @@ export default function Signup() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md border-border/50">
         <CardHeader className="text-center space-y-3">
-          <div className="mx-auto w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-            <GraduationCap className="w-6 h-6 text-primary-foreground" />
+          <div className="mx-auto w-16 h-16 flex items-center justify-center relative">
+            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary/30 to-gold/25 blur-xl" />
+            <img src={aurapenLogo} alt="AuraPen" className="w-16 h-16 object-contain relative z-10" />
           </div>
           <CardTitle className="text-xl">Create an account</CardTitle>
           <CardDescription>Get started with AuraPen</CardDescription>
