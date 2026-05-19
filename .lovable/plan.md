@@ -1,67 +1,62 @@
 ## Goal
-Prevent any teacher or student from being double-booked across batches that have overlapping schedule slots. Validate proactively at every point where a conflict could be introduced: schedule-slot creation, teacher assignment, and student enrollment.
+Capture a start date + start time + end time (and weekly recurrence days) inside the **Create Batch** dialog so we can:
+1. Auto-create the batch's first schedule slot in one shot (no separate Schedule page step).
+2. Run the existing teacher/student conflict checks **before** the batch is created — preventing double-booking at the source.
 
-## Why this shape (data model reality)
-- `batches` rows do NOT carry date/time. Time lives in `schedules` (batch_id, date, day_of_week, start_time, end_time).
-- Conflicts therefore must be computed by joining a batch's schedule rows against other batches' schedule rows where the teacher or student overlaps.
-- `SchedulePage` already runs room/time overlap detection. We extend the same overlap primitive to teacher/student dimensions.
+All prior conflict-validation work (teacher assign, student add, schedule slot, manage flows) stays intact and continues to work.
 
-## Active-batch definition
-Treat a batch as "active" if it has at least one schedule slot with `date >= today` (or any `day_of_week` slot with no date, since recurring). No schema change. (We can add an `is_active` flag later if admins ask for archive behavior.)
+## UX — Create Batch dialog (`src/pages/BatchesPage.tsx`)
+Extend the existing dialog with new required fields below "Max Students":
+
+```
+Course               [select]
+Batch Name           [text]
+Max Students         [number]
+─── Schedule ───
+Start Date           [date picker]            // first session date
+Start Time           [time]   End Time [time] // e.g. 16:00 – 17:00
+Repeats Weekly On    [Mon Tue Wed Thu Fri Sat Sun]  // multi-select chips, default = day-of-week of Start Date
+(Optional) Assign Teacher [select - reuse list_teachers]
+```
+
+Validation (client-side, before submit):
+- All schedule fields required.
+- `end_time > start_time`.
+- `start_date >= today`.
+- At least one weekday selected.
+
+On submit:
+1. If a teacher is picked → call `check_slot_conflicts({ teacher_id, date, day_of_week, start_time, end_time })` (new edge action, see below). Show inline red banner with other-batch name if any conflict; block save.
+2. Create the batch via `batchService.createBatch(...)`.
+3. Immediately bulk-insert one schedule row per selected weekday using existing `scheduleService.bulkCreateSchedules` — the row matching the Start Date keeps the date; recurring weekday-only rows have `date = null`.
+4. If a teacher was picked, `batchService.assignTeacher(newBatchId, teacherId)`.
+5. Toast success → close dialog → invalidate `['batches']` and `['schedules']`.
+
+Failure handling: if step 3 or 4 fails after batch insert, rollback by deleting the new batch (call `deleteBatch`) so partial state isn't left behind.
 
 ## Backend — `supabase/functions/admin-query/index.ts`
-Add three read-only actions used by the UI for live validation:
+Add **one** new read action (reuses existing overlap primitive):
 
-1. `check_teacher_conflicts({ teacher_id, batch_id })`
-   - Loads all schedules of `batch_id`.
-   - Loads all schedules of other batches where `teacher_id` matches.
-   - Returns `[{ date|day_of_week, start_time, end_time, other_batch_name }]` for every overlap.
+`check_slot_conflicts({ teacher_id?, student_ids?: string[], date?, day_of_week, start_time, end_time, exclude_batch_id? })`
+- Loads schedules where `(teacher matches via batches.teacher_id) OR (student in batch_students)`, scoped to same `date` or same `day_of_week`.
+- Returns `{ teacher_conflicts: [...], student_conflicts: [...] }`.
+- `exclude_batch_id` lets the existing teacher/student dialogs keep using the same action without false self-matches.
 
-2. `check_student_conflicts({ student_id, batch_id })`
-   - Loads all schedules of `batch_id`.
-   - Loads all schedules of other batches the student is in (`batch_students`).
-   - Returns overlap list with `other_batch_name`.
+The existing `check_teacher_conflicts` and `check_student_conflicts` actions remain — no breaking changes.
 
-3. `check_slot_conflicts({ batch_id, date|day_of_week, start_time, end_time })`
-   - Used at schedule-slot creation. Returns separate `teacher_conflicts` and `student_conflicts` arrays (so the SchedulePage can show both before insert).
-
-Overlap rule (matches existing SchedulePage logic): `a.start < b.end AND b.start < a.end`, scoped by same `date` if both have one, else same `day_of_week`.
-
-## Frontend changes
-
-### `src/pages/BatchesPage.tsx` — Assign Teacher Dialog
-- On `selectedTeacher` change (and on Save), call `check_teacher_conflicts`.
-- If conflicts → show inline red banner with message:
-  *"Teacher already has another batch assigned for the selected time slot. Please choose another teacher or time slot."* plus a list (date/day, time, other batch name).
-- Disable the Save button while conflicts exist. Bypass only via explicit "Override (Admin)" link (off by default).
-
-### `src/pages/BatchesPage.tsx` — Manage Students Dialog
-- Before calling `addStudent`, run `check_student_conflicts(selectedStudent, batch.id)`.
-- If conflicts → show warning dialog:
-  *"One or more students are already assigned to another batch during the selected time slot."* with details. Block add (Admin override link allowed).
-- Also annotate the student `<Select>` options that have any conflict with a small "⚠ conflict" suffix so the admin sees it before picking.
-
-### `src/pages/SchedulePage.tsx` — Schedule Slot Creation
-- Extend existing `conflictsFor()` to also surface teacher and student overlaps via `check_slot_conflicts`.
-- Show two extra sections inside the existing conflict banner: "Teacher conflicts" and "Student conflicts". Auto-schedule and Manual flows both blocked when any conflict exists.
-- Friendly copy reused from above.
-
-### Shared helper
-`src/lib/conflicts.ts` — pure `overlaps(aStart, aEnd, bStart, bEnd)` + `formatConflictMessage(list)` for consistent wording.
-
-## UX details
-- All conflict messages are non-technical, name the other batch + slot, and offer the resolution ("choose another teacher / time / student").
-- Validation runs on selection change (debounced 300ms) AND on submit — submit is the hard gate.
-- Loading state shown while the check is in flight; never lets the user submit during fetch.
-
-## Out of scope
-- Schema flag `is_active` on batches (can add later if requested).
-- Editing existing schedules — only creation paths. (Edit can be added with the same primitive when needed.)
-- Notifying affected teachers/students.
+## Service layer — `src/services/api/courseService.ts`
+- Add `batchService.checkSlotConflicts(args)` wrapper.
+- Extend `createBatch` signature is unchanged; new schedule rows go through the existing `scheduleService.bulkCreateSchedules`.
 
 ## Files touched
-- `supabase/functions/admin-query/index.ts` — 3 new read actions.
-- `src/lib/conflicts.ts` — new helper.
-- `src/services/api/courseService.ts` — wrappers for the 3 new actions.
-- `src/pages/BatchesPage.tsx` — teacher + student dialogs.
-- `src/pages/SchedulePage.tsx` — extend conflict banner.
+- `src/pages/BatchesPage.tsx` — extend Create Batch dialog + handler.
+- `src/services/api/courseService.ts` — add `checkSlotConflicts` wrapper.
+- `supabase/functions/admin-query/index.ts` — add `check_slot_conflicts` action.
+
+## Out of scope
+- Editing/back-filling schedule slots on existing batches (still done on Schedule page).
+- Multiple time slots per day in one dialog (single slot only; extra slots via Schedule page as today).
+- Room/location field in this dialog (existing schedule UI keeps that).
+
+## Why this preserves previous changes
+The teacher-dialog, student-dialog, and Schedule-page conflict banners introduced earlier remain in place and untouched. The new action only adds an additional entry-point check; existing actions keep their callers.
