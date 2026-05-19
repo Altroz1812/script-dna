@@ -16,6 +16,7 @@ const PUBLIC_GLOBAL_ACTIONS = new Set<string>([
   "list_org_members",
   "add_org_member",
   "remove_org_member",
+  "set_user_organizations",
   // Parent/child mapping is global
   "list_parent_children",
   "add_parent_child",

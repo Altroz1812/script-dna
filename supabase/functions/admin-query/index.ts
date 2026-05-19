@@ -161,7 +161,17 @@ Deno.serve(async (req) => {
         const { data: roles } = await supabase.from('user_roles').select('user_id, role')
         const roleMap: Record<string, string> = {}
         for (const r of roles ?? []) roleMap[r.user_id] = r.role
-        result = (profiles ?? []).map((p: any) => ({ ...p, role: roleMap[p.user_id] || 'student' }))
+        const { data: memberships } = await supabase.from('organization_members').select('user_id, organization_id')
+        const orgMap: Record<string, string[]> = {}
+        for (const m of memberships ?? []) {
+          if (!orgMap[m.user_id]) orgMap[m.user_id] = []
+          orgMap[m.user_id].push(m.organization_id)
+        }
+        result = (profiles ?? []).map((p: any) => ({
+          ...p,
+          role: roleMap[p.user_id] || 'student',
+          organization_ids: orgMap[p.user_id] || [],
+        }))
         break
       }
       case 'update_user': {
@@ -240,6 +250,36 @@ Deno.serve(async (req) => {
         const { error } = await supabase.from('organization_members').delete().eq('organization_id', organization_id).eq('user_id', user_id)
         if (error) throw error
         result = { success: true }
+        break
+      }
+      case 'set_user_organizations': {
+        // Replace the full set of org memberships for a user.
+        const { user_id, organization_ids } = params as { user_id: string; organization_ids: string[] }
+        if (!user_id || !Array.isArray(organization_ids)) {
+          throw new Error('user_id and organization_ids[] are required')
+        }
+        const { data: current } = await supabase
+          .from('organization_members')
+          .select('organization_id')
+          .eq('user_id', user_id)
+        const currentIds = new Set((current ?? []).map((r: any) => r.organization_id))
+        const nextIds = new Set(organization_ids)
+        const toAdd = [...nextIds].filter((id) => !currentIds.has(id))
+        const toRemove = [...currentIds].filter((id) => !nextIds.has(id))
+        if (toRemove.length > 0) {
+          const { error } = await supabase
+            .from('organization_members')
+            .delete()
+            .eq('user_id', user_id)
+            .in('organization_id', toRemove)
+          if (error) throw error
+        }
+        if (toAdd.length > 0) {
+          const rows = toAdd.map((organization_id) => ({ user_id, organization_id }))
+          const { error } = await supabase.from('organization_members').insert(rows)
+          if (error) throw error
+        }
+        result = { success: true, added: toAdd.length, removed: toRemove.length }
         break
       }
 
