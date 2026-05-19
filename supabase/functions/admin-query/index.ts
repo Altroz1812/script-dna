@@ -640,14 +640,8 @@ Deno.serve(async (req) => {
                 .from('batch_students')
                 .select('student_id')
                 .in('batch_id', batchIds)
-              const enrolledProfileIds = [...new Set((enrollRows ?? []).map((r: any) => r.student_id))]
-              if (enrolledProfileIds.length > 0) {
-                const { data: enrolledProfiles } = await supabase
-                  .from('profiles')
-                  .select('id, user_id')
-                  .in('id', enrolledProfileIds)
-                for (const p of enrolledProfiles ?? []) orgStudentIds.add(p.user_id)
-              }
+              // batch_students.student_id stores auth user_id
+              for (const r of enrollRows ?? []) orgStudentIds.add(r.student_id)
             }
             // Also include students who are explicit org members (e.g. created in org but not yet enrolled)
             const { data: members } = await supabase
@@ -699,11 +693,10 @@ Deno.serve(async (req) => {
 
         // list_students_with_batches
         const { data: profiles } = await supabase.from('profiles').select('*').in('user_id', ids)
-        const profileIds = (profiles ?? []).map((p: any) => p.id)
         const { data: enrollments } = await supabase
           .from('batch_students')
           .select('student_id, batch_id, batches(name, organization_id, courses(name))')
-          .in('student_id', profileIds)
+          .in('student_id', ids)
         const enrollMap: Record<string, any[]> = {}
         for (const e of enrollments ?? []) {
           // Restrict enrollments to the scoped org (admin's org, or SuperAdmin's picked org)
@@ -711,7 +704,7 @@ Deno.serve(async (req) => {
           if (!enrollMap[e.student_id]) enrollMap[e.student_id] = []
           enrollMap[e.student_id].push(e)
         }
-        result = (profiles ?? []).map((p: any) => ({ ...p, enrollments: enrollMap[p.id] || [] }))
+        result = (profiles ?? []).map((p: any) => ({ ...p, enrollments: enrollMap[p.user_id] || [] }))
         break
       }
 
@@ -827,11 +820,12 @@ Deno.serve(async (req) => {
         const sIds = (data ?? []).map((d: any) => d.student_id)
         let profs: any[] = []
         if (sIds.length) {
-          const { data: p } = await supabase.from('profiles').select('id, user_id, display_name, email').in('id', sIds)
+          // batch_students.student_id stores the auth user_id
+          const { data: p } = await supabase.from('profiles').select('id, user_id, display_name, email').in('user_id', sIds)
           profs = p ?? []
         }
         const pm: Record<string, any> = {}
-        for (const p of profs) pm[p.id] = p
+        for (const p of profs) pm[p.user_id] = p
         result = (data ?? []).map((d: any) => ({ ...d, profile: pm[d.student_id] || null }))
         break
       }
@@ -840,22 +834,23 @@ Deno.serve(async (req) => {
         if (!params?.batch_id || !params?.student_id) {
           throw new Error('batch_id and student_id are required')
         }
-        let studentProfileId = params.student_id
+        // Accept either profiles.user_id or profiles.id; ALWAYS persist user_id
+        // (auth uid) — that's what every student-side RLS policy filters on.
         let { data: studentProfile } = await supabase
           .from('profiles')
           .select('id, user_id')
-          .eq('id', params.student_id)
+          .eq('user_id', params.student_id)
           .maybeSingle()
         if (!studentProfile) {
-          const { data: byUserId } = await supabase
+          const { data: byProfileId } = await supabase
             .from('profiles')
             .select('id, user_id')
-            .eq('user_id', params.student_id)
+            .eq('id', params.student_id)
             .maybeSingle()
-          studentProfile = byUserId
+          studentProfile = byProfileId
         }
         if (!studentProfile) throw new Error('Student profile not found')
-        studentProfileId = studentProfile.id
+        const studentUserId = studentProfile.user_id
 
         const { data: batchInfo } = await supabase
           .from('batches')
@@ -883,18 +878,27 @@ Deno.serve(async (req) => {
           .from('batch_students')
           .select('id')
           .eq('batch_id', params.batch_id)
-          .eq('student_id', studentProfileId)
+          .eq('student_id', studentUserId)
           .maybeSingle()
         if (existing) throw new Error('Student is already enrolled in this batch')
         const { error } = await supabase
           .from('batch_students')
-          .insert({ batch_id: params.batch_id, student_id: studentProfileId })
+          .insert({ batch_id: params.batch_id, student_id: studentUserId })
         if (error) throw error
         result = { success: true }
         break
       }
       case 'remove_batch_student': {
-        const { error } = await supabase.from('batch_students').delete().eq('batch_id', params.batch_id).eq('student_id', params.student_id)
+        // Accept either user_id or profile.id — normalize to user_id
+        let sid = params.student_id
+        const { data: byUser } = await supabase
+          .from('profiles').select('user_id').eq('user_id', sid).maybeSingle()
+        if (!byUser) {
+          const { data: byProf } = await supabase
+            .from('profiles').select('user_id').eq('id', sid).maybeSingle()
+          if (byProf?.user_id) sid = byProf.user_id
+        }
+        const { error } = await supabase.from('batch_students').delete().eq('batch_id', params.batch_id).eq('student_id', sid)
         if (error) throw error
         result = { success: true }
         break
@@ -1555,9 +1559,19 @@ Deno.serve(async (req) => {
 
         if (action === 'add_batch_student') {
           await assertBatchInScope(params.batch_id)
+          // Normalize student_id to auth user_id
+          let sid = params.student_id
+          const { data: byUser } = await supabase
+            .from('profiles').select('user_id').eq('user_id', sid).maybeSingle()
+          if (!byUser) {
+            const { data: byProf } = await supabase
+              .from('profiles').select('user_id').eq('id', sid).maybeSingle()
+            if (!byProf?.user_id) throw new Error('Student profile not found')
+            sid = byProf.user_id
+          }
           const { error } = await supabase
             .from('batch_students')
-            .insert({ batch_id: params.batch_id, student_id: params.student_id })
+            .insert({ batch_id: params.batch_id, student_id: sid })
           if (error) throw error
           result = { success: true }
           break
@@ -1565,11 +1579,19 @@ Deno.serve(async (req) => {
 
         if (action === 'remove_batch_student') {
           await assertBatchInScope(params.batch_id)
+          let sid = params.student_id
+          const { data: byUser } = await supabase
+            .from('profiles').select('user_id').eq('user_id', sid).maybeSingle()
+          if (!byUser) {
+            const { data: byProf } = await supabase
+              .from('profiles').select('user_id').eq('id', sid).maybeSingle()
+            if (byProf?.user_id) sid = byProf.user_id
+          }
           const { error } = await supabase
             .from('batch_students')
             .delete()
             .eq('batch_id', params.batch_id)
-            .eq('student_id', params.student_id)
+            .eq('student_id', sid)
           if (error) throw error
           result = { success: true }
           break
@@ -1733,12 +1755,21 @@ Deno.serve(async (req) => {
             status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           })
         }
-        // student_id here is profiles.id (matches batch_students.student_id)
+        // batch_students.student_id is the auth user_id. Accept either user_id
+        // or profiles.id from the caller and normalize.
         const { student_id, batch_id } = params as { student_id?: string; batch_id?: string }
         if (!student_id || !batch_id) { result = []; break }
+        let sid = student_id
+        const { data: byUser } = await supabase
+          .from('profiles').select('user_id').eq('user_id', sid).maybeSingle()
+        if (!byUser) {
+          const { data: byProf } = await supabase
+            .from('profiles').select('user_id').eq('id', sid).maybeSingle()
+          if (byProf?.user_id) sid = byProf.user_id
+        }
         const { data: enrollments } = await supabase
           .from('batch_students').select('batch_id')
-          .eq('student_id', student_id).neq('batch_id', batch_id)
+          .eq('student_id', sid).neq('batch_id', batch_id)
         const otherIds = [...new Set((enrollments ?? []).map((e: any) => e.batch_id))]
         if (!otherIds.length) { result = []; break }
         const [{ data: otherBatches }, { data: mySch }, { data: otherSch }] = await Promise.all([
@@ -1826,7 +1857,18 @@ Deno.serve(async (req) => {
 
         let student_conflicts: any[] = []
         if (Array.isArray(student_ids) && student_ids.length) {
-          let q = supabase.from('batch_students').select('batch_id, student_id').in('student_id', student_ids)
+          // Normalize: accept profiles.id or user_id, persist user_id in DB.
+          const { data: pByUser } = await supabase
+            .from('profiles').select('user_id').in('user_id', student_ids)
+          const userIds = new Set<string>((pByUser ?? []).map((p: any) => p.user_id))
+          const unknown = student_ids.filter((id) => !userIds.has(id))
+          if (unknown.length) {
+            const { data: pByProf } = await supabase
+              .from('profiles').select('user_id').in('id', unknown)
+            for (const p of pByProf ?? []) userIds.add(p.user_id)
+          }
+          const normalizedIds = [...userIds]
+          let q = supabase.from('batch_students').select('batch_id, student_id').in('student_id', normalizedIds)
           if (exclude_batch_id) q = q.neq('batch_id', exclude_batch_id)
           const { data: enrollments } = await q
           const ids = [...new Set((enrollments ?? []).map((e: any) => e.batch_id))]

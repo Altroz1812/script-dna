@@ -367,8 +367,9 @@ export default function BatchesPage() {
     </div>
   );
 
+  // batch_students.student_id stores the auth user_id
   const enrolledIds = new Set(enrolledStudents.map(e => e.student_id));
-  const availableStudents = students.filter(s => !enrolledIds.has(s.id));
+  const availableStudents = students.filter(s => !enrolledIds.has(s.user_id));
 
   return (
     <div className="p-6 space-y-6">
@@ -599,7 +600,7 @@ export default function BatchesPage() {
                 <SelectTrigger className="flex-1"><SelectValue placeholder="Select student to add" /></SelectTrigger>
                 <SelectContent>
                   {availableStudents.map(s => (
-                    <SelectItem key={s.id} value={s.id}>
+                    <SelectItem key={s.user_id} value={s.user_id}>
                       {s.display_name || s.email || s.id}
                     </SelectItem>
                   ))}
