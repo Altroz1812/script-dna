@@ -6,11 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { GraduationCap, Loader2, User, ShieldAlert } from 'lucide-react';
+import { Loader2, User, ShieldAlert } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ROLE_LABELS, type AppRole } from '@/types/roles';
 import { checkRateLimit, resetRateLimit, formatRetryTime, sanitizeEmail } from '@/lib/security';
 import { MorphingBlob } from '@/components/ui/morphing-blob';
+import aurapenLogo from '@/assets/aurapen-logo.png';
 
 const DEMO_ACCOUNTS: { email: string; password: string; role: AppRole; name: string; org?: string }[] = [
   { email: 'superadmin@demo.com', password: 'Demo1234!', role: 'superadmin', name: 'Super Admin', org: 'Platform' },
@@ -121,12 +122,12 @@ export default function Login() {
         <Card className="glass-panel border-white/[0.12]">
           <CardHeader className="text-center space-y-3">
             <motion.div
-              className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-primary via-[hsl(var(--glow))] to-gold flex items-center justify-center shadow-[0_0_40px_-8px_hsl(var(--glow)/0.55)] relative"
-              animate={{ rotate: [0, 3, -3, 0] }}
+              className="mx-auto w-20 h-20 flex items-center justify-center relative"
+              animate={{ y: [0, -4, 0] }}
               transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
             >
-              <div className="absolute inset-[-3px] rounded-2xl bg-gradient-to-br from-primary via-[hsl(var(--glow))] to-gold opacity-45 blur-md" />
-              <GraduationCap className="w-7 h-7 text-white relative z-10" />
+              <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary/40 via-[hsl(var(--glow)/0.35)] to-gold/30 blur-2xl" />
+              <img src={aurapenLogo} alt="AuraPen" className="w-20 h-20 object-contain relative z-10 drop-shadow-[0_0_18px_hsl(var(--glow)/0.45)]" />
             </motion.div>
             <CardTitle className="text-xl font-display">Welcome back</CardTitle>
             <CardDescription>Sign in to AuraPen</CardDescription>
