@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useActiveOrg } from '@/contexts/ActiveOrgContext';
 import { useRBAC } from '@/hooks/useRBAC';
 import { courseService, batchService, type Course, type Batch, type ConflictInfo } from '@/services/api/courseService';
+import { scheduleService } from '@/services/api/courseService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -53,6 +54,15 @@ export default function BatchesPage() {
   const [batchName, setBatchName] = useState('');
   const [selectedCourse, setSelectedCourse] = useState('');
   const [maxStudents, setMaxStudents] = useState(25);
+  // create batch schedule fields
+  const [startDate, setStartDate] = useState('');
+  const [startTime, setStartTime] = useState('16:00');
+  const [endTime, setEndTime] = useState('17:00');
+  const [weekdays, setWeekdays] = useState<number[]>([]); // 0=Sun..6=Sat
+  const [createTeacher, setCreateTeacher] = useState<string>('');
+  const [createTeacherList, setCreateTeacherList] = useState<{ user_id: string; display_name: string | null; email: string | null }[]>([]);
+  const [createConflicts, setCreateConflicts] = useState<ConflictInfo[]>([]);
+  const [checkingCreate, setCheckingCreate] = useState(false);
 
   // edit batch dialog
   const [editBatch, setEditBatch] = useState<Batch | null>(null);
@@ -95,15 +105,58 @@ export default function BatchesPage() {
   };
 
   const createMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const orgId = activeOrgId ?? profile?.organizationId;
       if (!orgId) throw new Error('Pick an organization first');
-      return batchService.createBatch(orgId, selectedCourse, batchName.trim(), maxStudents);
+      const dayOfStart = new Date(startDate + 'T00:00:00').getDay();
+      const days = weekdays.length ? weekdays : [dayOfStart];
+
+      // Pre-flight conflict check against teacher (if picked)
+      if (createTeacher && createTeacher !== '__none__') {
+        const { teacher_conflicts } = await batchService.checkSlotConflicts({
+          teacher_id: createTeacher,
+          date: startDate,
+          day_of_week: dayOfStart,
+          start_time: startTime,
+          end_time: endTime,
+        });
+        if (teacher_conflicts.length) {
+          setCreateConflicts(teacher_conflicts);
+          throw new Error('Selected teacher already has another batch in this time slot. Pick another teacher or time.');
+        }
+      }
+
+      const batch = await batchService.createBatch(orgId, selectedCourse, batchName.trim(), maxStudents);
+      try {
+        const rows = days.map((dow) => ({
+          batch_id: batch.id,
+          title: batchName.trim(),
+          day_of_week: dow,
+          start_time: startTime,
+          end_time: endTime,
+          room: null,
+          date: dow === dayOfStart ? startDate : (null as any),
+          organization_id: orgId,
+        }));
+        await scheduleService.bulkCreateSchedules(rows as any);
+        if (createTeacher && createTeacher !== '__none__') {
+          await batchService.assignTeacher(batch.id, createTeacher);
+        }
+      } catch (err) {
+        // Rollback batch if schedule/teacher assignment fails
+        try { await batchService.deleteBatch(batch.id); } catch (_) {}
+        throw err;
+      }
+      return batch;
     },
     onSuccess: () => {
       toast.success('Batch created');
-      setBatchName(''); setSelectedCourse(''); setMaxStudents(25); setOpen(false);
+      setBatchName(''); setSelectedCourse(''); setMaxStudents(25);
+      setStartDate(''); setStartTime('16:00'); setEndTime('17:00'); setWeekdays([]);
+      setCreateTeacher(''); setCreateConflicts([]);
+      setOpen(false);
       invalidate();
+      queryClient.invalidateQueries({ queryKey: ['schedules'] });
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -176,7 +229,52 @@ export default function BatchesPage() {
     if (!batchName.trim()) { toast.error('Batch name is required'); return; }
     if (!selectedCourse) { toast.error('Select a course'); return; }
     if (maxStudents < 1 || maxStudents > 100) { toast.error('Max students must be 1-100'); return; }
+    if (!startDate) { toast.error('Pick a start date'); return; }
+    if (new Date(startDate + 'T00:00:00') < new Date(new Date().toDateString())) {
+      toast.error('Start date cannot be in the past'); return;
+    }
+    if (!startTime || !endTime) { toast.error('Set start & end time'); return; }
+    if (endTime <= startTime) { toast.error('End time must be after start time'); return; }
     createMutation.mutate();
+  };
+
+  // Load teachers list on dialog open
+  const onOpenChange = async (v: boolean) => {
+    setOpen(v);
+    if (v && createTeacherList.length === 0) {
+      try { setCreateTeacherList(await batchService.listTeachers()); } catch (_) {}
+    }
+    if (!v) setCreateConflicts([]);
+  };
+
+  // Live conflict check as user changes slot/teacher
+  const recheckCreateConflicts = async (overrides?: Partial<{ teacher: string; date: string; sTime: string; eTime: string }>) => {
+    const teacher = overrides?.teacher ?? createTeacher;
+    const d = overrides?.date ?? startDate;
+    const s = overrides?.sTime ?? startTime;
+    const e = overrides?.eTime ?? endTime;
+    if (!teacher || teacher === '__none__' || !d || !s || !e || e <= s) {
+      setCreateConflicts([]); return;
+    }
+    setCheckingCreate(true);
+    try {
+      const { teacher_conflicts } = await batchService.checkSlotConflicts({
+        teacher_id: teacher,
+        date: d,
+        day_of_week: new Date(d + 'T00:00:00').getDay(),
+        start_time: s,
+        end_time: e,
+      });
+      setCreateConflicts(teacher_conflicts);
+    } catch (_) {
+      setCreateConflicts([]);
+    } finally {
+      setCheckingCreate(false);
+    }
+  };
+
+  const toggleWeekday = (d: number) => {
+    setWeekdays((prev) => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
   };
 
   const openTeacherDialog = async (batchId: string) => {
