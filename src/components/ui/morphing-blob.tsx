@@ -6,7 +6,7 @@ interface MorphingBlobProps {
   color?: string;
 }
 
-export function MorphingBlob({ className, color = 'hsl(265 90% 65% / 0.15)' }: MorphingBlobProps) {
+export function MorphingBlob({ className, color = 'hsl(217 91% 60% / 0.18)' }: MorphingBlobProps) {
   return (
     <motion.div
       className={cn('absolute rounded-full animate-morph-blob blur-3xl pointer-events-none', className)}

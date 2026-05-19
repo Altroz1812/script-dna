@@ -42,7 +42,7 @@ export function AppHeader() {
   return (
     <header className="h-14 flex items-center justify-between border-b border-white/[0.06] bg-background/60 backdrop-blur-xl px-4 sticky top-0 z-40 relative">
       {/* Gradient bottom line */}
-      <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-primary/40 via-coral/30 to-accent/40" />
+      <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-primary/50 via-[hsl(var(--glow)/0.5)] to-gold/50" />
 
       <div className="flex items-center gap-2">
         <SidebarTrigger />
@@ -51,7 +51,7 @@ export function AppHeader() {
             variant="outline"
             size="sm"
             onClick={() => navigate('/select-organization')}
-            className="ml-2 h-8 gap-2 bg-white/[0.03] border-white/[0.1] hover:border-primary/40"
+            className="ml-2 h-8 gap-2 bg-white/[0.03] border-white/[0.1] hover:border-gold/50 hover:shadow-[0_0_18px_-6px_hsl(var(--accent)/0.5)]"
             title="Switch organization"
           >
             {isSuperAdmin && activeOrgId === null ? (
@@ -76,9 +76,9 @@ export function AppHeader() {
         <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="flex items-center gap-2 h-9 px-2 hover:bg-white/[0.04] group">
-            <Avatar className="h-7 w-7 ring-2 ring-primary/20 group-hover:ring-primary/50 transition-all duration-300">
+            <Avatar className="h-7 w-7 ring-2 ring-primary/25 group-hover:ring-gold/60 transition-all duration-300">
               <AvatarImage src={profile?.avatarUrl} />
-              <AvatarFallback className="text-xs bg-gradient-to-br from-primary/30 to-coral/30 text-primary-foreground font-medium">
+              <AvatarFallback className="text-xs bg-gradient-to-br from-primary/40 to-gold/40 text-primary-foreground font-medium">
                 {initials}
               </AvatarFallback>
             </Avatar>

@@ -29,6 +29,14 @@ export default {
           DEFAULT: "hsl(var(--coral))",
           foreground: "hsl(var(--coral-foreground))",
         },
+        gold: {
+          DEFAULT: "hsl(var(--accent))",
+          foreground: "hsl(var(--accent-foreground))",
+        },
+        glow: {
+          DEFAULT: "hsl(var(--glow))",
+          foreground: "hsl(var(--glow-foreground))",
+        },
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
@@ -124,6 +132,10 @@ export default {
           from: { opacity: "0", transform: "translateY(12px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
+        "glow-pulse-cyan": {
+          "0%, 100%": { boxShadow: "0 0 0 0 hsl(var(--glow) / 0.0)" },
+          "50%": { boxShadow: "0 0 28px 4px hsl(var(--glow) / 0.45)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -136,6 +148,7 @@ export default {
         "shimmer": "shimmer 2s linear infinite",
         "morph-blob": "morph-blob 8s ease-in-out infinite",
         "counter-up": "counter-up 0.5s ease-out",
+        "glow-pulse-cyan": "glow-pulse-cyan 2.4s ease-in-out infinite",
       },
     },
   },

@@ -119,8 +119,7 @@ export function NotificationsBell() {
           <Bell className="h-4 w-4" />
           {unread > 0 && (
             <Badge
-              variant="destructive"
-              className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 text-[10px] flex items-center justify-center rounded-full"
+              className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 text-[10px] flex items-center justify-center rounded-full bg-gold text-[hsl(226_47%_8%)] border-0 shadow-[0_0_10px_hsl(var(--accent)/0.6)]"
             >
               {unread > 9 ? '9+' : unread}
             </Badge>
