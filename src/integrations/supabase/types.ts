@@ -603,23 +603,32 @@ export type Database = {
         Row: {
           attempted_at: string
           email: string
+          error_code: string | null
           id: string
           ip_address: string | null
           success: boolean
+          user_agent: string | null
+          user_id: string | null
         }
         Insert: {
           attempted_at?: string
           email: string
+          error_code?: string | null
           id?: string
           ip_address?: string | null
           success?: boolean
+          user_agent?: string | null
+          user_id?: string | null
         }
         Update: {
           attempted_at?: string
           email?: string
+          error_code?: string | null
           id?: string
           ip_address?: string | null
           success?: boolean
+          user_agent?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -1390,6 +1399,36 @@ export type Database = {
         Update: {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_sessions: {
+        Row: {
+          ended_at: string | null
+          id: string
+          ip_address: string | null
+          last_seen_at: string
+          started_at: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          ended_at?: string | null
+          id?: string
+          ip_address?: string | null
+          last_seen_at?: string
+          started_at?: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          ended_at?: string | null
+          id?: string
+          ip_address?: string | null
+          last_seen_at?: string
+          started_at?: string
+          user_agent?: string | null
           user_id?: string
         }
         Relationships: []
