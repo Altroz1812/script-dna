@@ -1559,9 +1559,19 @@ Deno.serve(async (req) => {
 
         if (action === 'add_batch_student') {
           await assertBatchInScope(params.batch_id)
+          // Normalize student_id to auth user_id
+          let sid = params.student_id
+          const { data: byUser } = await supabase
+            .from('profiles').select('user_id').eq('user_id', sid).maybeSingle()
+          if (!byUser) {
+            const { data: byProf } = await supabase
+              .from('profiles').select('user_id').eq('id', sid).maybeSingle()
+            if (!byProf?.user_id) throw new Error('Student profile not found')
+            sid = byProf.user_id
+          }
           const { error } = await supabase
             .from('batch_students')
-            .insert({ batch_id: params.batch_id, student_id: params.student_id })
+            .insert({ batch_id: params.batch_id, student_id: sid })
           if (error) throw error
           result = { success: true }
           break
@@ -1569,11 +1579,19 @@ Deno.serve(async (req) => {
 
         if (action === 'remove_batch_student') {
           await assertBatchInScope(params.batch_id)
+          let sid = params.student_id
+          const { data: byUser } = await supabase
+            .from('profiles').select('user_id').eq('user_id', sid).maybeSingle()
+          if (!byUser) {
+            const { data: byProf } = await supabase
+              .from('profiles').select('user_id').eq('id', sid).maybeSingle()
+            if (byProf?.user_id) sid = byProf.user_id
+          }
           const { error } = await supabase
             .from('batch_students')
             .delete()
             .eq('batch_id', params.batch_id)
-            .eq('student_id', params.student_id)
+            .eq('student_id', sid)
           if (error) throw error
           result = { success: true }
           break
