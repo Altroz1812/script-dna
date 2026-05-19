@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminQuery } from '@/services/api/adminService';
 import { batchService, scheduleService, type Batch } from '@/services/api/courseService';
@@ -11,9 +11,13 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Plus, Trash2, Wand2, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Wand2, AlertCircle, PlayCircle, Calendar as CalendarIcon, Star } from 'lucide-react';
 import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { format, addDays, getDay } from 'date-fns';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { useNavigate } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const WORKING_DAYS_OPTIONS = [
@@ -245,6 +249,14 @@ export default function SchedulePage() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const navigate = useNavigate();
+  // Re-tick every 30s so live/upcoming/completed status stays fresh
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+
   const toggleDay = (day: number) => {
     setAutoForm(f => ({
       ...f,
@@ -461,39 +473,210 @@ export default function SchedulePage() {
       </div>
 
       {isLoading ? <TableSkeleton columns={6} rows={5} /> : (
-        <Card><CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Day</TableHead>
-                <TableHead>Time</TableHead>
-                <TableHead>Title</TableHead>
-                <TableHead>Batch</TableHead>
-                <TableHead>Room</TableHead>
-                <TableHead className="w-16"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {schedules.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No schedules</TableCell></TableRow>
-              ) : (
-                schedules.map((s: any) => (
-                  <TableRow key={s.id}>
-                    <TableCell>{s.date ? format(new Date(s.date), 'MMM d, yyyy') : '—'}</TableCell>
-                    <TableCell>{DAYS[s.day_of_week]}</TableCell>
-                    <TableCell>{s.start_time?.slice(0, 5)} - {s.end_time?.slice(0, 5)}</TableCell>
-                    <TableCell className="font-medium">{s.title}</TableCell>
-                    <TableCell>{s.batches?.name || '—'}</TableCell>
-                    <TableCell>{s.room || '—'}</TableCell>
-                    <TableCell><Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(s.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent></Card>
+        <ScheduleSections
+          schedules={schedules as any[]}
+          now={now}
+          onStart={(s) => navigate('/live-classes')}
+          onDelete={(id) => deleteMutation.mutate(id)}
+        />
       )}
+    </div>
+  );
+}
+
+// ---------- Schedule categorization & rendering ----------
+
+type ScheduleStatus = 'live' | 'today' | 'upcoming' | 'completed' | 'not_attended';
+
+function getScheduleDateTime(s: any): { start: Date | null; end: Date | null } {
+  if (!s?.date) return { start: null, end: null };
+  const [sh, sm] = (s.start_time || '00:00').split(':').map(Number);
+  const [eh, em] = (s.end_time || '00:00').split(':').map(Number);
+  const d = new Date(s.date);
+  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), sh || 0, sm || 0);
+  const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), eh || 0, em || 0);
+  return { start, end };
+}
+
+function isSameDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function classifySchedule(s: any, now: Date): ScheduleStatus {
+  const { start, end } = getScheduleDateTime(s);
+  if (!start || !end) return 'upcoming';
+  if (now >= start && now <= end) return 'live';
+  if (now > end) return 'completed';
+  if (isSameDay(start, now)) return 'today';
+  return 'upcoming';
+}
+
+function ScheduleSections({
+  schedules,
+  now,
+  onStart,
+  onDelete,
+}: {
+  schedules: any[];
+  now: Date;
+  onStart: (s: any) => void;
+  onDelete: (id: string) => void;
+}) {
+  const categorized = useMemo(() => {
+    const featured: any[] = [];
+    const today: any[] = [];
+    const live: any[] = [];
+    const upcoming: any[] = [];
+    const completed: any[] = [];
+    for (const s of schedules) {
+      if (s.is_featured) featured.push(s);
+      const status = classifySchedule(s, now);
+      if (status === 'live') live.push(s);
+      else if (status === 'today') today.push(s);
+      else if (status === 'upcoming') upcoming.push(s);
+      else if (status === 'completed') completed.push(s);
+    }
+    const byDateAsc = (a: any, b: any) => {
+      const ad = getScheduleDateTime(a).start?.getTime() ?? 0;
+      const bd = getScheduleDateTime(b).start?.getTime() ?? 0;
+      return ad - bd;
+    };
+    const byDateDesc = (a: any, b: any) => {
+      const ad = getScheduleDateTime(a).start?.getTime() ?? 0;
+      const bd = getScheduleDateTime(b).start?.getTime() ?? 0;
+      return bd - ad;
+    };
+    return {
+      featured: featured.sort(byDateAsc),
+      today: today.sort(byDateAsc),
+      live: live.sort(byDateAsc),
+      upcoming: upcoming.sort(byDateAsc),
+      completed: completed.sort(byDateDesc),
+    };
+  }, [schedules, now]);
+
+  const sections: Array<{ key: keyof typeof categorized; label: string; empty: string }> = [
+    { key: 'live', label: 'Live', empty: 'No live classes available' },
+    { key: 'today', label: 'Today', empty: 'No classes scheduled today' },
+    { key: 'upcoming', label: 'Upcoming', empty: 'No upcoming classes' },
+    { key: 'completed', label: 'Completed', empty: 'No completed classes yet' },
+    { key: 'featured', label: 'Featured', empty: 'No featured classes' },
+  ];
+
+  return (
+    <Tabs defaultValue="live" className="w-full">
+      <TabsList className="flex-wrap h-auto">
+        {sections.map(sec => (
+          <TabsTrigger key={sec.key} value={sec.key as string} className="gap-2">
+            {sec.key === 'live' && <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />}
+            {sec.key === 'featured' && <Star className="h-3.5 w-3.5" />}
+            {sec.label}
+            <span className="ml-1 text-xs text-muted-foreground">({categorized[sec.key].length})</span>
+          </TabsTrigger>
+        ))}
+      </TabsList>
+
+      {sections.map(sec => (
+        <TabsContent key={sec.key} value={sec.key as string} className="mt-4">
+          <ScheduleList
+            items={categorized[sec.key]}
+            now={now}
+            emptyMessage={sec.empty}
+            onStart={onStart}
+            onDelete={onDelete}
+          />
+        </TabsContent>
+      ))}
+    </Tabs>
+  );
+}
+
+function StatusBadge({ status }: { status: ScheduleStatus | 'featured' }) {
+  const map: Record<string, { label: string; className: string }> = {
+    live: { label: 'LIVE', className: 'bg-red-500 text-white border-transparent animate-pulse' },
+    today: { label: 'TODAY', className: 'bg-blue-500 text-white border-transparent' },
+    upcoming: { label: 'UPCOMING', className: 'bg-amber-500 text-white border-transparent' },
+    completed: { label: 'COMPLETED', className: 'bg-muted text-muted-foreground border-transparent' },
+    not_attended: { label: 'NOT ATTENDED', className: 'bg-destructive text-destructive-foreground border-transparent' },
+    featured: { label: 'FEATURED', className: 'bg-purple-500 text-white border-transparent' },
+  };
+  const m = map[status];
+  return <Badge className={cn('text-[10px] font-semibold tracking-wider', m.className)}>{m.label}</Badge>;
+}
+
+function ScheduleList({
+  items,
+  now,
+  emptyMessage,
+  onStart,
+  onDelete,
+}: {
+  items: any[];
+  now: Date;
+  emptyMessage: string;
+  onStart: (s: any) => void;
+  onDelete: (id: string) => void;
+}) {
+  if (items.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center text-muted-foreground flex flex-col items-center gap-2">
+          <CalendarIcon className="h-8 w-8 opacity-50" />
+          <p>{emptyMessage}</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="grid gap-3">
+      {items.map(s => {
+        const status = classifySchedule(s, now);
+        const { start } = getScheduleDateTime(s);
+        const isToday = start ? isSameDay(start, now) : false;
+        const canStart = status === 'live' || (status === 'today' && start && now < start);
+        return (
+          <Card key={s.id} className="hover:shadow-md transition-shadow">
+            <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  {s.is_featured && <StatusBadge status="featured" />}
+                  <StatusBadge status={status} />
+                  <span className="font-medium truncate">{s.title}</span>
+                </div>
+                <div className="text-sm text-muted-foreground flex flex-wrap gap-x-4 gap-y-1">
+                  <span>{s.date ? format(new Date(s.date), 'd MMM yyyy') : '—'}</span>
+                  <span>{DAYS[s.day_of_week]}</span>
+                  <span>{s.start_time?.slice(0, 5)} – {s.end_time?.slice(0, 5)}</span>
+                  <span>{s.batches?.name || '—'}</span>
+                  {s.room && <span>Room: {s.room}</span>}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant={status === 'live' ? 'default' : 'outline'}
+                  disabled={!canStart}
+                  onClick={() => {
+                    if (!canStart) {
+                      toast.error('Class can only be started on scheduled date.');
+                      return;
+                    }
+                    onStart(s);
+                  }}
+                  title={!isToday && status !== 'live' ? 'Class can only be started on scheduled date.' : undefined}
+                >
+                  <PlayCircle className="h-4 w-4 mr-1" />
+                  {status === 'live' ? 'Join Live' : 'Start'}
+                </Button>
+                <Button variant="ghost" size="icon" onClick={() => onDelete(s.id)}>
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 }
