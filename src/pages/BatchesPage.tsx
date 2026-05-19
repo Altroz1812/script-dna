@@ -600,7 +600,7 @@ export default function BatchesPage() {
                 <SelectTrigger className="flex-1"><SelectValue placeholder="Select student to add" /></SelectTrigger>
                 <SelectContent>
                   {availableStudents.map(s => (
-                    <SelectItem key={s.id} value={s.id}>
+                    <SelectItem key={s.user_id} value={s.user_id}>
                       {s.display_name || s.email || s.id}
                     </SelectItem>
                   ))}
