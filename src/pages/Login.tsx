@@ -22,12 +22,12 @@ const DEMO_ACCOUNTS: { email: string; password: string; role: AppRole; name: str
 ];
 
 const ROLE_BORDER_COLORS: Record<AppRole, string> = {
-  superadmin: 'border-l-purple-500',
-  admin: 'border-l-blue-500',
-  teacher: 'border-l-emerald-500',
-  student: 'border-l-orange-500',
-  support: 'border-l-cyan-500',
-  parent: 'border-l-pink-500',
+  superadmin: 'border-l-[hsl(var(--accent))]',
+  admin: 'border-l-[hsl(var(--accent))]',
+  teacher: 'border-l-[hsl(var(--primary))]',
+  student: 'border-l-[hsl(var(--glow))]',
+  support: 'border-l-[hsl(var(--primary))]',
+  parent: 'border-l-[hsl(var(--glow))]',
 };
 
 function getErrorMessage(err: any): string {
@@ -108,9 +108,9 @@ export default function Login() {
       />
 
       {/* Background effects */}
-      <MorphingBlob className="w-[600px] h-[600px] -top-40 -left-40 opacity-50" color="hsl(265 90% 65% / 0.12)" />
-      <MorphingBlob className="w-[500px] h-[500px] -bottom-32 -right-32 opacity-40" color="hsl(12 90% 65% / 0.1)" />
-      <MorphingBlob className="w-[400px] h-[400px] top-1/3 right-1/4 opacity-30" color="hsl(165 80% 45% / 0.1)" />
+      <MorphingBlob className="w-[600px] h-[600px] -top-40 -left-40 opacity-60" color="hsl(217 91% 60% / 0.18)" />
+      <MorphingBlob className="w-[500px] h-[500px] -bottom-32 -right-32 opacity-40" color="hsl(195 100% 50% / 0.15)" />
+      <MorphingBlob className="w-[400px] h-[400px] top-1/3 right-1/4 opacity-35" color="hsl(43 65% 52% / 0.12)" />
 
       <motion.div
         initial={{ opacity: 0, y: 20, scale: 0.97 }}
@@ -121,12 +121,11 @@ export default function Login() {
         <Card className="glass-panel border-white/[0.12]">
           <CardHeader className="text-center space-y-3">
             <motion.div
-              className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-primary via-coral to-accent flex items-center justify-center shadow-lg shadow-primary/30 relative"
+              className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-primary via-[hsl(var(--glow))] to-gold flex items-center justify-center shadow-[0_0_40px_-8px_hsl(var(--glow)/0.55)] relative"
               animate={{ rotate: [0, 3, -3, 0] }}
               transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
             >
-              {/* Gradient ring */}
-              <div className="absolute inset-[-3px] rounded-2xl bg-gradient-to-br from-primary via-coral to-accent opacity-40 blur-sm" />
+              <div className="absolute inset-[-3px] rounded-2xl bg-gradient-to-br from-primary via-[hsl(var(--glow))] to-gold opacity-45 blur-md" />
               <GraduationCap className="w-7 h-7 text-white relative z-10" />
             </motion.div>
             <CardTitle className="text-xl font-display">Welcome back</CardTitle>
@@ -160,7 +159,7 @@ export default function Login() {
               </div>
             </CardContent>
             <CardFooter className="flex flex-col gap-3">
-              <Button type="submit" className="w-full bg-gradient-to-r from-primary via-coral to-accent hover:opacity-90 transition-opacity text-white border-0 shadow-lg shadow-primary/20" disabled={loading || !!demoLoading}>
+              <Button type="submit" variant="glow" className="w-full" disabled={loading || !!demoLoading}>
                 {loading ? (
                   <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Signing in…</span>
                 ) : 'Sign In'}
@@ -177,7 +176,7 @@ export default function Login() {
         <Card className="glass-panel border-white/[0.12]">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-gradient-to-r from-primary to-coral animate-pulse-glow" />
+              <span className="w-2 h-2 rounded-full bg-gradient-to-r from-primary to-gold animate-pulse-glow" />
               Quick Demo Login
             </CardTitle>
           </CardHeader>
