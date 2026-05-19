@@ -20,12 +20,33 @@ interface ActiveOrgState {
 
 const STORAGE_KEY = 'aurapen.active_org';
 const STORAGE_NAME_KEY = 'aurapen.active_org_name';
+const STORAGE_USER_KEY = 'aurapen.active_org_user';
+
+// Synchronously clear any stored org if it belongs to a different user.
+// Runs at module load so adminService.readActiveOrgFromStorage() never
+// injects a stale cross-user target_org_id on the first render.
+function purgeStaleOrgForUser(currentUserId: string | null | undefined) {
+  if (typeof window === 'undefined') return;
+  const storedUser = window.localStorage.getItem(STORAGE_USER_KEY);
+  if (currentUserId && storedUser && storedUser !== currentUserId) {
+    window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(STORAGE_NAME_KEY);
+    window.localStorage.removeItem('aurapen.active_org_prev');
+  }
+  if (currentUserId) {
+    window.localStorage.setItem(STORAGE_USER_KEY, currentUserId);
+  }
+}
 
 const ActiveOrgContext = createContext<ActiveOrgState | null>(null);
 
 export function ActiveOrgProvider({ children }: { children: React.ReactNode }) {
   const { session, profile, loading: authLoading } = useAuth();
   const queryClient = useQueryClient();
+  // Purge stale org BEFORE we initialize state from localStorage.
+  if (typeof window !== 'undefined') {
+    purgeStaleOrgForUser(session?.user?.id ?? null);
+  }
   const [activeOrgId, setActiveOrgId] = useState<OrgId>(() => {
     if (typeof window === 'undefined') return undefined;
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -89,6 +110,16 @@ export function ActiveOrgProvider({ children }: { children: React.ReactNode }) {
       setAvailableOrgs([]);
       setOrgsLoading(false);
       return;
+    }
+    // Defensive: if the user identity changed since last render, drop any
+    // org selection still in component state before we fetch memberships.
+    const storedUser = typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_USER_KEY) : null;
+    if (storedUser && storedUser !== session.user.id) {
+      setActiveOrgId(undefined);
+      setActiveOrgName(null);
+    }
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(STORAGE_USER_KEY, session.user.id);
     }
     setOrgsLoading(true);
     (async () => {
