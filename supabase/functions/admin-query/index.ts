@@ -1688,7 +1688,6 @@ Deno.serve(async (req) => {
         break
       }
 
-      default:
       // ===== CONFLICT CHECKS =====
       case 'check_teacher_conflicts': {
         if (!callerUserId) {
