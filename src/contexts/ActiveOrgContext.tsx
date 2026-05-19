@@ -221,3 +221,13 @@ export function readActiveOrgFromStorage(): OrgId {
   if (raw === '__global__') return null;
   return raw;
 }
+
+// Same as readActiveOrgFromStorage but only returns a value when the stored
+// org belongs to `expectedUserId`. Prevents leaking a previous user's
+// target_org_id into the first request after a new sign-in.
+export function readActiveOrgForUser(expectedUserId: string | null | undefined): OrgId {
+  if (typeof window === 'undefined') return undefined;
+  const storedUser = window.localStorage.getItem(STORAGE_USER_KEY);
+  if (!expectedUserId || !storedUser || storedUser !== expectedUserId) return undefined;
+  return readActiveOrgFromStorage();
+}
