@@ -93,18 +93,18 @@ export function AppSidebar() {
                           end
                           className={`relative transition-all duration-200 rounded-lg ${
                             isActive
-                              ? 'bg-primary/15 text-primary font-medium shadow-sm shadow-primary/10'
-                              : 'text-muted-foreground hover:text-foreground hover:bg-white/[0.06]'
+                              ? 'bg-gradient-to-r from-primary/20 via-[hsl(var(--glow)/0.15)] to-transparent text-primary font-medium shadow-[0_0_20px_-6px_hsl(var(--glow)/0.45)]'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-white/[0.06] hover:shadow-[0_0_18px_-8px_hsl(var(--glow)/0.4)]'
                           }`}
                           activeClassName=""
                         >
                           {isActive && (
-                            <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-gradient-to-b from-primary to-coral shadow-sm shadow-primary/40" />
+                            <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-gradient-to-b from-gold to-primary shadow-[0_0_8px_hsl(var(--accent)/0.6)]" />
                           )}
                           <item.icon className="h-4 w-4 shrink-0" />
                           {!collapsed && <span>{item.title}</span>}
                           {isActive && !collapsed && (
-                            <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary animate-pulse-glow" />
+                            <span className="ml-auto w-1.5 h-1.5 rounded-full bg-gold animate-pulse-glow" />
                           )}
                         </NavLink>
                       </SidebarMenuButton>
