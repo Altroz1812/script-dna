@@ -96,6 +96,8 @@ Deno.serve(async (req) => {
       'list_courses', 'create_course', 'update_course', 'delete_course',
       'list_coupons', 'create_coupon', 'update_coupon', 'delete_coupon',
       'list_activity_logs',
+      'list_active_sessions',
+      'list_session_history',
       'list_course_modules', 'create_course_module', 'update_course_module', 'delete_course_module',
       'create_lesson', 'update_lesson', 'delete_lesson',
       'list_students_with_batches', 'list_all_students', 'list_teachers',
