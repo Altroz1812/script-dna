@@ -1,74 +1,67 @@
-## Fix Activity/Login Logs + Add Active Users & Session History
+## Goal
+Prevent any teacher or student from being double-booked across batches that have overlapping schedule slots. Validate proactively at every point where a conflict could be introduced: schedule-slot creation, teacher assignment, and student enrollment.
 
-### Findings (root causes)
+## Why this shape (data model reality)
+- `batches` rows do NOT carry date/time. Time lives in `schedules` (batch_id, date, day_of_week, start_time, end_time).
+- Conflicts therefore must be computed by joining a batch's schedule rows against other batches' schedule rows where the teacher or student overlaps.
+- `SchedulePage` already runs room/time overlap detection. We extend the same overlap primitive to teacher/student dimensions.
 
-1. **Activity logs look empty/sparse**: `activity_logs` has 338 rows in DB, but the API filters them with `.not('user_id', 'is', null)`. About half the rows have `user_id = null` (triggers fire from edge functions running as service role, where `auth.uid()` is null). Those rows are silently hidden.
-2. **Login attempts table is empty (0 rows)**: Nothing ever inserts into `login_attempts`. `AuthContext.signIn` calls `supabase.auth.signInWithPassword` directly and never records the attempt.
-3. **Active users / session history don't exist** — no table, no API, no UI.
+## Active-batch definition
+Treat a batch as "active" if it has at least one schedule slot with `date >= today` (or any `day_of_week` slot with no date, since recurring). No schema change. (We can add an `is_active` flag later if admins ask for archive behavior.)
 
-### Changes
+## Backend — `supabase/functions/admin-query/index.ts`
+Add three read-only actions used by the UI for live validation:
 
-#### A. Backend — record what's happening
+1. `check_teacher_conflicts({ teacher_id, batch_id })`
+   - Loads all schedules of `batch_id`.
+   - Loads all schedules of other batches where `teacher_id` matches.
+   - Returns `[{ date|day_of_week, start_time, end_time, other_batch_name }]` for every overlap.
 
-1. **New `record-login-attempt` edge function** (`verify_jwt = false`)
-   - Body: `{ email, success, error_code? }`
-   - Captures `x-forwarded-for` / `cf-connecting-ip` and `user-agent` from request headers.
-   - Inserts into `login_attempts` (extended — see migration below).
-   - On success, also inserts a row into new `user_sessions` table tying the auth user to a session record (looked up via `auth.admin.getUserByEmail`).
+2. `check_student_conflicts({ student_id, batch_id })`
+   - Loads all schedules of `batch_id`.
+   - Loads all schedules of other batches the student is in (`batch_students`).
+   - Returns overlap list with `other_batch_name`.
 
-2. **Migration**
-   - `ALTER TABLE login_attempts ADD COLUMN user_agent text, error_code text, user_id uuid` (nullable; populated on success).
-   - `CREATE TABLE user_sessions ( id uuid pk, user_id uuid not null, started_at timestamptz default now(), last_seen_at timestamptz default now(), ended_at timestamptz, ip_address text, user_agent text )`.
-   - Enable RLS. SuperAdmin/Admin SELECT via `has_role`. Service role inserts/updates via edge function.
-   - Index: `(user_id, started_at desc)`, `(last_seen_at desc) where ended_at is null`.
+3. `check_slot_conflicts({ batch_id, date|day_of_week, start_time, end_time })`
+   - Used at schedule-slot creation. Returns separate `teacher_conflicts` and `student_conflicts` arrays (so the SchedulePage can show both before insert).
 
-3. **New `heartbeat` edge function** (`verify_jwt = true`)
-   - Updates `user_sessions.last_seen_at = now()` for the caller's most recent open session.
-   - Called every 60s from `AuthContext` while logged in.
-   - On `signOut`, sets `ended_at = now()` on the open session.
+Overlap rule (matches existing SchedulePage logic): `a.start < b.end AND b.start < a.end`, scoped by same `date` if both have one, else same `day_of_week`.
 
-#### B. Frontend — wire it up
+## Frontend changes
 
-1. **`AuthContext.signIn` / `signUp` / `signOut`**
-   - After every sign-in result (success or failure), fire-and-forget invoke `record-login-attempt`.
-   - On successful auth state change, start a 60s `setInterval` calling `heartbeat`. Clear on sign-out / unmount.
-   - `signOut` invokes `heartbeat` with `{ end: true }` first (best-effort).
+### `src/pages/BatchesPage.tsx` — Assign Teacher Dialog
+- On `selectedTeacher` change (and on Save), call `check_teacher_conflicts`.
+- If conflicts → show inline red banner with message:
+  *"Teacher already has another batch assigned for the selected time slot. Please choose another teacher or time slot."* plus a list (date/day, time, other batch name).
+- Disable the Save button while conflicts exist. Bypass only via explicit "Override (Admin)" link (off by default).
 
-2. **`admin-query` edge function — `list_activity_logs` fix**
-   - Remove `.not('user_id', 'is', null)` filter — show all rows; UI already handles "—" for missing user.
-   - Enrich rows with no user_id by labeling them `System` instead of "Unknown".
-   - Return `login_attempts` with new fields (`user_agent`, `error_code`).
+### `src/pages/BatchesPage.tsx` — Manage Students Dialog
+- Before calling `addStudent`, run `check_student_conflicts(selectedStudent, batch.id)`.
+- If conflicts → show warning dialog:
+  *"One or more students are already assigned to another batch during the selected time slot."* with details. Block add (Admin override link allowed).
+- Also annotate the student `<Select>` options that have any conflict with a small "⚠ conflict" suffix so the admin sees it before picking.
 
-3. **New `admin-query` actions**
-   - `list_active_sessions` — `user_sessions` where `ended_at is null AND last_seen_at > now() - interval '5 minutes'`, joined to profiles for name/email/role.
-   - `list_session_history` — paginated `user_sessions` joined to profiles, ordered by `started_at desc`, with optional `user_id` filter.
+### `src/pages/SchedulePage.tsx` — Schedule Slot Creation
+- Extend existing `conflictsFor()` to also surface teacher and student overlaps via `check_slot_conflicts`.
+- Show two extra sections inside the existing conflict banner: "Teacher conflicts" and "Student conflicts". Auto-schedule and Manual flows both blocked when any conflict exists.
+- Friendly copy reused from above.
 
-4. **`ActivityLogsPage.tsx` — add two tabs**
-   - **Active Users** tab: live list (name, email, role, IP, user agent, started, last seen) with auto-refresh every 30s. Green dot for `last_seen < 1 min`.
-   - **Session History** tab: paginated table (user, started, ended, duration, IP, UA). Filter by user.
-   - Existing **Login Attempts** tab now shows real data (with UA/error code columns) and a per-email click-through to that user's session history.
-   - Existing **Activity** tab shows all rows (including system) with a "System" badge for null user.
+### Shared helper
+`src/lib/conflicts.ts` — pure `overlaps(aStart, aEnd, bStart, bEnd)` + `formatConflictMessage(list)` for consistent wording.
 
-5. **Realtime** (optional, low-risk)
-   - `ALTER PUBLICATION supabase_realtime ADD TABLE user_sessions, login_attempts` so the Active Users tab can react instantly to logins/sign-outs.
+## UX details
+- All conflict messages are non-technical, name the other batch + slot, and offer the resolution ("choose another teacher / time / student").
+- Validation runs on selection change (debounced 300ms) AND on submit — submit is the hard gate.
+- Loading state shown while the check is in flight; never lets the user submit during fetch.
 
-### Out of scope
-- Geolocation lookup for IPs (just show raw IP + UA).
-- Per-org session quotas / forced sign-out tooling — can be a follow-up.
+## Out of scope
+- Schema flag `is_active` on batches (can add later if requested).
+- Editing existing schedules — only creation paths. (Edit can be added with the same primitive when needed.)
+- Notifying affected teachers/students.
 
-### Files touched
-```
-supabase/migrations/<ts>_login_logs_and_sessions.sql   (new)
-supabase/functions/record-login-attempt/index.ts        (new)
-supabase/functions/heartbeat/index.ts                   (new)
-supabase/functions/admin-query/index.ts                 (fix + 2 new actions)
-src/contexts/AuthContext.tsx                            (instrument signIn/Out + heartbeat)
-src/pages/ActivityLogsPage.tsx                          (4 tabs, new columns)
-src/services/api/adminService.ts                        (only if action whitelist exists)
-```
-
-### Verification
-1. Sign in with wrong password → `login_attempts` gets a row with `success=false`; visible in UI within seconds.
-2. Sign in successfully → `success=true` row + new `user_sessions` row appears in Active Users tab.
-3. Wait > 5 min idle → user falls off Active Users; row remains in Session History with `ended_at` set on sign-out.
-4. Activity tab now shows ~338 historic rows (previously hidden).
+## Files touched
+- `supabase/functions/admin-query/index.ts` — 3 new read actions.
+- `src/lib/conflicts.ts` — new helper.
+- `src/services/api/courseService.ts` — wrappers for the 3 new actions.
+- `src/pages/BatchesPage.tsx` — teacher + student dialogs.
+- `src/pages/SchedulePage.tsx` — extend conflict banner.

@@ -1688,6 +1688,86 @@ Deno.serve(async (req) => {
         break
       }
 
+      // ===== CONFLICT CHECKS =====
+      case 'check_teacher_conflicts': {
+        if (!callerUserId) {
+          return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+            status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+        const { teacher_id, batch_id } = params as { teacher_id?: string; batch_id?: string }
+        if (!teacher_id || !batch_id) { result = []; break }
+        const { data: otherBatches } = await supabase
+          .from('batches').select('id, name')
+          .eq('teacher_id', teacher_id).neq('id', batch_id)
+        const otherIds = (otherBatches ?? []).map((b: any) => b.id)
+        if (!otherIds.length) { result = []; break }
+        const [{ data: mySch }, { data: otherSch }] = await Promise.all([
+          supabase.from('schedules').select('date, day_of_week, start_time, end_time').eq('batch_id', batch_id),
+          supabase.from('schedules').select('batch_id, date, day_of_week, start_time, end_time').in('batch_id', otherIds),
+        ])
+        const nameMap: Record<string, string> = {}
+        for (const b of otherBatches ?? []) nameMap[b.id] = b.name
+        const conflicts: any[] = []
+        for (const m of mySch ?? []) {
+          for (const o of otherSch ?? []) {
+            const sameWhen = m.date && o.date ? m.date === o.date : m.day_of_week === o.day_of_week
+            if (!sameWhen) continue
+            const aS = (m.start_time || '').slice(0,5), aE = (m.end_time || '').slice(0,5)
+            const bS = (o.start_time || '').slice(0,5), bE = (o.end_time || '').slice(0,5)
+            if (aS < bE && bS < aE) {
+              conflicts.push({
+                date: o.date, day_of_week: o.day_of_week,
+                start_time: o.start_time, end_time: o.end_time,
+                other_batch_id: o.batch_id, other_batch_name: nameMap[o.batch_id] || 'Unknown batch',
+              })
+            }
+          }
+        }
+        result = conflicts
+        break
+      }
+      case 'check_student_conflicts': {
+        if (!callerUserId) {
+          return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+            status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+        // student_id here is profiles.id (matches batch_students.student_id)
+        const { student_id, batch_id } = params as { student_id?: string; batch_id?: string }
+        if (!student_id || !batch_id) { result = []; break }
+        const { data: enrollments } = await supabase
+          .from('batch_students').select('batch_id')
+          .eq('student_id', student_id).neq('batch_id', batch_id)
+        const otherIds = [...new Set((enrollments ?? []).map((e: any) => e.batch_id))]
+        if (!otherIds.length) { result = []; break }
+        const [{ data: otherBatches }, { data: mySch }, { data: otherSch }] = await Promise.all([
+          supabase.from('batches').select('id, name').in('id', otherIds),
+          supabase.from('schedules').select('date, day_of_week, start_time, end_time').eq('batch_id', batch_id),
+          supabase.from('schedules').select('batch_id, date, day_of_week, start_time, end_time').in('batch_id', otherIds),
+        ])
+        const nameMap: Record<string, string> = {}
+        for (const b of otherBatches ?? []) nameMap[b.id] = b.name
+        const conflicts: any[] = []
+        for (const m of mySch ?? []) {
+          for (const o of otherSch ?? []) {
+            const sameWhen = m.date && o.date ? m.date === o.date : m.day_of_week === o.day_of_week
+            if (!sameWhen) continue
+            const aS = (m.start_time || '').slice(0,5), aE = (m.end_time || '').slice(0,5)
+            const bS = (o.start_time || '').slice(0,5), bE = (o.end_time || '').slice(0,5)
+            if (aS < bE && bS < aE) {
+              conflicts.push({
+                date: o.date, day_of_week: o.day_of_week,
+                start_time: o.start_time, end_time: o.end_time,
+                other_batch_id: o.batch_id, other_batch_name: nameMap[o.batch_id] || 'Unknown batch',
+              })
+            }
+          }
+        }
+        result = conflicts
+        break
+      }
+
       default:
         return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
           status: 400,

@@ -68,6 +68,13 @@ export default function SchedulePage() {
     staleTime: 1000 * 60 * 2,
   });
 
+  // All batch_students (org-scoped) so we can detect student cross-batch conflicts.
+  const { data: allBatchStudents = [] } = useQuery<Array<{ batch_id: string; student_id: string }>>({
+    queryKey: ['batch_students', 'all-for-conflicts'],
+    queryFn: () => adminQuery('list_enrollments', {}),
+    staleTime: 1000 * 60 * 2,
+  });
+
   const selectedBatch = useMemo(() => batches.find(b => b.id === autoForm.batch_id), [batches, autoForm.batch_id]);
   const courseDays = selectedBatch?.courses?.duration_days ?? 0;
   const courseName = selectedBatch?.courses?.name ?? '';
@@ -98,7 +105,7 @@ export default function SchedulePage() {
 
   // ---------- Conflict detection ----------
   type Entry = { batch_id: string; date?: string | null; day_of_week: number; start_time: string; end_time: string; room?: string | null };
-  type Conflict = { entry: Entry; with: any; reason: 'batch' | 'room'; when: string };
+  type Conflict = { entry: Entry; with: any; reason: 'batch' | 'room' | 'teacher' | 'student'; when: string; detail?: string };
 
   const norm = (t?: string | null) => (t || '').slice(0, 5); // HH:MM
   const overlaps = (aStart: string, aEnd: string, bStart: string, bEnd: string) =>
@@ -106,9 +113,27 @@ export default function SchedulePage() {
   const sameRoom = (a?: string | null, b?: string | null) =>
     !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
 
+  // Index helpers for teacher/student conflict detection
+  const batchById = useMemo(() => {
+    const m: Record<string, Batch> = {};
+    for (const b of batches) m[b.id] = b;
+    return m;
+  }, [batches]);
+  const studentsByBatch = useMemo(() => {
+    const m: Record<string, Set<string>> = {};
+    for (const r of allBatchStudents as any[]) {
+      if (!m[r.batch_id]) m[r.batch_id] = new Set();
+      m[r.batch_id].add(r.student_id);
+    }
+    return m;
+  }, [allBatchStudents]);
+
   const findConflicts = (candidates: Entry[], existing: any[], excludeId?: string): Conflict[] => {
     const conflicts: Conflict[] = [];
     for (const cand of candidates) {
+      const candBatch = batchById[cand.batch_id];
+      const candTeacherId = candBatch?.teacher_id ?? null;
+      const candStudents = studentsByBatch[cand.batch_id] ?? new Set<string>();
       for (const ex of existing) {
         if (excludeId && ex.id === excludeId) continue;
         // Compare same calendar date when both have it; otherwise fall back to day_of_week
@@ -122,8 +147,30 @@ export default function SchedulePage() {
           : DAYS[cand.day_of_week];
         if (ex.batch_id === cand.batch_id) {
           conflicts.push({ entry: cand, with: ex, reason: 'batch', when });
-        } else if (sameRoom(cand.room, ex.room)) {
-          conflicts.push({ entry: cand, with: ex, reason: 'room', when });
+        } else {
+          if (sameRoom(cand.room, ex.room)) {
+            conflicts.push({ entry: cand, with: ex, reason: 'room', when });
+          }
+          // Teacher double-booking across batches
+          const exBatch = batchById[ex.batch_id];
+          if (candTeacherId && exBatch?.teacher_id && exBatch.teacher_id === candTeacherId) {
+            conflicts.push({
+              entry: cand, with: ex, reason: 'teacher', when,
+              detail: (exBatch as any)?.teacher_name || 'this teacher',
+            });
+          }
+          // Student double-booking across batches
+          const otherStudents = studentsByBatch[ex.batch_id];
+          if (otherStudents && candStudents.size > 0) {
+            let shared = 0;
+            for (const sid of candStudents) if (otherStudents.has(sid)) shared++;
+            if (shared > 0) {
+              conflicts.push({
+                entry: cand, with: ex, reason: 'student', when,
+                detail: `${shared} student${shared === 1 ? '' : 's'}`,
+              });
+            }
+          }
         }
       }
     }
@@ -455,7 +502,7 @@ function ConflictPanel({
   conflicts,
   batches,
 }: {
-  conflicts: Array<{ entry: any; with: any; reason: 'batch' | 'room'; when: string }>;
+  conflicts: Array<{ entry: any; with: any; reason: 'batch' | 'room' | 'teacher' | 'student'; when: string; detail?: string }>;
   batches: Array<{ id: string; name: string }>;
 }) {
   const batchName = (id: string) => batches.find(b => b.id === id)?.name || 'Unknown batch';
@@ -476,13 +523,17 @@ function ConflictPanel({
             {' — '}
             {c.reason === 'batch'
               ? <span className="text-destructive">same batch double-booked</span>
-              : <span className="text-destructive">room "{c.with.room}" already booked</span>}
+              : c.reason === 'room'
+                ? <span className="text-destructive">room "{c.with.room}" already booked</span>
+                : c.reason === 'teacher'
+                  ? <span className="text-destructive">teacher already has another batch at this time</span>
+                  : <span className="text-destructive">{c.detail || 'student(s)'} already in another batch at this time</span>}
           </li>
         ))}
         {extra > 0 && <li className="text-muted-foreground italic">…and {extra} more</li>}
       </ul>
       <p className="text-xs text-muted-foreground">
-        Change time, room, or date to resolve conflicts.
+        Change time, room, date, teacher, or student assignments to resolve conflicts.
       </p>
     </div>
   );
