@@ -1,65 +1,61 @@
-## Root cause — confirmed bug, not just missing data
+# Plan: OAuth 404 + Parent-Only Checkout
 
-`batch_students.student_id` is supposed to store the **auth `user_id`** (that's what every student-side RLS policy and every student-side query filters on — `student_id = auth.uid()`). But the admin "Add Student" flow is inserting **`profiles.id`** instead.
+## Issue 1 — Google Sign-In 404 at `www.aurapen.com/~oauth/initiate`
 
-Evidence from the live DB:
+The `/~oauth/initiate` path is handled by Lovable's hosting proxy worker, not by app code. A 404 there means the custom domain `www.aurapen.com` is not properly wired to this Lovable project (DNS misconfigured, custom domain not active, or pointing to the wrong project).
 
-```
-batch_students.student_id = db03f395-…  (profiles.id of student@demo.com)
-profiles.user_id          = 17e2a982-…  (the real auth user id)
-```
+Per Lovable guidance, this is **not** fixed by editing redirect URIs, callback URLs, or the `lovable.auth.signInWithOAuth` call — the code is already correct (it works on `*.lovable.app`).
 
-So:
-- Admin UI shows the student as enrolled (correct — admin queries join via `profiles.id`).
-- When `student@demo.com` logs in, `auth.uid()` is `17e2a982-…`, which doesn't match `db03f395-…`, so RLS returns nothing → all student screens blank.
+### Action (user-side, no code change)
+1. Open Lovable → Project Settings → Custom Domain and confirm `www.aurapen.com` shows "Active" / "Verified".
+2. If not active, fix DNS (CNAME → `*.lovable.app` target shown in settings) and wait for verification.
+3. Re-publish the project after the domain is active.
+4. Retest Google sign-in on `https://www.aurapen.com/checkout`.
 
-### Where the bug lives
-
-1. `supabase/functions/admin-query/index.ts`
-   - **Branch A — lines 838-894 (`add_batch_student`)**: resolves the param to `studentProfile.id` and inserts that. Should insert `studentProfile.user_id`.
-   - **Branch B — lines 1556-1564 (`add_batch_student` second handler)**: blindly inserts `params.student_id`. Needs the same normalization.
-   - **`list_batch_students` (lines ~820-836)**: joins `profiles.id = student_id` — only "works" because of this same bug. Must join `profiles.user_id = batch_students.student_id`.
-
-2. `src/pages/BatchesPage.tsx`
-   - Line 343 calls `batchService.addStudent(batch.id, selectedStudent)` where `selectedStudent` is the dropdown's `s.id` (profile.id). Must pass `s.user_id`.
-   - Line 370-371: `enrolledIds = new Set(enrolledStudents.map(e => e.student_id))` then `students.filter(s => !enrolledIds.has(s.id))` — comparison mixes user_id vs profile.id. Must compare against `s.user_id`.
-
-3. Other places that may carry the same mistake (audit, fix if found):
-   - `src/components/courses/BatchPickerDialog.tsx`
-   - `src/components/classroom/EndClassAttendanceDialog.tsx`
-   - `src/pages/ReportsPage.tsx`
-   - `src/pages/ParentChildrenPage.tsx`
-
-### Why this matches your symptom exactly
-"Student added by super admin shows as added in front end" — yes, because admin-side join uses `profiles.id`. But for the student, RLS uses `auth.uid()`, which is `user_id`, so they see nothing.
+If `id-preview--*.lovable.app` and `aurapen.lovable.app` both work but only `www.aurapen.com` 404s on `/~oauth/initiate`, it is purely a custom-domain/hosting configuration issue. I will not touch auth code for this.
 
 ---
 
-## Fix plan (4 steps, isolated, zero impact on admin/teacher/parent existing flows)
+## Issue 2 — Checkout & Payments restricted to `parent` role
 
-### Step 1 — Patch edge function `admin-query`
-- **`add_batch_student` (Branch A)**: keep profile lookup, but insert `studentProfile.user_id`, not `studentProfile.id`. Duplicate check by `user_id` too.
-- **`add_batch_student` (Branch B)**: same normalization (accept either profile.id or user_id, persist user_id).
-- **`list_batch_students` (both branches)**: join `profiles.user_id = batch_students.student_id` and return the profile.
-- **`remove_batch_student`**: accept either, normalize to user_id before delete (safety).
-- **`check_student_conflicts`**: normalize too if it uses student_id.
+Today: any signed-in user (student/teacher/admin/parent) can complete `/checkout`. Requirement:
+- Only users with role `parent` may complete checkout and pay.
+- Brand-new Google sign-ups → since `handle_new_user_role()` defaults new users to `student`, they cannot check out either. Newly created users coming through `/checkout` must be promoted to `parent` automatically (they are buying for a child).
+- Existing users with a non-parent role (student/teacher/admin/etc.) → must be **blocked** at checkout with a clear message ("This account is registered as a {role}. Checkout is only available for parent accounts.") and a Sign-out / Switch-account option.
 
-### Step 2 — Patch frontend `BatchesPage.tsx`
-- Pass `s.user_id` (not `s.id`) to `addStudent`.
-- Compute `enrolledIds` from `e.student_id` and filter `students` by `s.user_id`.
-- Audit `BatchPickerDialog`, `EndClassAttendanceDialog`, `ReportsPage`, `ParentChildrenPage` for the same swap.
+### Frontend changes — `src/pages/CheckoutPage.tsx`
+1. Read `profile` from `useAuth()` alongside `session`.
+2. After auth step, gate the flow:
+   - If `profile.role === 'parent'` → proceed to Student Details (current behaviour).
+   - If `profile.role !== 'parent'` AND the account already existed before this checkout → show a **blocking screen** (cannot proceed, with Sign out button).
+   - If the account was *just created* in this checkout session (detected via a `justSignedUpForCheckout` flag set right after `signInWithOAuth` returns tokens) and role is `student` (default) → call edge function `promote-to-parent` to flip the role, then `refreshProfile()` and continue.
+3. Disable the Next button on Sign-In step until role validation completes.
 
-### Step 3 — Backfill the 2 broken rows
-One-time data fix: for each `batch_students` row whose `student_id` doesn't match any `auth.users.id`, look it up via `profiles.id` and rewrite to the matching `profiles.user_id`. After this, the existing `db03f395-…` rows become valid enrollments for `student@demo.com`, who will immediately see their batches, schedule, live classes, attendance, etc.
+### New edge function — `supabase/functions/promote-to-parent/index.ts`
+- Verifies JWT, gets `auth.uid()`.
+- Uses service role to:
+  - Confirm the user has *no* existing non-`parent`/non-`student` role AND was created within the last N minutes (safety: only promote freshly-created accounts).
+  - `UPDATE user_roles SET role='parent' WHERE user_id=...` (or delete `student` row + insert `parent`).
+- Returns `{ ok: true, role: 'parent' }` or `{ ok: false, reason }`.
+- Registered in `supabase/config.toml` with default JWT verification.
 
-### Step 4 — Verify
-- Log in as `student@demo.com` → Dashboard, Schedule, Live Classes, Practice Assignments, Courses must show the two batches and their classes.
-- Log in as Admin → Batches → Manage Students → list still shows the same enrolled students (no regression).
-- Add a new student via Admin UI → DB row now stores `user_id`, and that student sees it immediately.
+### Payments page — `src/pages/PaymentsPage.tsx`
+- "Pay Now" / record-payment UI for the parent role already exists (`isParent` branch). 
+- For non-parent + non-admin roles (e.g. student), hide the "Pay Now" button and show only their own payment history (read-only). Admin/superadmin/support keep existing capabilities.
+
+### Cart entry points
+- `BatchPickerDialog` / landing "Add to Cart" — no change to the add flow itself. The role gate lives at `/checkout`, so non-parent users can still browse but get blocked at the checkout gate with the explanatory message above.
+
+---
 
 ## Out of scope
-- The big refactor plan (still parked in `.lovable/plan.md`).
-- Any change to teacher, parent, payments, payroll, or superadmin flows beyond the small audit in Step 2.
-- Schema changes — `batch_students.student_id` stays as-is; we're just fixing what gets written to it.
+- The `.lovable/plan.md` enterprise refactor (still parked).
+- Any change to admin/teacher/student dashboards beyond hiding "Pay Now" for non-parent students on the Payments page.
+- Schema changes other than the role flip done inside the edge function.
 
-Approve and I'll implement Steps 1–4 in order.
+## Verification
+1. Publish + confirm custom domain active → Google sign-in on `www.aurapen.com/checkout` succeeds (no 404).
+2. New Google user signs up via `/checkout` → role auto-promoted to `parent`, checkout proceeds.
+3. Existing `student@demo.com` opens `/checkout` after login → sees blocked screen, cannot reach Payment step.
+4. Existing `parent@demo.com` → checkout works end-to-end.
+5. Admin / Teacher logging in → unaffected on every other page.

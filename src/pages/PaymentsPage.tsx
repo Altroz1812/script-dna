@@ -17,6 +17,8 @@ import { TableSkeleton } from '@/components/ui/loading-skeletons';
 export default function PaymentsPage() {
   const { profile } = useAuth();
   const isParent = profile?.role === 'parent';
+  const isStudent = profile?.role === 'student';
+  const canRecord = !isStudent; // students see history only
   const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -82,7 +84,7 @@ export default function PaymentsPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">Payments</h1>
-        <Dialog open={open} onOpenChange={setOpen}>
+        {canRecord && <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4" />{isParent ? 'Pay Now' : 'Record Payment'}</Button></DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>{isParent ? 'Make Payment' : 'Record Payment'}</DialogTitle></DialogHeader>
@@ -105,7 +107,7 @@ export default function PaymentsPage() {
               <Button onClick={handleCreate} className="w-full">{isParent ? 'Pay' : 'Record'}</Button>
             </div>
           </DialogContent>
-        </Dialog>
+        </Dialog>}
       </div>
       {loading ? <TableSkeleton columns={5} rows={5} /> : (
         <Card><CardContent className="p-0">
