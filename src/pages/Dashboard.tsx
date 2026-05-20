@@ -346,6 +346,8 @@ export default function Dashboard() {
             </div>
           </motion.div>
 
+          {quickJoin}
+
           {studentLoading ? (
             <DashboardCardsSkeleton count={4} />
           ) : (
@@ -465,6 +467,8 @@ export default function Dashboard() {
               <p className="text-muted-foreground text-sm pl-[56px]">Monitor your children's learning</p>
             </div>
           </motion.div>
+
+          {quickJoin}
 
           {parentLoading ? (
             <DashboardCardsSkeleton count={4} />
@@ -612,6 +616,8 @@ export default function Dashboard() {
             </div>
           </motion.div>
 
+          {quickJoin}
+
           {teacherLoading ? (
             <DashboardCardsSkeleton count={4} />
           ) : (
@@ -745,6 +751,8 @@ export default function Dashboard() {
               <p className="text-muted-foreground text-sm pl-[56px]">Lead management & enrollment overview</p>
             </div>
           </motion.div>
+
+          {quickJoin}
 
           {supportLoading ? (
             <DashboardCardsSkeleton count={3} />
@@ -898,6 +906,8 @@ export default function Dashboard() {
             )}
           </div>
         </motion.div>
+
+        {quickJoin}
 
         {/* Bento Grid */}
         {isLoading ? (
