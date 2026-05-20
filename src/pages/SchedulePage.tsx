@@ -253,7 +253,9 @@ export default function SchedulePage() {
   // Re-tick every 30s so live/upcoming/completed status stays fresh
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 30_000);
+    const t = setInterval(() => {
+      if (document.visibilityState === 'visible') setNow(new Date());
+    }, 30_000);
     return () => clearInterval(t);
   }, []);
 
