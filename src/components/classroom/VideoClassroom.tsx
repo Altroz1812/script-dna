@@ -1,41 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  X,
-  Minimize2,
-  Loader2,
-  MessageSquare,
-  WifiOff,
-  AlertTriangle,
-  Mic,
-  MicOff,
-  Video,
-  VideoOff,
-  Users,
-  ChevronDown,
-  ChevronUp,
-} from "lucide-react";
+import { X, Minimize2, Loader2, MessageSquare, WifiOff, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  LiveKitRoom,
-  RoomAudioRenderer,
-  useParticipants,
-  useLocalParticipant,
-  useRoomInfo,
-  useTrackToggle,
-  TrackToggle,
-  ParticipantTile,
-  useIsConnected,
-} from "@livekit/components-react";
+import { LiveKitRoom, VideoConference, RoomAudioRenderer } from "@livekit/components-react";
 import "@livekit/components-styles";
 import { TeacherControls } from "./TeacherControls";
 import { StudentDataListener } from "./StudentDataListener";
 import { ClassroomChat } from "./ClassroomChat";
-import { Track } from "livekit-client";
 
 interface VideoClassroomProps {
   roomName: string;
@@ -49,257 +22,6 @@ interface VideoClassroomProps {
 }
 
 type ConnectionState = "idle" | "fetching" | "ready" | "failed";
-
-// Participant Card Component
-function ParticipantCard({ participant, isLocal, isHost }: { participant: any; isLocal: boolean; isHost: boolean }) {
-  const [isVideoEnabled, setIsVideoEnabled] = useState(true);
-  const [isAudioEnabled, setIsAudioEnabled] = useState(true);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-
-  useEffect(() => {
-    if (!participant) return;
-
-    const videoTrack = participant.getTrack(Track.Source.Camera);
-    const audioTrack = participant.getTrack(Track.Source.Microphone);
-
-    setIsVideoEnabled(videoTrack?.isEnabled ?? false);
-    setIsAudioEnabled(audioTrack?.isEnabled ?? false);
-
-    const handleTrackUpdate = () => {
-      setIsVideoEnabled(videoTrack?.isEnabled ?? false);
-      setIsAudioEnabled(audioTrack?.isEnabled ?? false);
-    };
-
-    const handleSpeakingUpdate = () => {
-      setIsSpeaking(participant.isSpeaking || false);
-    };
-
-    participant.on("trackMuted", handleTrackUpdate);
-    participant.on("trackUnmuted", handleTrackUpdate);
-    participant.on("speakingChanged", handleSpeakingUpdate);
-
-    return () => {
-      participant.off("trackMuted", handleTrackUpdate);
-      participant.off("trackUnmuted", handleTrackUpdate);
-      participant.off("speakingChanged", handleSpeakingUpdate);
-    };
-  }, [participant]);
-
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  };
-
-  return (
-    <div
-      className={`p-3 rounded-lg transition-all ${isSpeaking ? "bg-primary/10 ring-1 ring-primary" : "bg-muted/30"}`}
-    >
-      <div className="flex items-center gap-3">
-        <div className="relative">
-          <Avatar className="h-10 w-10">
-            <AvatarFallback className="bg-primary/10 text-primary text-sm">
-              {getInitials(participant.name || "User")}
-            </AvatarFallback>
-          </Avatar>
-          {isHost && (
-            <div className="absolute -top-1 -right-1">
-              <Badge variant="secondary" className="h-5 w-5 p-0 flex items-center justify-center text-xs rounded-full">
-                👑
-              </Badge>
-            </div>
-          )}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate">
-            {participant.name || "Anonymous"}
-            {isLocal && " (You)"}
-          </p>
-          <div className="flex items-center gap-2 mt-1">
-            {isAudioEnabled ? <Mic className="h-3 w-3 text-green-500" /> : <MicOff className="h-3 w-3 text-red-500" />}
-            {isVideoEnabled ? (
-              <Video className="h-3 w-3 text-green-500" />
-            ) : (
-              <VideoOff className="h-3 w-3 text-red-500" />
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Participants Sidebar Component
-function ParticipantsSidebar({ isExpanded, onToggle }: { isExpanded: boolean; onToggle: () => void }) {
-  const participants = useParticipants();
-  const localParticipant = useLocalParticipant();
-  const isConnected = useIsConnected();
-
-  if (!isConnected) return null;
-
-  // Filter participants - host/teacher first, then others
-  const allParticipants = Array.from(participants.values());
-  const hostParticipant = allParticipants.find(
-    (p) => p.metadata?.includes("teacher") || p.name?.toLowerCase().includes("teacher"),
-  );
-  const otherParticipants = allParticipants.filter(
-    (p) => p !== hostParticipant && p.identity !== localParticipant.localParticipant?.identity,
-  );
-
-  const sortedParticipants = [
-    ...(hostParticipant ? [{ participant: hostParticipant, isHost: true, isLocal: false }] : []),
-    ...(localParticipant.localParticipant
-      ? [{ participant: localParticipant.localParticipant, isHost: false, isLocal: true }]
-      : []),
-    ...otherParticipants.map((p) => ({ participant: p, isHost: false, isLocal: false })),
-  ];
-
-  return (
-    <div
-      className={`bg-background border-l border-border transition-all duration-300 flex flex-col ${
-        isExpanded ? "w-80" : "w-12"
-      }`}
-    >
-      <button
-        onClick={onToggle}
-        className="flex items-center justify-between p-3 hover:bg-muted/50 transition-colors border-b border-border"
-      >
-        {isExpanded ? (
-          <>
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              <span className="text-sm font-medium">Participants</span>
-              <Badge variant="secondary" className="text-xs">
-                {participants.length}
-              </Badge>
-            </div>
-            <ChevronDown className="h-4 w-4" />
-          </>
-        ) : (
-          <div className="flex flex-col items-center gap-2">
-            <Users className="h-4 w-4" />
-            <Badge variant="secondary" className="text-[10px] px-1">
-              {participants.length}
-            </Badge>
-          </div>
-        )}
-      </button>
-
-      {isExpanded && (
-        <ScrollArea className="flex-1">
-          <div className="p-3 space-y-2">
-            {sortedParticipants.map(({ participant, isHost, isLocal }) => (
-              <ParticipantCard key={participant.identity} participant={participant} isLocal={isLocal} isHost={isHost} />
-            ))}
-          </div>
-        </ScrollArea>
-      )}
-    </div>
-  );
-}
-
-// Main Video Layout Component
-function VideoLayout({ isTeacher }: { isTeacher?: boolean }) {
-  const participants = useParticipants();
-  const localParticipant = useLocalParticipant();
-  const isConnected = useIsConnected();
-
-  if (!isConnected) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  // Find host (teacher) - prioritize participants with teacher role or first participant
-  const hostParticipant =
-    Array.from(participants.values()).find(
-      (p) => p.metadata?.includes("teacher") || p.name?.toLowerCase().includes("teacher"),
-    ) || Array.from(participants.values())[0];
-
-  const showParticipantVideos = isTeacher; // Only teacher/admin can see participant videos
-  const otherParticipants = Array.from(participants.values()).filter((p) => p !== hostParticipant);
-
-  return (
-    <div className="flex-1 flex flex-col h-full">
-      {/* Main Host Video */}
-      <div className="flex-1 bg-black/5 dark:bg-black/20 relative min-h-0">
-        {hostParticipant ? (
-          <div className="h-full w-full">
-            <ParticipantTile participant={hostParticipant} className="h-full w-full" />
-            <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm px-3 py-1.5 rounded-lg">
-              <p className="text-white text-sm font-medium">
-                {hostParticipant.name || "Teacher"}
-                {(hostParticipant.metadata?.includes("teacher") ||
-                  hostParticipant.name?.toLowerCase().includes("teacher")) &&
-                  " (Host)"}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="h-full flex items-center justify-center">
-            <div className="text-center">
-              <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                <Users className="h-10 w-10 text-primary/50" />
-              </div>
-              <p className="text-muted-foreground">Waiting for host to connect...</p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Participant Videos Strip (only for teacher) */}
-      {showParticipantVideos && otherParticipants.length > 0 && (
-        <div className="h-32 border-t border-border bg-muted/20 p-2">
-          <div className="flex gap-2 overflow-x-auto h-full">
-            {otherParticipants.map((participant) => (
-              <div
-                key={participant.identity}
-                className="w-40 h-full flex-shrink-0 relative rounded-lg overflow-hidden bg-black/10"
-              >
-                <ParticipantTile participant={participant} className="w-full h-full" />
-                <div className="absolute bottom-1 left-1 right-1 bg-black/50 backdrop-blur-sm rounded px-1.5 py-0.5">
-                  <p className="text-white text-xs truncate">{participant.name || "Student"}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Controls Component with actual LiveKit controls
-function ClassroomControls({ onLeave }: { onLeave: () => void }) {
-  const { toggle: toggleMic, enabled: micEnabled } = useTrackToggle(Track.Source.Microphone);
-  const { toggle: toggleCam, enabled: camEnabled } = useTrackToggle(Track.Source.Camera);
-
-  return (
-    <div className="shrink-0 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="flex items-center justify-center gap-2 p-3">
-        <Button variant={!micEnabled ? "destructive" : "secondary"} size="sm" onClick={toggleMic} className="gap-2">
-          {!micEnabled ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-          <span className="hidden sm:inline">{!micEnabled ? "Unmute" : "Mute"}</span>
-        </Button>
-
-        <Button variant={!camEnabled ? "destructive" : "secondary"} size="sm" onClick={toggleCam} className="gap-2">
-          {!camEnabled ? <VideoOff className="h-4 w-4" /> : <Video className="h-4 w-4" />}
-          <span className="hidden sm:inline">{!camEnabled ? "Start Video" : "Stop Video"}</span>
-        </Button>
-
-        <Button variant="destructive" size="sm" onClick={onLeave} className="gap-2">
-          <span className="hidden sm:inline">Leave</span>
-          <span className="sm:hidden">🚪</span>
-        </Button>
-      </div>
-    </div>
-  );
-}
 
 export function VideoClassroom({
   roomName,
@@ -319,7 +41,6 @@ export function VideoClassroom({
   const [chatOpen, setChatOpen] = useState(false);
   const [unread, setUnread] = useState(0);
   const [waitingForTeacher, setWaitingForTeacher] = useState(!isTeacher && classStatus === "scheduled");
-  const [participantsExpanded, setParticipantsExpanded] = useState(true);
   const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const waitingPollRef = useRef<ReturnType<typeof setInterval>>();
 
@@ -412,31 +133,19 @@ export function VideoClassroom({
     <div className="w-full h-full bg-background overflow-hidden flex flex-col">
       {/* Header bar */}
       <div className="flex items-center justify-between px-4 py-2 bg-muted/50 border-b border-border shrink-0">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-foreground">Live Classroom</span>
-          {isTeacher && (
-            <Badge variant="secondary" className="text-xs">
-              Teacher
-            </Badge>
-          )}
-          {waitingForTeacher && (
-            <Badge variant="outline" className="text-xs">
-              Waiting for teacher...
-            </Badge>
-          )}
-        </div>
+        <span className="text-sm font-medium text-foreground">Live Classroom</span>
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
             size="icon"
             className="h-7 w-7 relative"
             onClick={() => {
-              setChatOpen(!chatOpen);
-              if (!chatOpen) setUnread(0);
+              setChatOpen((o) => !o);
+              setUnread(0);
             }}
           >
             <MessageSquare className="h-4 w-4" />
-            {unread > 0 && !chatOpen && (
+            {unread > 0 && (
               <Badge
                 className="absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[10px] leading-none flex items-center justify-center"
                 variant="destructive"
@@ -456,18 +165,16 @@ export function VideoClassroom({
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex min-h-0 overflow-hidden">
-        {/* Left side - Video Area */}
-        <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-          {/* Waiting for teacher state */}
+      {/* Content area */}
+      <div className="flex-1 flex min-h-0">
+        <div className="flex-1 min-w-0 h-full relative flex">
           {waitingForTeacher && (
             <div className="flex flex-col items-center justify-center h-full gap-4">
               <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
               <div className="text-center space-y-2">
-                <h3 className="text-lg font-semibold text-foreground">Waiting for teacher to start...</h3>
+                <h3 className="text-lg font-semibold text-foreground">Waiting for teacher to start…</h3>
                 <p className="text-sm text-muted-foreground">
                   You'll be connected automatically once the class begins.
                 </p>
@@ -478,7 +185,6 @@ export function VideoClassroom({
             </div>
           )}
 
-          {/* Loading state */}
           {!waitingForTeacher && isLoading && (
             <div className="flex items-center justify-center h-full">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -486,7 +192,6 @@ export function VideoClassroom({
             </div>
           )}
 
-          {/* Error state */}
           {!waitingForTeacher && isFailed && (
             <div className="flex items-center justify-center h-full p-6">
               <Alert variant="destructive" className="max-w-md">
@@ -522,43 +227,32 @@ export function VideoClassroom({
             </div>
           )}
 
-          {/* LiveKit Room - Connected state */}
-          {token && serverUrl && connectionState === "ready" && !waitingForTeacher && (
+          {token && serverUrl && connectionState === "ready" && (
             <LiveKitRoom
               serverUrl={serverUrl}
               token={token}
               connect={true}
               video={true}
               audio={true}
-              className="flex-1 flex flex-col overflow-hidden"
+              style={{ height: "100%", width: "100%", display: "flex" }}
               onConnected={handleLiveKitConnected}
               onError={handleLiveKitError}
               onDisconnected={onClose}
             >
-              <VideoLayout isTeacher={isTeacher} />
-              <ClassroomControls onLeave={onClose} />
+              <div className="flex-1 min-w-0 h-full">
+                <VideoConference />
+              </div>
               <RoomAudioRenderer />
-              {/* Keep original teacher/student components */}
               {isTeacher && <TeacherControls />}
               {!isTeacher && <StudentDataListener />}
+              {chatOpen && (
+                <div className="w-80 shrink-0 h-full">
+                  <ClassroomChat onClose={() => setChatOpen(false)} onNewMessage={() => setUnread((u) => u + 1)} />
+                </div>
+              )}
             </LiveKitRoom>
           )}
         </div>
-
-        {/* Right side - Participants Sidebar - Only show when connected */}
-        {token && serverUrl && connectionState === "ready" && !waitingForTeacher && (
-          <ParticipantsSidebar
-            isExpanded={participantsExpanded}
-            onToggle={() => setParticipantsExpanded(!participantsExpanded)}
-          />
-        )}
-
-        {/* Chat Panel */}
-        {chatOpen && (
-          <div className="w-80 shrink-0 border-l border-border bg-background">
-            <ClassroomChat onClose={() => setChatOpen(false)} onNewMessage={() => setUnread((u) => u + 1)} />
-          </div>
-        )}
       </div>
     </div>
   );
