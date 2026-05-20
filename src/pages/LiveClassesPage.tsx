@@ -10,7 +10,8 @@ import { EndClassAttendanceDialog } from '@/components/classroom/EndClassAttenda
 import { ReassignTeacherDialog } from '@/components/classroom/ReassignTeacherDialog';
 import { useRBAC } from '@/hooks/useRBAC';
 import { useAuth } from '@/contexts/AuthContext';
-import { VideoClassroom } from '@/components/classroom/VideoClassroom';
+import { useClassroomSession } from '@/contexts/ClassroomSessionContext';
+import { startLiveClass } from '@/services/classroom/startClass';
 import { format, isToday, isFuture, isPast, parseISO, startOfDay } from 'date-fns';
 import { Calendar } from '@/components/ui/calendar';
 
@@ -38,13 +39,13 @@ type LiveClass = {
 export default function LiveClassesPage() {
   const { isAdmin, role } = useRBAC();
   const { profile } = useAuth();
+  const { joinClass } = useClassroomSession();
   const isTeacher = role === 'teacher';
   const isStudent = role === 'student';
   const canManage = isAdmin || isTeacher;
 
   const [classes, setClasses] = useState<LiveClass[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeClassroom, setActiveClassroom] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [filter, setFilter] = useState<'today' | 'upcoming' | 'completed' | 'all'>('today');
   const [endingClass, setEndingClass] = useState<LiveClass | null>(null);
@@ -117,29 +118,32 @@ export default function LiveClassesPage() {
 
   const startClass = async (cls: LiveClass) => {
     try {
-      const roomName = `class-${cls.id.slice(0, 8)}`;
-      const updatePayload: any = { status: 'live', meeting_url: roomName };
-      
-      // Track who started the class
-      if (isAdmin && profile?.id) {
-        updatePayload.started_by = profile.id;
-      }
-
-      await adminQuery('update_live_class', { id: cls.id, ...updatePayload });
+      const roomName = await startLiveClass({ classId: cls.id, startedBy: profile?.id, isAdmin });
       toast.success('Class started!');
-      setActiveClassroom(cls.id);
+      joinClass({
+        classId: cls.id,
+        roomName,
+        displayName: profile?.displayName || (isAdmin ? 'Admin' : 'Teacher'),
+        isTeacher: true,
+        classStatus: 'live',
+      });
       load();
     } catch (e: any) {
       toast.error(e.message);
     }
   };
 
-  const handleClassEnded = () => {
-    setActiveClassroom(null);
-    load();
-  };
+  const handleClassEnded = () => { load(); };
 
-  const activeClass = classes.find(c => c.id === activeClassroom);
+  const joinExisting = (cls: LiveClass) => {
+    joinClass({
+      classId: cls.id,
+      roomName: cls.meeting_url || `class-${cls.id.slice(0, 8)}`,
+      displayName: profile?.displayName || (isStudent ? 'Student' : isAdmin ? 'Admin' : 'Teacher'),
+      isTeacher: isTeacher || isAdmin,
+      classStatus: cls.status,
+    });
+  };
 
   const ClassCard = ({ cls }: { cls: LiveClass }) => {
     const isLive = cls.status === 'live';
@@ -198,7 +202,7 @@ export default function LiveClassesPage() {
                       </Button>
                     )}
                     {isLive && canManage && (
-                      <Button size="sm" className="h-7 gap-1" onClick={() => setActiveClassroom(cls.id)}>
+                      <Button size="sm" className="h-7 gap-1" onClick={() => joinExisting(cls)}>
                         <Video className="h-3 w-3" /> Join
                       </Button>
                     )}
@@ -208,7 +212,7 @@ export default function LiveClassesPage() {
                       </Button>
                     )}
                     {isStudent && (isLive || isScheduled) && (
-                      <Button size="sm" className="h-7 gap-1" onClick={() => setActiveClassroom(cls.id)}>
+                      <Button size="sm" className="h-7 gap-1" onClick={() => joinExisting(cls)}>
                         <Video className="h-3 w-3" /> {isLive ? 'Join' : 'Join & Wait'}
                       </Button>
                     )}
@@ -230,18 +234,6 @@ export default function LiveClassesPage() {
 
   return (
     <div className="p-6 space-y-6">
-      {activeClass && (
-        <VideoClassroom
-          roomName={activeClass.meeting_url || `class-${activeClass.id.slice(0, 8)}`}
-          displayName={profile?.displayName || (isStudent ? 'Student' : isAdmin ? 'Admin' : 'Teacher')}
-          isTeacher={isTeacher || isAdmin}
-          classStatus={activeClass.status}
-          classId={activeClass.id}
-          onClose={() => setActiveClassroom(null)}
-          onClassStarted={load}
-        />
-      )}
-
       <h1 className="text-2xl font-bold text-foreground">
         {isStudent ? 'My Classes' : isTeacher ? 'My Classes' : 'Live Classes'}
       </h1>
