@@ -51,7 +51,17 @@ import OrderHistoryPage from "@/pages/OrderHistoryPage";
 import ProfilePage from "@/pages/ProfilePage";
 import SelectOrganizationPage from "@/pages/SelectOrganizationPage";
 import Unauthorized from "@/pages/Unauthorized";
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: false,
+      staleTime: 60_000,
+      retry: 1,
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
