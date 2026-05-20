@@ -24,21 +24,7 @@ interface VideoClassroomProps {
   onClassStarted?: () => void;
 }
 
-type ConnectionState = 'idle' | 'fetching' | 'checking' | 'ready' | 'failed';
-
-function wsPreCheck(url: string, timeoutMs = 5000): Promise<boolean> {
-  return new Promise((resolve) => {
-    try {
-      const wsUrl = url.replace(/^https?:\/\//, 'wss://').replace(/^wss:\/\//, 'wss://');
-      const ws = new WebSocket(wsUrl);
-      const timer = setTimeout(() => { ws.close(); resolve(false); }, timeoutMs);
-      ws.onopen = () => { clearTimeout(timer); ws.close(); resolve(true); };
-      ws.onerror = () => { clearTimeout(timer); ws.close(); resolve(false); };
-    } catch {
-      resolve(false);
-    }
-  });
-}
+type ConnectionState = 'idle' | 'fetching' | 'ready' | 'failed';
 
 export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, classId, onClose, onClassStarted }: VideoClassroomProps) {
   const [fullscreen, setFullscreen] = useState(false);
@@ -70,16 +56,6 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
           setErrorType('config');
         }
         throw new Error(data.error);
-      }
-
-      // Pre-check WebSocket connectivity
-      setConnectionState('checking');
-      const reachable = await wsPreCheck(data.url);
-      if (!reachable) {
-        setErrorType('unreachable');
-        setError('The video server is not responding. It may be undergoing maintenance or the URL may be incorrect.');
-        setConnectionState('failed');
-        return;
       }
 
       setToken(data.token);
@@ -145,7 +121,7 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
     setServerUrl(null);
   }, []);
 
-  const isLoading = connectionState === 'fetching' || connectionState === 'checking';
+  const isLoading = connectionState === 'fetching';
   const isFailed = connectionState === 'failed';
 
   return (
@@ -191,7 +167,7 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
             <div className="flex items-center justify-center h-full">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               <span className="ml-2 text-muted-foreground">
-                {connectionState === 'checking' ? 'Verifying video server...' : 'Connecting to classroom...'}
+                Connecting to classroom...
               </span>
             </div>
           )}
