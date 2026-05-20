@@ -1,65 +1,49 @@
-# Plan: Dashboard Class Cards + Full-Page Video Join
+# Prevent Page Reinitialization on Resume
 
-## Goals
-1. Every role's dashboard shows two prominent cards: **Today's Class** (next class scheduled today) and **Live Now** (any class currently live).
-2. Clicking either card joins immediately — no need to navigate to Live Classes page.
-3. After successful join, the classroom renders as a **full-page overlay** (not a 500px embed) with **Close** and **Minimize** controls available to every participant (teacher, admin, student, parent).
-4. Minimize collapses the video to a draggable corner pill (PiP-style) so users can still navigate the app; clicking it re-expands. Close disconnects and dismisses.
+When the user switches tabs / apps and returns, the current page reloads its data, the classroom reconnects, and local state appears to reset. Root causes: React Query's default `refetchOnWindowFocus`/`refetchOnReconnect`, an aggressive `refetchInterval`, and the auth provider flipping `loading=true` on every `onAuthStateChange` event (including `TOKEN_REFRESHED` fired on focus), which unmounts protected routes.
 
-## Implementation
+## Changes
 
-### 1. New shared hook + provider: `ClassroomSessionProvider`
-- File: `src/contexts/ClassroomSessionContext.tsx`
-- Holds global state for the currently-joined class: `{ classId, roomName, displayName, isTeacher, classStatus, minimized }`.
-- Exposes `joinClass(cls)`, `leaveClass()`, `toggleMinimize()`.
-- Mounted in `App.tsx` above the router so the overlay survives route changes.
+### 1. Global React Query defaults — `src/App.tsx`
+Configure the shared `QueryClient` with safe defaults so every page inherits them:
+```ts
+new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: false,
+      staleTime: 60_000,
+      retry: 1,
+    },
+  },
+})
+```
+This single change kills the bulk of the "everything reloads on resume" behavior across Dashboard, Schedule, Courses, Student/Parent pages, etc.
 
-### 2. New component: `GlobalClassroomOverlay`
-- File: `src/components/classroom/GlobalClassroomOverlay.tsx`
-- Reads from `ClassroomSessionContext`.
-- When `classId` present and `!minimized`: renders `VideoClassroom` inside a `fixed inset-0 z-[100]` container (true full-page).
-- When `minimized`: renders a floating pill at bottom-right (avatar + "Class in progress" + expand button + close button). Audio keeps playing because `LiveKitRoom` stays mounted (we hide via CSS `hidden` rather than unmount).
-- Rendered once in `AppLayout.tsx`.
+### 2. Stop auth-driven remounts — `src/contexts/AuthContext.tsx`
+- Do **not** set `loading=true` inside `onAuthStateChange`. Only set it on the initial `getSession()` pass.
+- Ignore `TOKEN_REFRESHED` and `INITIAL_SESSION` events for profile reload — only react to `SIGNED_IN` (when user id actually changes) and `SIGNED_OUT`.
+- Keep the existing `setTimeout(0)` deadlock guard.
 
-### 3. Update `VideoClassroom.tsx`
-- Remove the internal `fullscreen` state and 500px embedded mode — it's always rendered inside the overlay container, so it fills its parent.
-- Header gets two buttons for **all users**: **Minimize** (calls `toggleMinimize`) and **Close** (calls `leaveClass`). Drop the old maximize toggle.
-- Keep existing connection / waiting-room / error UI.
+Effect: `ProtectedRoute` no longer briefly renders its loader on tab return, so the `<Outlet/>` tree (and the page component) is not unmounted.
 
-### 4. Dashboard cards (`src/pages/Dashboard.tsx`)
-Add a new top section (above existing stat grid) shown for **every role** when data is available:
-- **Live Now card**: highlighted green/pulse if a class with `status='live'` exists; click → `joinClass(...)`. Empty state: "No class live right now".
-- **Today's Class card**: shows next `scheduled` class today (earliest by `scheduled_at`); click → for teachers/admins triggers `startClass`+join, for students triggers join (waiting room handles pre-start). Empty state: "No class today".
+### 3. Tame the classroom hook — `src/hooks/useTodayClasses.ts`
+- Replace `refetchInterval: 30s` with `refetchInterval: 60s` and add `refetchIntervalInBackground: false` so polling pauses when hidden and doesn't fire a burst on resume.
+- Explicitly set `refetchOnWindowFocus: false`.
 
-Data source per role:
-- Student/Parent: already fetched in `studentData.upcomingClasses` / `parentData.upcomingClasses` — filter by today/live.
-- Teacher: already in `teacherData` — extend query to return the full list (currently only count).
-- Admin/Superadmin/Support: add a new lightweight query `adminQuery('list_live_classes')` filtered to today + live, scoped by `effectiveOrgId`.
+### 4. Keep the LiveKit session alive
+`GlobalClassroomOverlay` already lives in `AppLayout` and stays mounted while routes change, so the LiveKit room will no longer be torn down once items 1–2 above stop the layout from remounting. No structural change needed here — verify only.
 
-Extract a small reusable `<ClassQuickJoinCards classes={...} onJoin={...} onStart={...} />` component to avoid duplicating JSX across 5 role branches.
+### 5. Light visibility audit
+- `src/pages/ActivityLogsPage.tsx` and `src/pages/SchedulePage.tsx` use raw `setInterval` for polling. Gate them with `document.visibilityState === 'visible'` inside the tick so hidden tabs don't queue work that floods on resume. No refetch on focus is added.
 
-### 5. Wire join handlers
-- The card's join calls `joinClass({ classId, roomName: meeting_url || 'class-'+id.slice(0,8), displayName, isTeacher, classStatus })`.
-- For teachers/admins starting a not-yet-live class, call the same `startClass` flow already in `LiveClassesPage` — extract it into `src/services/classroom/startClass.ts` so dashboard + classes page share it.
-- `LiveClassesPage` join buttons also switch to using `joinClass` from the context (drop its local `activeClassroom` state and the inline `VideoClassroom` mount).
+## Out of scope
+- No changes to LiveKit reconnect logic itself (LiveKit handles its own resume).
+- No router/layout restructuring — the existing `AppLayout` already persists across route changes; the fix is to stop the auth context from forcing it to unmount.
+- Form/scroll state is preserved automatically once remounts stop; no per-page work needed.
 
-### 6. Routing
-No new routes. The overlay is global, so users can navigate while minimized.
-
-## Technical Notes
-- `LiveKitRoom` must stay mounted during minimize. Implement by toggling Tailwind `hidden` + sizing classes rather than unmounting; otherwise the media connection drops.
-- `z-index`: overlay `z-[100]`, minimized pill `z-[90]`, both above sidebar.
-- Mobile: full-page already responsive; minimized pill anchors `bottom-4 right-4`, ~`w-64`.
-- No backend / schema / RLS changes.
-- No new edge functions.
-
-## Files Touched
-- New: `src/contexts/ClassroomSessionContext.tsx`
-- New: `src/components/classroom/GlobalClassroomOverlay.tsx`
-- New: `src/components/classroom/ClassQuickJoinCards.tsx`
-- New: `src/services/classroom/startClass.ts`
-- Edit: `src/App.tsx` (wrap with provider)
-- Edit: `src/components/layout/AppLayout.tsx` (mount overlay)
-- Edit: `src/components/classroom/VideoClassroom.tsx` (header buttons, drop fullscreen toggle)
-- Edit: `src/pages/Dashboard.tsx` (add quick-join cards in all role branches)
-- Edit: `src/pages/LiveClassesPage.tsx` (use shared join context + startClass service)
+## Verification
+1. Open Dashboard, switch tabs for 30s, return → no network burst, no skeleton flash.
+2. Join a live class, minimize, switch to another app, return → still connected, no reconnect.
+3. Fill a form, switch tabs, return → inputs intact.
