@@ -2,6 +2,7 @@ import { Outlet } from "react-router-dom";
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
 import { AppHeader } from './AppHeader';
+import { GlobalClassroomOverlay } from '@/components/classroom/GlobalClassroomOverlay';
 
 export function AppLayout() {
   return (
@@ -15,6 +16,7 @@ export function AppLayout() {
           </main>
         </div>
       </div>
+      <GlobalClassroomOverlay />
     </SidebarProvider>
   );
 }

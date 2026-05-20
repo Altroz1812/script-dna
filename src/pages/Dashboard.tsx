@@ -29,6 +29,8 @@ import {
 } from "lucide-react";
 import { readActiveOrgFromStorage } from "@/contexts/ActiveOrgContext";
 import { useActiveOrg } from "@/contexts/ActiveOrgContext";
+import { ClassQuickJoinCards } from "@/components/classroom/ClassQuickJoinCards";
+import { useTodayClasses } from "@/hooks/useTodayClasses";
 
 interface Stats {
   totalUsers: number;
@@ -113,6 +115,20 @@ export default function Dashboard() {
   const isSupport = role === "support";
   const isSuperadmin = role === "superadmin";
   const organizationId = profile?.organizationId ?? null;
+  const isAdminRole = role === "admin" || isSuperadmin;
+
+  const { data: todayClasses = [], refetch: refetchTodayClasses } = useTodayClasses();
+
+  const quickJoin = (
+    <ClassQuickJoinCards
+      classes={todayClasses as any}
+      displayName={profile?.displayName || profile?.email || "Participant"}
+      isTeacher={isTeacher}
+      isAdmin={isAdminRole}
+      userId={profile?.id}
+      onAfterStart={refetchTodayClasses}
+    />
+  );
 
   // Then replace the effectiveOrgId logic:
   // For superadmin, use the selected org from context; for regular users, use their org
@@ -330,6 +346,8 @@ export default function Dashboard() {
             </div>
           </motion.div>
 
+          {quickJoin}
+
           {studentLoading ? (
             <DashboardCardsSkeleton count={4} />
           ) : (
@@ -449,6 +467,8 @@ export default function Dashboard() {
               <p className="text-muted-foreground text-sm pl-[56px]">Monitor your children's learning</p>
             </div>
           </motion.div>
+
+          {quickJoin}
 
           {parentLoading ? (
             <DashboardCardsSkeleton count={4} />
@@ -596,6 +616,8 @@ export default function Dashboard() {
             </div>
           </motion.div>
 
+          {quickJoin}
+
           {teacherLoading ? (
             <DashboardCardsSkeleton count={4} />
           ) : (
@@ -729,6 +751,8 @@ export default function Dashboard() {
               <p className="text-muted-foreground text-sm pl-[56px]">Lead management & enrollment overview</p>
             </div>
           </motion.div>
+
+          {quickJoin}
 
           {supportLoading ? (
             <DashboardCardsSkeleton count={3} />
@@ -882,6 +906,8 @@ export default function Dashboard() {
             )}
           </div>
         </motion.div>
+
+        {quickJoin}
 
         {/* Bento Grid */}
         {isLoading ? (

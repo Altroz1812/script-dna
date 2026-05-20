@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { X, Maximize2, Minimize2, Loader2, MessageSquare, WifiOff, AlertTriangle } from 'lucide-react';
+import { X, Minimize2, Loader2, MessageSquare, WifiOff, AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
@@ -21,13 +21,13 @@ interface VideoClassroomProps {
   classStatus?: string;
   classId?: string;
   onClose: () => void;
+  onMinimize?: () => void;
   onClassStarted?: () => void;
 }
 
 type ConnectionState = 'idle' | 'fetching' | 'ready' | 'failed';
 
-export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, classId, onClose, onClassStarted }: VideoClassroomProps) {
-  const [fullscreen, setFullscreen] = useState(false);
+export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, classId, onClose, onMinimize, onClassStarted }: VideoClassroomProps) {
   const [token, setToken] = useState<string | null>(null);
   const [serverUrl, setServerUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -125,7 +125,7 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
   const isFailed = connectionState === 'failed';
 
   return (
-    <div className={`${fullscreen ? 'fixed inset-0 z-50' : 'relative w-full'} bg-background border border-border rounded-lg overflow-hidden flex flex-col`}>
+    <div className="w-full h-full bg-background overflow-hidden flex flex-col">
       {/* Header bar */}
       <div className="flex items-center justify-between px-4 py-2 bg-muted/50 border-b border-border shrink-0">
         <span className="text-sm font-medium text-foreground">Live Classroom</span>
@@ -138,17 +138,19 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
               </Badge>
             )}
           </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setFullscreen(f => !f)}>
-            {fullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
+          {onMinimize && (
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onMinimize} title="Minimize">
+              <Minimize2 className="h-4 w-4" />
+            </Button>
+          )}
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose} title="Leave class">
             <X className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
       {/* Content area */}
-      <div className={`flex-1 flex ${fullscreen ? 'h-[calc(100vh-41px)]' : 'h-[500px]'}`}>
+      <div className="flex-1 flex min-h-0">
         <div className="flex-1 min-w-0">
           {waitingForTeacher && (
             <div className="flex flex-col items-center justify-center h-full gap-4">
