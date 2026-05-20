@@ -15,7 +15,8 @@ async function createLivekitToken(
   apiSecret: string,
   identity: string,
   roomName: string,
-  isTeacher: boolean
+  isTeacher: boolean,
+  displayName: string
 ): Promise<string> {
   const header = { alg: "HS256", typ: "JWT" };
 
@@ -35,7 +36,7 @@ async function createLivekitToken(
       canPublishData: true,
       ...(isTeacher ? { roomAdmin: true } : {}),
     },
-    name: identity,
+    name: displayName || identity,
   };
 
   const enc = new TextEncoder();
@@ -141,7 +142,8 @@ serve(async (req) => {
       apiSecret,
       user.id,
       roomName,
-      !!isTeacher
+      !!isTeacher,
+      participantName
     );
 
     return new Response(
