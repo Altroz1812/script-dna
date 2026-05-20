@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingCart, ArrowLeft, ArrowRight, CheckCircle, Users, CreditCard, LogIn, Trash2, Tag, Percent } from 'lucide-react';
+import { ShoppingCart, ArrowLeft, ArrowRight, CheckCircle, Users, CreditCard, LogIn, Trash2, Tag, Percent, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -42,7 +42,7 @@ function calculateDiscounts(items: { id: string; fee: number }[], studentDetails
 
 export default function CheckoutPage() {
   const { items, removeItem, clearCart, studentDetails, setStudentDetails, getStudentDetails } = useCart();
-  const { session, loading: authLoading } = useAuth();
+  const { session, profile, loading: authLoading, signOut, refreshProfile } = useAuth();
   const [step, setStep] = useState(0);
   const [couponCode, setCouponCode] = useState('');
   const [couponDiscount, setCouponDiscount] = useState(0);
@@ -50,11 +50,45 @@ export default function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [orderId, setOrderId] = useState('');
+  const [promoting, setPromoting] = useState(false);
+  const promoteAttempted = useRef(false);
+
+  // Mark this checkout session as a fresh sign-up flow when user clicks
+  // "Continue with Google" so we know it's safe to auto-promote to parent.
+  const markSignupIntent = () => {
+    try { sessionStorage.setItem('checkout_signup_intent', '1'); } catch {}
+  };
+
+  // After auth lands, if a fresh non-parent user signed up via checkout,
+  // try to promote them to 'parent'. Existing non-parent users are blocked.
+  useEffect(() => {
+    if (!session || !profile || promoteAttempted.current) return;
+    if (profile.role === 'parent') return;
+    const intent = (() => { try { return sessionStorage.getItem('checkout_signup_intent') === '1'; } catch { return false; } })();
+    if (!intent) return;
+    promoteAttempted.current = true;
+    (async () => {
+      setPromoting(true);
+      try {
+        const { data, error } = await supabase.functions.invoke('promote-to-parent', { body: {} });
+        if (error) throw error;
+        if (data?.ok) {
+          await refreshProfile();
+          toast.success('Account set up as parent');
+        }
+      } catch (e: any) {
+        // silent; gating UI will show the block
+      } finally {
+        try { sessionStorage.removeItem('checkout_signup_intent'); } catch {}
+        setPromoting(false);
+      }
+    })();
+  }, [session, profile, refreshProfile]);
 
   // Auto-advance past auth step if logged in
   useEffect(() => {
-    if (session && step === 0) setStep(1);
-  }, [session, step]);
+    if (session && profile?.role === 'parent' && step === 0) setStep(1);
+  }, [session, profile, step]);
 
   // If not logged in, force step 0
   useEffect(() => {
@@ -62,6 +96,7 @@ export default function CheckoutPage() {
   }, [session, step]);
 
   const handleGoogleSignIn = async () => {
+    markSignupIntent();
     const { error } = await lovable.auth.signInWithOAuth('google', {
       redirect_uri: window.location.origin + '/checkout',
     });
@@ -214,6 +249,8 @@ export default function CheckoutPage() {
           </div>
         ) : items.length === 0 && !success ? (
           <EmptyCart />
+        ) : session && profile && profile.role !== 'parent' && !promoting ? (
+          <RoleBlocked role={profile.role} onSignOut={async () => { await signOut(); }} />
         ) : (
           <AnimatePresence mode="wait">
             {step === 0 && <AuthGateStep key="auth" onGoogleSignIn={handleGoogleSignIn} />}
@@ -252,7 +289,7 @@ export default function CheckoutPage() {
         )}
 
         {/* Navigation */}
-        {items.length > 0 && !success && (
+        {items.length > 0 && !success && (!session || profile?.role === 'parent') && (
           <div className="flex justify-between mt-8">
             <Button variant="outline" onClick={() => setStep(s => Math.max(session ? 1 : 0, s - 1))} disabled={step <= (session ? 1 : 0)}>
               <ArrowLeft className="h-4 w-4 mr-2" /> Back
