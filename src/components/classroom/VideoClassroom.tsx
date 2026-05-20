@@ -6,13 +6,16 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
 import {
   LiveKitRoom,
-  VideoConference,
+  GridLayout,
+  ParticipantTile,
+  useTracks,
   RoomAudioRenderer,
 } from '@livekit/components-react';
+import { Track } from 'livekit-client';
 import '@livekit/components-styles';
-import { TeacherControls } from './TeacherControls';
 import { StudentDataListener } from './StudentDataListener';
 import { ClassroomChat } from './ClassroomChat';
+import { RoleAwareControls } from './RoleAwareControls';
 
 interface VideoClassroomProps {
   roomName: string;
@@ -47,7 +50,7 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
 
     try {
       const { data, error: fnError } = await supabase.functions.invoke('livekit-token', {
-        body: { roomName, participantName: displayName, isTeacher: !!isTeacher },
+        body: { roomName, participantName: displayName },
       });
 
       if (fnError) throw new Error(fnError.message);
@@ -210,19 +213,16 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
               serverUrl={serverUrl}
               token={token}
               connect={true}
-              video={true}
-              audio={true}
+              video={!!isTeacher}
+              audio={!!isTeacher}
               style={{ height: '100%', width: '100%', display: 'flex' }}
               onConnected={handleLiveKitConnected}
               onError={handleLiveKitError}
               onDisconnected={onClose}
             >
-              <div className="flex-1 min-w-0 h-full">
-                <VideoConference />
-              </div>
+              <ClassroomStage isTeacher={!!isTeacher} onLeave={onClose} />
               <RoomAudioRenderer />
-              {isTeacher && <TeacherControls />}
-              {!isTeacher && <StudentDataListener />}
+              <StudentDataListener />
               {chatOpen && (
                 <div className="w-80 shrink-0 h-full">
                   <ClassroomChat onClose={() => setChatOpen(false)} onNewMessage={() => setUnread(u => u + 1)} />
@@ -232,6 +232,27 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ClassroomStage({ isTeacher, onLeave }: { isTeacher: boolean; onLeave: () => void }) {
+  const tracks = useTracks(
+    [
+      { source: Track.Source.Camera, withPlaceholder: true },
+      { source: Track.Source.ScreenShare, withPlaceholder: false },
+    ],
+    { onlySubscribed: false }
+  );
+
+  return (
+    <div className="flex-1 min-w-0 h-full flex flex-col">
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <GridLayout tracks={tracks} style={{ height: '100%' }}>
+          <ParticipantTile />
+        </GridLayout>
+      </div>
+      <RoleAwareControls onLeave={onLeave} />
     </div>
   );
 }

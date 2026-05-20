@@ -10,17 +10,22 @@ const corsHeaders = {
 // Minimal LiveKit JWT generation without external SDK
 // LiveKit tokens are standard JWTs with specific claims
 
+type RoleBucket = "moderator" | "viewer";
+
 async function createLivekitToken(
   apiKey: string,
   apiSecret: string,
   identity: string,
   roomName: string,
-  isTeacher: boolean,
+  roleBucket: RoleBucket,
+  appRole: string,
   displayName: string
 ): Promise<string> {
   const header = { alg: "HS256", typ: "JWT" };
 
   const now = Math.floor(Date.now() / 1000);
+  const isModerator = roleBucket === "moderator";
+  const metadata = JSON.stringify({ role: appRole, bucket: roleBucket });
   const payload: Record<string, unknown> = {
     iss: apiKey,
     sub: identity,
@@ -31,12 +36,17 @@ async function createLivekitToken(
     video: {
       roomJoin: true,
       room: roomName,
-      canPublish: true,
+      canPublish: isModerator,
       canSubscribe: true,
+      // Viewers can send data so they can post chat too; flip to false to make chat read-only
       canPublishData: true,
-      ...(isTeacher ? { roomAdmin: true } : {}),
+      canPublishSources: isModerator
+        ? ["camera", "microphone", "screen_share", "screen_share_audio"]
+        : [],
+      ...(isModerator ? { roomAdmin: true } : {}),
     },
     name: displayName || identity,
+    metadata,
   };
 
   const enc = new TextEncoder();
@@ -94,7 +104,7 @@ serve(async (req) => {
       });
     }
 
-    const { roomName, participantName, isTeacher } = await req.json();
+    const { roomName, participantName } = await req.json();
 
     if (!roomName || !participantName) {
       return new Response(
@@ -137,17 +147,31 @@ serve(async (req) => {
       );
     }
 
+    // Derive role server-side (do NOT trust client)
+    const { data: roleRow } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const appRole: string = (roleRow?.role as string) ?? "student";
+    const moderatorRoles = ["superadmin", "admin", "support", "teacher"];
+    const roleBucket: RoleBucket = moderatorRoles.includes(appRole)
+      ? "moderator"
+      : "viewer";
+
     const token = await createLivekitToken(
       apiKey,
       apiSecret,
       user.id,
       roomName,
-      !!isTeacher,
+      roleBucket,
+      appRole,
       participantName
     );
 
     return new Response(
-      JSON.stringify({ token, url: livekitUrl }),
+      JSON.stringify({ token, url: livekitUrl, role: appRole, bucket: roleBucket }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
