@@ -36,34 +36,16 @@ export function BatchPickerDialog({ open, onOpenChange, courseId, courseName, on
     setLoading(true);
 
     (async () => {
-      const { data: batchData } = await supabase
-        .from('batches')
-        .select('id, name, max_students, teacher_id, batch_students(count)')
-        .eq('course_id', courseId);
-
-      const items: BatchWithCount[] = (batchData ?? []).map((b: any) => ({
-        id: b.id,
-        name: b.name,
-        max_students: b.max_students,
-        teacher_id: b.teacher_id,
-        enrolled_count: b.batch_students?.[0]?.count ?? 0,
-      }));
-
-      // Fetch teacher names
-      const teacherIds = [...new Set(items.filter(b => b.teacher_id).map(b => b.teacher_id!))];
-      if (teacherIds.length > 0) {
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('user_id, display_name')
-          .in('user_id', teacherIds);
-        const nameMap: Record<string, string> = {};
-        for (const p of profiles ?? []) nameMap[p.user_id] = p.display_name ?? '';
-        for (const b of items) {
-          if (b.teacher_id) b.teacher_name = nameMap[b.teacher_id] || null;
-        }
+      // Use public edge function so unauthenticated landing-page visitors
+      // can see available batches (RLS blocks direct anon reads on `batches`).
+      const { data, error } = await supabase.functions.invoke('public-batches', {
+        body: { course_id: courseId },
+      });
+      if (error || !Array.isArray(data)) {
+        setBatches([]);
+      } else {
+        setBatches(data as BatchWithCount[]);
       }
-
-      setBatches(items);
       setLoading(false);
     })();
   }, [open, courseId]);
