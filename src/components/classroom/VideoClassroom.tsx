@@ -113,16 +113,16 @@ function ParticipantsList({ displayName }: { displayName: string }) {
 
 // Custom controls component
 function CustomControls({ onLeave }: { onLeave: () => void }) {
-  const { toggle: toggleMic, enabled: micEnabled } = useTrackToggle(Track.Source.Microphone);
-  const { toggle: toggleCam, enabled: camEnabled } = useTrackToggle(Track.Source.Camera);
+  const { toggle: toggleMic, enabled: micEnabled } = useTrackToggle({ source: Track.Source.Microphone });
+  const { toggle: toggleCam, enabled: camEnabled } = useTrackToggle({ source: Track.Source.Camera });
 
   return (
     <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 p-2 bg-background/95 backdrop-blur rounded-lg shadow-lg border">
-      <Button variant={!micEnabled ? "destructive" : "secondary"} size="sm" onClick={toggleMic} className="gap-1">
+      <Button variant={!micEnabled ? "destructive" : "secondary"} size="sm" onClick={() => toggleMic()} className="gap-1">
         {!micEnabled ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
       </Button>
 
-      <Button variant={!camEnabled ? "destructive" : "secondary"} size="sm" onClick={toggleCam} className="gap-1">
+      <Button variant={!camEnabled ? "destructive" : "secondary"} size="sm" onClick={() => toggleCam()} className="gap-1">
         {!camEnabled ? <VideoOff className="h-4 w-4" /> : <Video className="h-4 w-4" />}
       </Button>
 
