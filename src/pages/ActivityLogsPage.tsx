@@ -68,7 +68,9 @@ export default function ActivityLogsPage() {
   useEffect(() => {
     setLoading(true);
     loadAll();
-    const t = window.setInterval(loadAll, 30_000);
+    const t = window.setInterval(() => {
+      if (document.visibilityState === 'visible') loadAll();
+    }, 30_000);
     return () => window.clearInterval(t);
   }, []);
 
