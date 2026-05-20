@@ -1,14 +1,39 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { X, Minimize2, Loader2, MessageSquare, WifiOff, AlertTriangle } from "lucide-react";
+import {
+  X,
+  Minimize2,
+  Loader2,
+  MessageSquare,
+  WifiOff,
+  AlertTriangle,
+  Mic,
+  MicOff,
+  Video,
+  VideoOff,
+  Users,
+  ChevronDown,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
-import { LiveKitRoom, VideoConference, RoomAudioRenderer } from "@livekit/components-react";
+import {
+  LiveKitRoom,
+  VideoConference,
+  RoomAudioRenderer,
+  useParticipants,
+  useLocalParticipant,
+  useTrackToggle,
+  TrackToggle,
+  useRoomContext,
+} from "@livekit/components-react";
 import "@livekit/components-styles";
 import { TeacherControls } from "./TeacherControls";
 import { StudentDataListener } from "./StudentDataListener";
 import { ClassroomChat } from "./ClassroomChat";
+import { Track } from "livekit-client";
 
 interface VideoClassroomProps {
   roomName: string;
@@ -22,6 +47,121 @@ interface VideoClassroomProps {
 }
 
 type ConnectionState = "idle" | "fetching" | "ready" | "failed";
+
+// Simple participants list component
+function ParticipantsList() {
+  const participants = useParticipants();
+  const localParticipant = useLocalParticipant();
+
+  const getInitials = (name: string) => {
+    return name.slice(0, 2).toUpperCase();
+  };
+
+  // Separate host (teacher) from others
+  const hostParticipant = participants.find((p) => p.isAgent || p.name?.includes("Teacher"));
+  const otherParticipants = participants.filter((p) => p !== hostParticipant);
+
+  return (
+    <ScrollArea className="h-full">
+      <div className="p-3 space-y-2">
+        {hostParticipant && (
+          <div className="p-2 rounded-lg bg-primary/5 border border-primary/20">
+            <div className="flex items-center gap-2">
+              <Avatar className="h-8 w-8">
+                <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                  {getInitials(hostParticipant.name || "Teacher")}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{hostParticipant.name || "Teacher"} 👑</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {localParticipant.localParticipant && (
+          <div className="p-2 rounded-lg bg-muted/30">
+            <div className="flex items-center gap-2">
+              <Avatar className="h-8 w-8">
+                <AvatarFallback className="bg-muted text-xs">{getInitials(displayName || "You")}</AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm truncate">{displayName} (You)</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {otherParticipants.map((participant) => (
+          <div key={participant.identity} className="p-2 rounded-lg bg-muted/30">
+            <div className="flex items-center gap-2">
+              <Avatar className="h-8 w-8">
+                <AvatarFallback className="bg-muted text-xs">
+                  {getInitials(participant.name || "Student")}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm truncate">{participant.name || "Student"}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </ScrollArea>
+  );
+}
+
+// Custom controls component
+function CustomControls({ onLeave }: { onLeave: () => void }) {
+  const { toggle: toggleMic, enabled: micEnabled } = useTrackToggle(Track.Source.Microphone);
+  const { toggle: toggleCam, enabled: camEnabled } = useTrackToggle(Track.Source.Camera);
+
+  return (
+    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 p-2 bg-background/95 backdrop-blur rounded-lg shadow-lg border">
+      <Button variant={!micEnabled ? "destructive" : "secondary"} size="sm" onClick={toggleMic} className="gap-1">
+        {!micEnabled ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+      </Button>
+
+      <Button variant={!camEnabled ? "destructive" : "secondary"} size="sm" onClick={toggleCam} className="gap-1">
+        {!camEnabled ? <VideoOff className="h-4 w-4" /> : <Video className="h-4 w-4" />}
+      </Button>
+
+      <Button variant="destructive" size="sm" onClick={onLeave}>
+        Leave
+      </Button>
+    </div>
+  );
+}
+
+// Custom video layout - host takes main space
+function CustomVideoLayout() {
+  const participants = useParticipants();
+  const room = useRoomContext();
+
+  // Find host (teacher)
+  const hostParticipant = participants.find((p) => p.isAgent || p.name?.includes("Teacher")) || participants[0];
+
+  return (
+    <div className="relative w-full h-full bg-black">
+      {/* Main video - always shows host */}
+      {hostParticipant ? (
+        <div className="w-full h-full">
+          <VideoConference />
+        </div>
+      ) : (
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center text-white">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
+            <p>Waiting for host...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Controls overlay */}
+      <CustomControls onLeave={() => window.dispatchEvent(new Event("leave-classroom"))} />
+    </div>
+  );
+}
 
 export function VideoClassroom({
   roomName,
@@ -41,6 +181,7 @@ export function VideoClassroom({
   const [chatOpen, setChatOpen] = useState(false);
   const [unread, setUnread] = useState(0);
   const [waitingForTeacher, setWaitingForTeacher] = useState(!isTeacher && classStatus === "scheduled");
+  const [showParticipants, setShowParticipants] = useState(true);
   const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const waitingPollRef = useRef<ReturnType<typeof setInterval>>();
 
@@ -67,7 +208,6 @@ export function VideoClassroom({
       setServerUrl(data.url);
       setConnectionState("ready");
 
-      // Safety timeout — if LiveKitRoom doesn't connect within 15s, show error
       connectionTimeoutRef.current = setTimeout(() => {
         setErrorType("unreachable");
         setError("Connection timed out. The video server did not respond in time.");
@@ -94,7 +234,6 @@ export function VideoClassroom({
       if (data && data.status === "live") {
         setWaitingForTeacher(false);
         onClassStarted?.();
-        // Now connect
         fetchToken();
       }
     }, 3000);
@@ -126,12 +265,19 @@ export function VideoClassroom({
     setServerUrl(null);
   }, []);
 
+  // Listen for leave event from custom controls
+  useEffect(() => {
+    const handleLeave = () => onClose();
+    window.addEventListener("leave-classroom", handleLeave);
+    return () => window.removeEventListener("leave-classroom", handleLeave);
+  }, [onClose]);
+
   const isLoading = connectionState === "fetching";
   const isFailed = connectionState === "failed";
 
   return (
     <div className="w-full h-full bg-background overflow-hidden flex flex-col">
-      {/* Header bar */}
+      {/* Header bar - unchanged from original */}
       <div className="flex items-center justify-between px-4 py-2 bg-muted/50 border-b border-border shrink-0">
         <span className="text-sm font-medium text-foreground">Live Classroom</span>
         <div className="flex items-center gap-1">
@@ -154,6 +300,15 @@ export function VideoClassroom({
               </Badge>
             )}
           </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => setShowParticipants(!showParticipants)}
+            title="Participants"
+          >
+            <Users className="h-4 w-4" />
+          </Button>
           {onMinimize && (
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onMinimize} title="Minimize">
               <Minimize2 className="h-4 w-4" />
@@ -165,9 +320,10 @@ export function VideoClassroom({
         </div>
       </div>
 
-      {/* Content area */}
-      <div className="flex-1 flex min-h-0">
-        <div className="flex-1 min-w-0 h-full relative flex">
+      {/* Content area - modified for new layout */}
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        {/* Main video area */}
+        <div className="flex-1 relative">
           {waitingForTeacher && (
             <div className="flex flex-col items-center justify-center h-full gap-4">
               <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
@@ -234,25 +390,35 @@ export function VideoClassroom({
               connect={true}
               video={true}
               audio={true}
-              style={{ height: "100%", width: "100%", display: "flex" }}
+              style={{ height: "100%", width: "100%" }}
               onConnected={handleLiveKitConnected}
               onError={handleLiveKitError}
               onDisconnected={onClose}
             >
-              <div className="flex-1 min-w-0 h-full">
-                <VideoConference />
-              </div>
+              <CustomVideoLayout />
               <RoomAudioRenderer />
               {isTeacher && <TeacherControls />}
               {!isTeacher && <StudentDataListener />}
-              {chatOpen && (
-                <div className="w-80 shrink-0 h-full">
-                  <ClassroomChat onClose={() => setChatOpen(false)} onNewMessage={() => setUnread((u) => u + 1)} />
-                </div>
-              )}
             </LiveKitRoom>
           )}
         </div>
+
+        {/* Participants sidebar - collapsible */}
+        {token && serverUrl && connectionState === "ready" && showParticipants && (
+          <div className="w-64 border-l border-border bg-background flex flex-col">
+            <div className="p-3 border-b border-border">
+              <h3 className="font-medium text-sm">Participants</h3>
+            </div>
+            <ParticipantsList />
+          </div>
+        )}
+
+        {/* Chat panel - same as original */}
+        {chatOpen && (
+          <div className="w-80 shrink-0 border-l border-border">
+            <ClassroomChat onClose={() => setChatOpen(false)} onNewMessage={() => setUnread((u) => u + 1)} />
+          </div>
+        )}
       </div>
     </div>
   );
