@@ -151,7 +151,7 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
 
       {/* Content area */}
       <div className="flex-1 flex min-h-0">
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 h-full relative">
           {waitingForTeacher && (
             <div className="flex flex-col items-center justify-center h-full gap-4">
               <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
@@ -212,7 +212,7 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
               connect={true}
               video={true}
               audio={true}
-              style={{ height: '100%' }}
+              style={{ height: '100%', width: '100%' }}
               onConnected={handleLiveKitConnected}
               onError={handleLiveKitError}
               onDisconnected={onClose}
@@ -221,14 +221,14 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
               <RoomAudioRenderer />
               {isTeacher && <TeacherControls />}
               {!isTeacher && <StudentDataListener />}
-              {chatOpen && (
-                <div className="fixed right-0 top-0 bottom-0 w-80 z-50">
-                  <ClassroomChat onNewMessage={() => { if (!chatOpen) setUnread(u => u + 1); }} />
-                </div>
-              )}
             </LiveKitRoom>
           )}
         </div>
+        {chatOpen && token && serverUrl && connectionState === 'ready' && (
+          <div className="w-80 shrink-0 h-full">
+            <ClassroomChatWrapper onClose={() => setChatOpen(false)} onNewMessage={() => setUnread(u => u + 1)} />
+          </div>
+        )}
       </div>
     </div>
   );
