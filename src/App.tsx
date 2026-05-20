@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { CartProvider } from "@/contexts/CartContext";
 import { ActiveOrgProvider } from "@/contexts/ActiveOrgContext";
+import { ClassroomSessionProvider } from "@/contexts/ClassroomSessionContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { AppLayout } from "@/components/layout/AppLayout";
 import LandingPage from "@/pages/LandingPage";
@@ -61,6 +62,7 @@ const App = () => (
         <BrowserRouter>
           <AuthProvider>
             <ActiveOrgProvider>
+            <ClassroomSessionProvider>
             <Routes>
               {/* Public routes */}
               <Route path="/" element={<LandingPage />} />
@@ -117,6 +119,7 @@ const App = () => (
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
+            </ClassroomSessionProvider>
             </ActiveOrgProvider>
           </AuthProvider>
         </BrowserRouter>
