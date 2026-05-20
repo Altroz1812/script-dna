@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useRoomContext } from '@livekit/components-react';
+import { useRoomContext, useLocalParticipant } from '@livekit/components-react';
 import { RoomEvent } from 'livekit-client';
+import { useParticipantRole } from '@/hooks/useParticipantRole';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -20,6 +21,9 @@ interface ClassroomChatProps {
 
 export function ClassroomChat({ onNewMessage, onClose }: ClassroomChatProps) {
   const room = useRoomContext();
+  const { localParticipant } = useLocalParticipant();
+  const { bucket } = useParticipantRole(localParticipant);
+  const canSend = bucket === 'moderator' || !!localParticipant?.permissions?.canPublishData;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -125,10 +129,11 @@ export function ClassroomChat({ onNewMessage, onClose }: ClassroomChatProps) {
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Type a message..."
+          placeholder={canSend ? 'Type a message...' : 'Chat is read-only'}
           className="h-8 text-sm"
+          disabled={!canSend}
         />
-        <Button size="icon" className="h-8 w-8 shrink-0" onClick={sendMessage} disabled={!input.trim()}>
+        <Button size="icon" className="h-8 w-8 shrink-0" onClick={sendMessage} disabled={!input.trim() || !canSend}>
           <Send className="h-3.5 w-3.5" />
         </Button>
       </div>
