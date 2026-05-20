@@ -5,6 +5,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Send } from 'lucide-react';
+import { X } from 'lucide-react';
 
 interface ChatMessage {
   sender: string;
@@ -14,9 +15,10 @@ interface ChatMessage {
 
 interface ClassroomChatProps {
   onNewMessage?: () => void;
+  onClose?: () => void;
 }
 
-export function ClassroomChat({ onNewMessage }: ClassroomChatProps) {
+export function ClassroomChat({ onNewMessage, onClose }: ClassroomChatProps) {
   const room = useRoomContext();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -84,7 +86,14 @@ export function ClassroomChat({ onNewMessage }: ClassroomChatProps) {
   return (
     <div className="flex flex-col h-full border-l border-border bg-background">
       <div className="px-3 py-2 border-b border-border shrink-0">
-        <span className="text-sm font-medium text-foreground">Chat</span>
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-foreground">Chat</span>
+          {onClose && (
+            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={onClose} title="Close chat">
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
       </div>
 
       <ScrollArea className="flex-1 px-3 py-2">
