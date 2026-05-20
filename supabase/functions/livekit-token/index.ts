@@ -105,11 +105,11 @@ serve(async (req) => {
       );
     }
 
-    const livekitUrl = Deno.env.get("LIVEKIT_URL");
+    const rawUrl = Deno.env.get("LIVEKIT_URL");
     const apiKey = Deno.env.get("LIVEKIT_API_KEY");
     const apiSecret = Deno.env.get("LIVEKIT_API_SECRET");
 
-    if (!livekitUrl || !apiKey || !apiSecret) {
+    if (!rawUrl || !apiKey || !apiSecret) {
       return new Response(
         JSON.stringify({ error: "LiveKit not configured. Please set LIVEKIT_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET." }),
         {
@@ -119,9 +119,16 @@ serve(async (req) => {
       );
     }
 
+    // Normalize: strip whitespace/quotes, rewrite https→wss, drop trailing slash
+    let livekitUrl = rawUrl.trim().replace(/^["']|["']$/g, "");
+    if (livekitUrl.startsWith("https://")) livekitUrl = "wss://" + livekitUrl.slice(8);
+    else if (livekitUrl.startsWith("http://")) livekitUrl = "ws://" + livekitUrl.slice(7);
+    livekitUrl = livekitUrl.replace(/\/+$/, "");
+
     if (!livekitUrl.startsWith("wss://")) {
+      const prefix = livekitUrl.slice(0, 12);
       return new Response(
-        JSON.stringify({ error: "LiveKit server URL is invalid. It must start with wss://" }),
+        JSON.stringify({ error: `LiveKit server URL is invalid. It must start with wss:// (got "${prefix}...")` }),
         {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
