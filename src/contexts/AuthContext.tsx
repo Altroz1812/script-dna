@@ -73,29 +73,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (heartbeatTimer != null) { window.clearInterval(heartbeatTimer); heartbeatTimer = null; }
     };
 
-    // Set up listener FIRST
+    // Set up listener FIRST. Only react to actual sign-in / sign-out events;
+    // ignore TOKEN_REFRESHED / INITIAL_SESSION / USER_UPDATED so tab-focus
+    // refreshes do not flip `loading` and remount the entire protected tree.
+    let currentUserId: string | null = null;
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, sess) => {
-      setLoading(true);
       setSession(sess);
-      if (sess?.user) {
-        // Use setTimeout to avoid Supabase auth callback deadlocks, but keep
-        // auth loading true until the role/profile has actually loaded.
+      if (event === 'SIGNED_OUT' || !sess?.user) {
+        currentUserId = null;
+        setProfile(null);
+        setLoading(false);
+        stopHeartbeat();
+        return;
+      }
+      if (event === 'SIGNED_IN' && sess.user.id !== currentUserId) {
+        currentUserId = sess.user.id;
+        setLoading(true);
         setTimeout(async () => {
           await loadProfile(sess.user.id);
           setLoading(false);
           startHeartbeat();
         }, 0);
-      } else {
-        setProfile(null);
-        setLoading(false);
-        stopHeartbeat();
       }
+      // TOKEN_REFRESHED / INITIAL_SESSION / USER_UPDATED: keep state as-is.
     });
 
     // Then check existing session
     supabase.auth.getSession().then(async ({ data: { session: sess } }) => {
       setSession(sess);
       if (sess?.user) {
+        currentUserId = sess.user.id;
         await loadProfile(sess.user.id);
         startHeartbeat();
       } else {
