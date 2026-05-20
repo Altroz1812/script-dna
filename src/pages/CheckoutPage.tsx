@@ -325,6 +325,24 @@ function EmptyCart() {
   );
 }
 
+function RoleBlocked({ role, onSignOut }: { role: string; onSignOut: () => void | Promise<void> }) {
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-16 max-w-md mx-auto">
+      <ShieldAlert className="mx-auto h-14 w-14 text-destructive mb-4" />
+      <h2 className="text-2xl font-bold text-foreground mb-2">Parent account required</h2>
+      <p className="text-muted-foreground mb-6">
+        This account is registered as <span className="font-semibold capitalize">{role}</span>.
+        Checkout and enrollment payments are only available for parent accounts.
+        Please sign out and continue with a parent account, or contact support.
+      </p>
+      <div className="flex gap-3 justify-center">
+        <Button variant="outline" asChild><Link to="/">Back to Home</Link></Button>
+        <Button onClick={() => onSignOut()}>Sign out</Button>
+      </div>
+    </motion.div>
+  );
+}
+
 function AuthGateStep({ onGoogleSignIn }: { onGoogleSignIn: () => void }) {
   return (
     <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} className="flex flex-col items-center justify-center py-16">
