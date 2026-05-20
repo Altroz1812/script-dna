@@ -37,6 +37,8 @@ export function useTodayClasses() {
     },
     enabled: !!profile,
     staleTime: 30 * 1000,
-    refetchInterval: 30 * 1000,
+    refetchInterval: 60 * 1000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
   });
 }
