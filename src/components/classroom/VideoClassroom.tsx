@@ -49,7 +49,7 @@ interface VideoClassroomProps {
 type ConnectionState = "idle" | "fetching" | "ready" | "failed";
 
 // Simple participants list component
-function ParticipantsList() {
+function ParticipantsList({ displayName }: { displayName: string }) {
   const participants = useParticipants();
   const localParticipant = useLocalParticipant();
 
@@ -409,7 +409,7 @@ export function VideoClassroom({
             <div className="p-3 border-b border-border">
               <h3 className="font-medium text-sm">Participants</h3>
             </div>
-            <ParticipantsList />
+            <ParticipantsList displayName={displayName} />
           </div>
         )}
 
