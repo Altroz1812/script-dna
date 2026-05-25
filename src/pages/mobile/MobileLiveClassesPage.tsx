@@ -214,8 +214,10 @@ export default function MobileLiveClassesPage() {
             const isLive = status === 'live';
             const isToday = status === 'today';
             const start = c.scheduled_at ? parseISO(c.scheduled_at) : null;
+            const end = start ? addMinutes(start, c.duration_minutes || 60) : null;
+            const windowEnded = !!(end && now > end) && c.status !== 'live';
             const canStart = canManage && (isLive || isToday) && c.status !== 'completed';
-            const canJoin = isLive || (isStudent && isToday && start && now >= addMinutes(start, -10));
+            const canJoin = !windowEnded && (isLive || (isStudent && isToday && start && now >= addMinutes(start, -10)));
             return (
               <div
                 key={c.id}
