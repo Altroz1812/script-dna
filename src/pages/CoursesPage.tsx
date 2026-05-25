@@ -19,8 +19,12 @@ import { toast } from 'sonner';
 import { Plus, Trash2, BookOpen, Clock, Calendar, GraduationCap, IndianRupee, Eye, Pencil, MapPin, Wifi, Building2, Users, ChevronDown } from 'lucide-react';
 import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
 import { CourseForm } from '@/components/courses/CourseForm';
+import { useIsMobileApp } from '@/hooks/useIsMobileApp';
+import MobileCoursesPage from './mobile/MobileCoursesPage';
 
 export default function CoursesPage() {
+  const __isMobile = useIsMobileApp();
+  if (__isMobile) return <MobileCoursesPage />;
   const { profile } = useAuth();
   const { isAdmin, role } = useRBAC();
   const isStudent = role === 'student';

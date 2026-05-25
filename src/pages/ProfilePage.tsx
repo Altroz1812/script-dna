@@ -14,8 +14,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { PasswordStrengthMeter } from '@/components/auth/PasswordStrengthMeter';
 import { checkPasswordStrength } from '@/lib/security';
+import { useIsMobileApp } from '@/hooks/useIsMobileApp';
+import MobileProfilePage from './mobile/MobileProfilePage';
 
 export default function ProfilePage() {
+  const __isMobile = useIsMobileApp();
+  if (__isMobile) return <MobileProfilePage />;
   const { profile, refreshProfile } = useAuth();
   const { role, isAdmin, isSuperAdmin } = useRBAC();
 

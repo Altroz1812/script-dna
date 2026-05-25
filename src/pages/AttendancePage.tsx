@@ -8,8 +8,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { toast } from 'sonner';
 import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { useActiveOrg } from '@/contexts/ActiveOrgContext';
+import { useIsMobileApp } from '@/hooks/useIsMobileApp';
+import MobileAttendancePage from './mobile/MobileAttendancePage';
 
 export default function AttendancePage() {
+  const __isMobile = useIsMobileApp();
+  if (__isMobile) return <MobileAttendancePage />;
   const { activeOrgId } = useActiveOrg();
 
   const [batches, setBatches] = useState<any[]>([]);

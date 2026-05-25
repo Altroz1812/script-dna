@@ -8,8 +8,12 @@ import { toast } from 'sonner';
 import { GraduationCap } from 'lucide-react';
 import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { useRBAC } from '@/hooks/useRBAC';
+import { useIsMobileApp } from '@/hooks/useIsMobileApp';
+import MobileStudentsPage from './mobile/MobileStudentsPage';
 
 export default function StudentsPage() {
+  const __isMobile = useIsMobileApp();
+  if (__isMobile) return <MobileStudentsPage />;
   const { role } = useRBAC();
   const isTeacher = role === 'teacher';
 
