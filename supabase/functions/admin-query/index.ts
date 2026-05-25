@@ -98,6 +98,7 @@ Deno.serve(async (req) => {
       'list_activity_logs',
       'list_active_sessions',
       'list_session_history',
+      'get_support_overview',
       'list_course_modules', 'create_course_module', 'update_course_module', 'delete_course_module',
       'create_lesson', 'update_lesson', 'delete_lesson',
       'list_students_with_batches', 'list_all_students', 'list_teachers',
@@ -292,6 +293,43 @@ Deno.serve(async (req) => {
         if (targetOrgId) q = q.eq('organization_id', targetOrgId)
         const { data } = await q
         result = data ?? []
+        break
+      }
+      // Consolidated counts for Support dashboard. One round-trip instead of
+      // three separate list_* fetches.
+      case 'get_support_overview': {
+        const leadsQ = supabase.from('leads').select('id', { count: 'exact', head: true })
+        const paymentsQ = supabase.from('payments').select('id, status')
+        let leadsCount = 0
+        let enrollmentsCount = 0
+        let openPayments = 0
+        if (targetOrgId) {
+          const [{ count: lc }, { data: ob }] = await Promise.all([
+            leadsQ.eq('organization_id', targetOrgId),
+            supabase.from('batches').select('id').eq('organization_id', targetOrgId),
+          ])
+          leadsCount = lc ?? 0
+          const batchIds = (ob ?? []).map((b: any) => b.id)
+          if (batchIds.length > 0) {
+            const { count: ec } = await supabase
+              .from('batch_students')
+              .select('id', { count: 'exact', head: true })
+              .in('batch_id', batchIds)
+            enrollmentsCount = ec ?? 0
+          }
+          const { data: pays } = await paymentsQ
+          openPayments = (pays ?? []).filter((p: any) => p.status === 'pending').length
+        } else {
+          const [{ count: lc }, { count: ec }, { data: pays }] = await Promise.all([
+            leadsQ,
+            supabase.from('batch_students').select('id', { count: 'exact', head: true }),
+            paymentsQ,
+          ])
+          leadsCount = lc ?? 0
+          enrollmentsCount = ec ?? 0
+          openPayments = (pays ?? []).filter((p: any) => p.status === 'pending').length
+        }
+        result = { totalLeads: leadsCount, totalEnrollments: enrollmentsCount, openPayments }
         break
       }
       case 'create_lead': {
