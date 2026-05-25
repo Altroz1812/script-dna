@@ -6,16 +6,17 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
 import {
   LiveKitRoom,
-  GridLayout,
-  ParticipantTile,
   useTracks,
+  useParticipants,
+  VideoTrack,
   RoomAudioRenderer,
 } from '@livekit/components-react';
-import { Track } from 'livekit-client';
+import { Track, type Participant } from 'livekit-client';
 import '@livekit/components-styles';
 import { StudentDataListener } from './StudentDataListener';
 import { ClassroomChat } from './ClassroomChat';
 import { RoleAwareControls } from './RoleAwareControls';
+import { MicOff, ScreenShare, User as UserIcon } from 'lucide-react';
 
 interface VideoClassroomProps {
   roomName: string;
@@ -225,12 +226,17 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
               <StudentDataListener />
               {chatOpen && (
                 <>
-                  {/* Mobile backdrop */}
+                  {/* Backdrop (mobile fullscreen, desktop overlay-less) */}
                   <div
-                    className="absolute inset-0 z-10 bg-black/40 sm:hidden"
+                    className="absolute inset-0 z-10 bg-black/50 sm:hidden"
                     onClick={() => setChatOpen(false)}
                   />
-                  <div className="absolute inset-y-0 right-0 z-20 w-full max-w-sm sm:relative sm:w-80 sm:max-w-none shrink-0 h-full shadow-2xl sm:shadow-none">
+                  {/* Mobile: bottom sheet. Desktop: right side panel */}
+                  <div
+                    className="absolute z-20 shadow-2xl
+                      inset-x-0 bottom-0 h-[70vh] rounded-t-2xl overflow-hidden
+                      sm:relative sm:inset-auto sm:h-full sm:w-80 sm:rounded-none sm:shadow-none sm:shrink-0"
+                  >
                     <ClassroomChat onClose={() => setChatOpen(false)} onNewMessage={() => setUnread(u => u + 1)} />
                   </div>
                 </>
@@ -243,21 +249,119 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
   );
 }
 
+function isModerator(p: Participant | undefined): boolean {
+  if (!p) return false;
+  if (p.metadata) {
+    try {
+      const m = JSON.parse(p.metadata);
+      if (m?.bucket === 'moderator') return true;
+    } catch { /* ignore */ }
+  }
+  return !!p.permissions?.canPublish && !!p.permissions?.canPublishData;
+}
+
 function ClassroomStage({ isTeacher, onLeave }: { isTeacher: boolean; onLeave: () => void }) {
-  const tracks = useTracks(
-    [
-      { source: Track.Source.Camera, withPlaceholder: true },
-      { source: Track.Source.ScreenShare, withPlaceholder: false },
-    ],
+  const cameraTracks = useTracks(
+    [{ source: Track.Source.Camera, withPlaceholder: true }],
     { onlySubscribed: false }
   );
+  const screenTracks = useTracks(
+    [{ source: Track.Source.ScreenShare, withPlaceholder: false }],
+    { onlySubscribed: false }
+  );
+  const participants = useParticipants();
+
+  // Determine main track:
+  // 1) active screen-share, 2) host (moderator) camera, 3) first camera.
+  const moderator = participants.find(isModerator);
+  const publishedCams = cameraTracks.filter((t) => !!t.publication);
+  const hostCam =
+    publishedCams.find((t) => t.participant.identity === moderator?.identity)
+    ?? cameraTracks.find((t) => t.participant.identity === moderator?.identity)
+    ?? publishedCams[0]
+    ?? cameraTracks[0];
+  const screen = screenTracks[0];
+  const mainTrack = screen ?? hostCam;
+  const mainIsScreen = !!screen;
+  const mainHasVideo = mainIsScreen || !!hostCam?.publication;
+
+  // PiP tiles: every camera track EXCEPT the one currently on the main stage
+  // (unless screen is main — then include host camera too).
+  const pipTracks = cameraTracks.filter((t) => {
+    if (mainIsScreen) return true;
+    return t !== hostCam;
+  });
 
   return (
-    <div className="flex-1 min-w-0 h-full flex flex-col">
-      <div className="flex-1 min-h-0 overflow-hidden">
-        <GridLayout tracks={tracks} style={{ height: '100%' }}>
-          <ParticipantTile />
-        </GridLayout>
+    <div className="flex-1 min-w-0 h-full flex flex-col bg-black">
+      <div className="flex-1 min-h-0 relative overflow-hidden">
+        {/* Main stage — chromeless full-bleed */}
+        {mainTrack && mainHasVideo ? (
+          <div className="absolute inset-0">
+            <VideoTrack
+              trackRef={mainTrack as any}
+              className="w-full h-full object-contain bg-black"
+            />
+            {/* Name label */}
+            <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between pointer-events-none">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-black/55 backdrop-blur-sm">
+                {mainIsScreen && <ScreenShare className="h-3.5 w-3.5 text-white" />}
+                <span className="text-xs font-medium text-white truncate max-w-[60vw]">
+                  {mainTrack.participant?.name || mainTrack.participant?.identity || 'Host'}
+                  {mainIsScreen ? ' · sharing screen' : ''}
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-muted-foreground text-sm">
+            <div className="h-20 w-20 rounded-full bg-white/5 flex items-center justify-center">
+              <UserIcon className="h-8 w-8" />
+            </div>
+            <span>
+              {mainTrack?.participant?.name || mainTrack?.participant?.identity || 'Host'} · camera off
+            </span>
+          </div>
+        )}
+
+        {/* Chromeless PiP strip */}
+        {pipTracks.length > 0 && (
+          <div className="absolute top-2 right-2 flex flex-col gap-2 max-h-[70%] overflow-y-auto pr-0.5">
+            {pipTracks.map((t, idx) => {
+              const p = t.participant;
+              const micPub = p?.getTrackPublication?.(Track.Source.Microphone);
+              const micMuted = micPub ? micPub.isMuted : true;
+              const isHost = mainIsScreen && p?.identity === moderator?.identity;
+              return (
+                <div
+                  key={`${p?.identity || 'p'}-${idx}`}
+                  className="relative w-24 h-32 sm:w-28 sm:h-36 rounded-xl overflow-hidden ring-1 ring-white/15 bg-black/60 shadow-lg"
+                >
+                  <VideoTrack
+                    trackRef={t as any}
+                    className="w-full h-full object-cover"
+                  />
+                  {/* Fallback avatar when camera off */}
+                  {(!t.publication || t.publication.isMuted) && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900">
+                      <UserIcon className="h-6 w-6 text-white/60" />
+                    </div>
+                  )}
+                  <div className="absolute bottom-1 left-1 right-1 flex items-center justify-between gap-1">
+                    <span className="text-[10px] text-white truncate bg-black/50 px-1.5 py-0.5 rounded">
+                      {isHost ? 'Host' : (p?.name || p?.identity?.slice(0, 8) || '—')}
+                    </span>
+                    {micMuted && (
+                      <span className="rounded bg-black/60 p-0.5">
+                        <MicOff className="h-3 w-3 text-red-400" />
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
       <RoleAwareControls onLeave={onLeave} />
     </div>

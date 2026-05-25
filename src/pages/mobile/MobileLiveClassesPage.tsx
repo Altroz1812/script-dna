@@ -147,8 +147,14 @@ export default function MobileLiveClassesPage() {
       </div>
 
       {activeClass && (
-        <div className="rounded-2xl overflow-hidden border border-success/30 bg-black">
-          <div className="aspect-video w-full relative">
+        <div
+          className="fixed inset-0 z-[100] bg-black flex flex-col"
+          style={{
+            paddingTop: 'env(safe-area-inset-top)',
+            paddingBottom: 'env(safe-area-inset-bottom)',
+          }}
+        >
+          <div className="flex-1 min-h-0 relative">
             <VideoClassroom
               roomName={`edu-room-${activeClass.id}`}
               displayName={profile?.displayName || profile?.email || 'User'}
@@ -162,17 +168,15 @@ export default function MobileLiveClassesPage() {
               onMinimize={() => {}}
               onClassStarted={load}
             />
-          </div>
-          {canManage && (
-            <div className="p-2 flex justify-end bg-card/80">
+            {canManage && (
               <button
-                className="text-xs px-3 py-1.5 rounded-md bg-destructive text-destructive-foreground flex items-center gap-1.5"
+                className="absolute top-12 right-3 z-30 text-[11px] px-3 py-1.5 rounded-full bg-destructive/90 text-destructive-foreground flex items-center gap-1.5 shadow-lg backdrop-blur-sm"
                 onClick={() => setEndingClass(activeClass)}
               >
-                <Square className="w-3 h-3" /> End Session
+                <Square className="w-3 h-3" /> End
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
 
