@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Plus, Trash2, Users, UserPlus, UserMinus, Layers, Wifi, Building2, Pencil, AlertCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
 import { useIsMobileApp } from '@/hooks/useIsMobileApp';
 import MobileBatchesPage from './mobile/MobileBatchesPage';
@@ -52,6 +53,7 @@ export default function BatchesPage() {
   const { activeOrgId } = useActiveOrg();
   const { isAdmin } = useRBAC();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   // create batch form
   const [open, setOpen] = useState(false);
@@ -483,15 +485,15 @@ export default function BatchesPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {batches.map(b => (
-            <Card key={b.id}>
-              <CardHeader>
+            <Card key={b.id} className="hover:border-primary/40 transition-colors">
+              <CardHeader className="cursor-pointer" onClick={() => navigate(`/batches/${b.id}`)}>
                 <div className="flex items-start justify-between">
                   <div>
                     <CardTitle className="text-lg">{b.name}</CardTitle>
                     <CardDescription>{(b as any).courses?.name ?? 'Unknown course'}</CardDescription>
                   </div>
                   {isAdmin && (
-                    <div className="flex gap-1">
+                    <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                       <Button variant="ghost" size="icon" onClick={() => openEditDialog(b)}>
                         <Pencil className="h-4 w-4 text-muted-foreground" />
                       </Button>

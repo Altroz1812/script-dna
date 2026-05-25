@@ -31,6 +31,11 @@ export interface Batch {
   teacher_id: string | null;
   created_at: string;
   updated_at: string;
+  meeting_room?: string | null;
+  meeting_link_expires_at?: string | null;
+  organization_id?: string | null;
+  teacher_name?: string | null;
+  enrolled_count?: number;
   courses?: { name: string; delivery_mode?: string; duration_days?: number; daily_hours?: number; total_hours?: number };
 }
 
@@ -124,6 +129,10 @@ export const batchService = {
 
   async deleteBatch(id: string): Promise<void> {
     await adminQuery("delete_batch", { id });
+  },
+
+  async getBatchDetail(id: string): Promise<any> {
+    return await adminQuery("get_batch_detail", { id });
   },
 
   async getStudents(batchId: string): Promise<BatchStudent[]> {
