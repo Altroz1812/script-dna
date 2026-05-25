@@ -313,9 +313,14 @@ export default function SchedulePage() {
             </SelectContent>
           </Select>
           <Dialog open={manualOpen} onOpenChange={setManualOpen}>
-            <DialogTrigger asChild><Button variant="outline"><Plus className="mr-2 h-4 w-4" />Add Manually</Button></DialogTrigger>
+            <DialogTrigger asChild><Button variant="outline"><Plus className="mr-2 h-4 w-4" />Add Extra Session</Button></DialogTrigger>
             <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-              <DialogHeader><DialogTitle>Add Schedule Entry</DialogTitle></DialogHeader>
+              <DialogHeader>
+                <DialogTitle>Add Extra / Reschedule Session</DialogTitle>
+                <p className="text-xs text-muted-foreground pt-1">
+                  For one-off sessions: extra class, substitute, or holiday reschedule. Uses the batch's permanent meeting link.
+                </p>
+              </DialogHeader>
               <div className="space-y-4">
                 <div>
                   <Label>Batch</Label>
@@ -383,9 +388,14 @@ export default function SchedulePage() {
             </DialogContent>
           </Dialog>
           <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild><Button><Wand2 className="mr-2 h-4 w-4" />Auto-Schedule</Button></DialogTrigger>
+            <DialogTrigger asChild><Button><Wand2 className="mr-2 h-4 w-4" />Generate Full Schedule</Button></DialogTrigger>
             <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-              <DialogHeader><DialogTitle>Auto-Generate Schedule</DialogTitle></DialogHeader>
+              <DialogHeader>
+                <DialogTitle>Generate Full Course Schedule</DialogTitle>
+                <p className="text-xs text-muted-foreground pt-1">
+                  Creates the recurring session itinerary for a batch in one pass. Duplicate dates/times are skipped.
+                </p>
+              </DialogHeader>
               <div className="space-y-4">
                 <div>
                   <Label>Batch</Label>
