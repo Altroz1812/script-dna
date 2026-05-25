@@ -785,11 +785,46 @@ Deno.serve(async (req) => {
           }
         }
 
-        result = batches.map((b: any) => ({
-          ...b,
-          enrolled_count: counts[b.id] ?? 0,
-          teacher_name: b.teacher_id ? (teacherMap[b.teacher_id] ?? null) : null,
-        }))
+        // Sessions per batch: total / completed / next upcoming
+        const sessionStats: Record<string, { total: number; completed: number; next: any | null }> = {}
+        if (batchIds.length) {
+          const { data: lcs } = await supabase
+            .from('live_classes')
+            .select('id, batch_id, title, scheduled_at, duration_minutes, status')
+            .in('batch_id', batchIds)
+            .order('scheduled_at', { ascending: true })
+          const now = Date.now()
+          for (const id of batchIds) sessionStats[id] = { total: 0, completed: 0, next: null }
+          for (const s of lcs ?? []) {
+            const st = sessionStats[s.batch_id]
+            if (!st) continue
+            st.total++
+            if (s.status === 'completed') st.completed++
+            if (!st.next && s.status !== 'completed' && s.status !== 'cancelled' && new Date(s.scheduled_at).getTime() >= now) {
+              st.next = { id: s.id, title: s.title, scheduled_at: s.scheduled_at, duration_minutes: s.duration_minutes, status: s.status }
+            }
+          }
+        }
+
+        result = batches.map((b: any) => {
+          const st = sessionStats[b.id] ?? { total: 0, completed: 0, next: null }
+          const totalHours = b.courses?.total_hours ?? null
+          const hoursCompleted = st.total ? +((st.completed / st.total) * (totalHours ?? 0)).toFixed(1) : 0
+          const progress_pct = totalHours && totalHours > 0
+            ? Math.min(100, Math.round((hoursCompleted / totalHours) * 100))
+            : (st.total ? Math.round((st.completed / st.total) * 100) : 0)
+          return {
+            ...b,
+            enrolled_count: counts[b.id] ?? 0,
+            teacher_name: b.teacher_id ? (teacherMap[b.teacher_id] ?? null) : null,
+            sessions_total: st.total,
+            sessions_completed: st.completed,
+            next_session: st.next,
+            hours_completed: hoursCompleted,
+            hours_total: totalHours,
+            progress_pct,
+          }
+        })
         break
       }
       case 'create_batch': {
