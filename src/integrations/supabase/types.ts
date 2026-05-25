@@ -137,6 +137,8 @@ export type Database = {
           created_at: string
           id: string
           max_students: number
+          meeting_link_expires_at: string | null
+          meeting_room: string | null
           name: string
           organization_id: string
           teacher_id: string | null
@@ -147,6 +149,8 @@ export type Database = {
           created_at?: string
           id?: string
           max_students?: number
+          meeting_link_expires_at?: string | null
+          meeting_room?: string | null
           name: string
           organization_id: string
           teacher_id?: string | null
@@ -157,6 +161,8 @@ export type Database = {
           created_at?: string
           id?: string
           max_students?: number
+          meeting_link_expires_at?: string | null
+          meeting_room?: string | null
           name?: string
           organization_id?: string
           teacher_id?: string | null
