@@ -274,11 +274,16 @@ function ClassroomStage({ isTeacher, onLeave }: { isTeacher: boolean; onLeave: (
   // Determine main track:
   // 1) active screen-share, 2) host (moderator) camera, 3) first camera.
   const moderator = participants.find(isModerator);
-  const hostCam = cameraTracks.find((t) => t.participant.identity === moderator?.identity)
+  const publishedCams = cameraTracks.filter((t) => !!t.publication);
+  const hostCam =
+    publishedCams.find((t) => t.participant.identity === moderator?.identity)
+    ?? cameraTracks.find((t) => t.participant.identity === moderator?.identity)
+    ?? publishedCams[0]
     ?? cameraTracks[0];
   const screen = screenTracks[0];
   const mainTrack = screen ?? hostCam;
   const mainIsScreen = !!screen;
+  const mainHasVideo = mainIsScreen || !!hostCam?.publication;
 
   // PiP tiles: every camera track EXCEPT the one currently on the main stage
   // (unless screen is main — then include host camera too).
@@ -291,7 +296,7 @@ function ClassroomStage({ isTeacher, onLeave }: { isTeacher: boolean; onLeave: (
     <div className="flex-1 min-w-0 h-full flex flex-col bg-black">
       <div className="flex-1 min-h-0 relative overflow-hidden">
         {/* Main stage — chromeless full-bleed */}
-        {mainTrack ? (
+        {mainTrack && mainHasVideo ? (
           <div className="absolute inset-0">
             <VideoTrack
               trackRef={mainTrack as any}
@@ -309,8 +314,13 @@ function ClassroomStage({ isTeacher, onLeave }: { isTeacher: boolean; onLeave: (
             </div>
           </div>
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
-            Waiting for host…
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-muted-foreground text-sm">
+            <div className="h-20 w-20 rounded-full bg-white/5 flex items-center justify-center">
+              <UserIcon className="h-8 w-8" />
+            </div>
+            <span>
+              {mainTrack?.participant?.name || mainTrack?.participant?.identity || 'Host'} · camera off
+            </span>
           </div>
         )}
 
