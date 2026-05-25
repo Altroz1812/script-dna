@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { BookOpen, NotebookPen, FileCheck, TrendingUp, Video, ArrowRight, Sparkles } from 'lucide-react';
+import { BookOpen, NotebookPen, FileCheck, TrendingUp, Video, ArrowRight, Sparkles, PenTool } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { MobilePage } from '@/components/mobile/ui/MobilePage';
@@ -87,10 +87,10 @@ export default function StudentHome() {
   })();
 
   const quickActions = [
-    { label: 'Practice', icon: NotebookPen, path: '/practice', tint: 'from-emerald-400/30 to-emerald-600/10' },
+    { label: 'Practice Canvas', icon: PenTool, path: '/practice-canvas', tint: 'from-emerald-400/30 to-emerald-600/10' },
+    { label: 'Assignments', icon: NotebookPen, path: '/practice', tint: 'from-violet-400/30 to-violet-600/10' },
     { label: 'Submit', icon: FileCheck, path: '/submissions', tint: 'from-orange-400/30 to-orange-600/10' },
     { label: 'Courses', icon: BookOpen, path: '/courses', tint: 'from-primary/30 to-primary/5' },
-    { label: 'Progress', icon: TrendingUp, path: '/my-progress', tint: 'from-accent/30 to-accent/5' },
   ];
 
   return (
