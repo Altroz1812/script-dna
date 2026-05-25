@@ -268,16 +268,12 @@ export default function Dashboard() {
   const { data: supportData, isLoading: supportLoading } = useQuery({
     queryKey: ["support_dashboard", profile?.id, activeOrgId],
     queryFn: async () => {
-      const [leads, enrolls, payments] = await Promise.all([
-        adminQuery("list_leads").catch(() => []),
-        adminQuery("list_enrollments").catch(() => []),
-        adminQuery("list_payments").catch(() => []),
-      ]);
-      return {
-        totalLeads: (leads ?? []).length,
-        totalEnrollments: (enrolls ?? []).length,
-        openPayments: (payments ?? []).filter((p: any) => p.status === "pending").length,
-      };
+      try {
+        const overview = await adminQuery("get_support_overview");
+        return overview ?? { totalLeads: 0, totalEnrollments: 0, openPayments: 0 };
+      } catch {
+        return { totalLeads: 0, totalEnrollments: 0, openPayments: 0 };
+      }
     },
     enabled: !!profile && isSupport,
     staleTime: 1000 * 60 * 2,
