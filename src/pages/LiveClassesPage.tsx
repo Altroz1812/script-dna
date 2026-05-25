@@ -62,29 +62,19 @@ function classifyClass(cls: LiveClass, now: Date): ClassStatus {
   if (cls.status === 'cancelled') return 'cancelled';
   if (cls.status === 'completed') return 'completed';
 
+  // Teacher must explicitly end — never auto-flip DB status to completed.
+  if (cls.status === 'live') return 'live';
+
   const { start, end } = getClassDateTime(cls);
-
-  // If marked live in DB but the window has already ended, treat as completed
-  if (cls.status === 'live') {
-    if (end && now > end) return 'completed';
-    return 'live';
-  }
-
   if (!start) return 'upcoming';
 
   // Check if currently LIVE (now between start and end)
   if (now >= start && end && now <= end) return 'live';
 
-  // If the scheduled window has already ended, it's completed (even if same day)
-  if (end && now > end) return 'completed';
+  // Same-day classes stay TODAY (even after window) until teacher ends them
+  if (isSameDay(start, now)) return 'today';
 
-  // Check if TODAY (same date, still upcoming today)
-  if (isSameDay(start, now) && start > now) return 'today';
-
-  // Check if UPCOMING (future date, not today)
   if (start > now) return 'upcoming';
-
-  // Everything else is completed
   return 'completed';
 }
 
