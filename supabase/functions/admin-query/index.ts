@@ -5,6 +5,41 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
+// Per-instance micro-cache for hot read-only actions. Lives only while the
+// worker is warm; absorbs bursty navigation (e.g. user flipping between
+// /users, /students, /payments) without serving stale data for long.
+const READ_CACHE_TTL_MS = 5_000
+const READ_CACHEABLE_ACTIONS = new Set<string>([
+  'get_stats',
+  'get_support_overview',
+  'list_courses',
+  'list_teachers',
+  'list_all_students',
+  'list_students_with_batches',
+  'list_batches',
+  'list_organizations',
+  'list_subscription_plans',
+])
+type CacheEntry = { expiresAt: number; payload: any }
+const readCache = new Map<string, CacheEntry>()
+function cacheKey(action: string, callerId: string | null, orgId: string | null, params: any): string {
+  return `${action}|${callerId ?? 'anon'}|${orgId ?? 'global'}|${JSON.stringify(params ?? {})}`
+}
+function readFromCache(key: string): any | undefined {
+  const e = readCache.get(key)
+  if (!e) return undefined
+  if (e.expiresAt < Date.now()) { readCache.delete(key); return undefined }
+  return e.payload
+}
+function writeToCache(key: string, payload: any) {
+  // Bound memory: simple FIFO eviction when over 200 entries.
+  if (readCache.size > 200) {
+    const first = readCache.keys().next().value
+    if (first) readCache.delete(first)
+  }
+  readCache.set(key, { expiresAt: Date.now() + READ_CACHE_TTL_MS, payload })
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -118,6 +153,19 @@ Deno.serve(async (req) => {
     }
 
     let result: any = null
+
+    // Try cache for read-only hot actions before doing any DB work.
+    const cKey = READ_CACHEABLE_ACTIONS.has(action)
+      ? cacheKey(action, callerUserId, targetOrgId, params)
+      : null
+    if (cKey) {
+      const hit = readFromCache(cKey)
+      if (hit !== undefined) {
+        return new Response(JSON.stringify(hit), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache': 'HIT' },
+        })
+      }
+    }
 
     switch (action) {
       // ===== STATS =====
@@ -2047,6 +2095,8 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
     }
+
+    if (cKey) writeToCache(cKey, result)
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
