@@ -224,9 +224,16 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
               <RoomAudioRenderer />
               <StudentDataListener />
               {chatOpen && (
-                <div className="w-80 shrink-0 h-full">
-                  <ClassroomChat onClose={() => setChatOpen(false)} onNewMessage={() => setUnread(u => u + 1)} />
-                </div>
+                <>
+                  {/* Mobile backdrop */}
+                  <div
+                    className="absolute inset-0 z-10 bg-black/40 sm:hidden"
+                    onClick={() => setChatOpen(false)}
+                  />
+                  <div className="absolute inset-y-0 right-0 z-20 w-full max-w-sm sm:relative sm:w-80 sm:max-w-none shrink-0 h-full shadow-2xl sm:shadow-none">
+                    <ClassroomChat onClose={() => setChatOpen(false)} onNewMessage={() => setUnread(u => u + 1)} />
+                  </div>
+                </>
               )}
             </LiveKitRoom>
           )}
