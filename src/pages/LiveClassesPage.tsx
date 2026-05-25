@@ -440,29 +440,8 @@ export default function LiveClassesPage() {
 
       {/* Active Live Class Video Component */}
       {currentLiveClass && (
-        <Card className="border-green-500/30 overflow-hidden bg-zinc-950 text-white shadow-2xl">
-          <div className="aspect-video w-full bg-black relative">
-            <div className="absolute top-2 right-2 z-10 flex gap-2">
-              <Button 
-                variant="secondary" 
-                size="sm" 
-                className="h-7 text-xs bg-black/60 hover:bg-zinc-800 text-white border border-white/10" 
-                onClick={() => setIsTheaterMode(!isTheaterMode)}
-              >
-                {isTheaterMode ? <Minimize2 className="h-3.5 w-3.5 mr-1" /> : <Maximize2 className="h-3.5 w-3.5 mr-1" />}
-                {isTheaterMode ? 'Compact' : 'Theater'}
-              </Button>
-              {canManage && (
-                <Button 
-                  variant="destructive" 
-                  size="sm" 
-                  className="h-7 text-xs" 
-                  onClick={() => setEndingClass(currentLiveClass)}
-                >
-                  <Square className="h-3 w-3 mr-1" /> End Session
-                </Button>
-              )}
-            </div>
+        <div className="fixed inset-0 z-[100] bg-black flex flex-col">
+          <div className="flex-1 min-h-0 relative">
             <VideoClassroom
               roomName={`edu-room-${currentLiveClass.id}`}
               displayName={profile?.displayName || profile?.email || 'User'}
@@ -470,11 +449,21 @@ export default function LiveClassesPage() {
               classStatus={currentLiveClass.status}
               classId={currentLiveClass.id}
               onClose={handleCloseClass}
-              onMinimize={() => setIsTheaterMode(!isTheaterMode)}
+              onMinimize={handleCloseClass}
               onClassStarted={load}
             />
+            {canManage && (
+              <Button
+                variant="destructive"
+                size="sm"
+                className="absolute top-12 right-3 z-30 h-8 text-xs rounded-full shadow-lg"
+                onClick={() => setEndingClass(currentLiveClass)}
+              >
+                <Square className="h-3 w-3 mr-1" /> End Session
+              </Button>
+            )}
           </div>
-        </Card>
+        </div>
       )}
 
       {/* Tabs for categorized classes */}
