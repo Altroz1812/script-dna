@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 
-const BREAKPOINT = 768;
+// Treat phones AND tablets as the native mobile shell.
+// 1024px keeps iPad portrait (768) and landscape (1024) in mobile mode,
+// while desktops at >=1025 keep the full sidebar layout.
+const BREAKPOINT = 1025;
 
 function detect(): boolean {
   if (typeof window === 'undefined') return false;
