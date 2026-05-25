@@ -1439,6 +1439,7 @@ export type Database = {
     }
     Functions: {
       first_org_for_user: { Args: { _user_id: string }; Returns: string }
+      get_table_ddl: { Args: { p_table_name: string }; Returns: string }
       get_user_organization_name: {
         Args: { user_uuid: string }
         Returns: string
