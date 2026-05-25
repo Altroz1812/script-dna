@@ -20,16 +20,12 @@ type Filter = 'live' | 'today' | 'upcoming' | 'past';
 
 function classify(cls: LC, now: Date): Filter {
   if (cls.status === 'cancelled' || cls.status === 'completed') return 'past';
+  if (cls.status === 'live') return 'live';
   if (!cls.scheduled_at) return 'upcoming';
   const start = parseISO(cls.scheduled_at);
   const end = addMinutes(start, cls.duration_minutes || 60);
-  if (cls.status === 'live') {
-    if (now > end) return 'past';
-    return 'live';
-  }
   if (now >= start && now <= end) return 'live';
-  if (now > end) return 'past';
-  if (isSameDay(start, now) && start > now) return 'today';
+  if (isSameDay(start, now)) return 'today';
   if (start > now) return 'upcoming';
   return 'past';
 }
@@ -218,8 +214,10 @@ export default function MobileLiveClassesPage() {
             const isLive = status === 'live';
             const isToday = status === 'today';
             const start = c.scheduled_at ? parseISO(c.scheduled_at) : null;
+            const end = start ? addMinutes(start, c.duration_minutes || 60) : null;
+            const windowEnded = !!(end && now > end) && c.status !== 'live';
             const canStart = canManage && (isLive || isToday) && c.status !== 'completed';
-            const canJoin = isLive || (isStudent && isToday && start && now >= addMinutes(start, -10));
+            const canJoin = !windowEnded && (isLive || (isStudent && isToday && start && now >= addMinutes(start, -10)));
             return (
               <div
                 key={c.id}
