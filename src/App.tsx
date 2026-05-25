@@ -51,6 +51,7 @@ import OrderHistoryPage from "@/pages/OrderHistoryPage";
 import ProfilePage from "@/pages/ProfilePage";
 import SelectOrganizationPage from "@/pages/SelectOrganizationPage";
 import Unauthorized from "@/pages/Unauthorized";
+import PracticeCanvasPage from "@/pages/PracticeCanvasPage";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -120,6 +121,7 @@ const App = () => (
                 <Route path="/curriculum" element={<CurriculumPage />} />
                 <Route path="/monitoring" element={<SystemMonitoringPage />} />
                 <Route path="/practice" element={<PracticeAssignmentsPage />} />
+                <Route path="/practice-canvas" element={<PracticeCanvasPage />} />
                 <Route path="/submissions" element={<StudentSubmissionsPage />} />
                 <Route path="/courses/:courseId/lessons" element={<StudentLessonViewer />} />
                 <Route path="/my-progress" element={<StudentProgressPage />} />
