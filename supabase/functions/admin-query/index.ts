@@ -102,6 +102,7 @@ Deno.serve(async (req) => {
       'create_lesson', 'update_lesson', 'delete_lesson',
       'list_students_with_batches', 'list_all_students', 'list_teachers',
       'list_batches', 'create_batch', 'update_batch', 'delete_batch',
+      'get_batch_detail',
       'list_batch_students', 'add_batch_student', 'remove_batch_student', 'batch_student_count',
       'revenue_analytics', 'org_performance', 'student_trends',
       'system_health',
