@@ -7,9 +7,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MicOff, VideoOff, UserX, Shield, Users } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, UserX, Shield, Users } from 'lucide-react';
 import { useParticipants, useRoomContext } from '@livekit/components-react';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 export function TeacherControls() {
   const room = useRoomContext();
@@ -17,6 +18,60 @@ export function TeacherControls() {
   const remoteParticipants = participants.filter(
     (p) => p.identity !== room.localParticipant.identity
   );
+
+  const updatePermission = async (
+    identity: string,
+    opts: { canPublish: boolean; sources: string[] },
+  ) => {
+    const { data, error } = await supabase.functions.invoke('livekit-update-participant', {
+      body: {
+        roomName: room.name,
+        identity,
+        canPublish: opts.canPublish,
+        canPublishSources: opts.sources,
+        canPublishData: true,
+        canSubscribe: true,
+      },
+    });
+    if (error || (data && data.error)) {
+      toast({
+        title: 'Failed to update permissions',
+        description: error?.message || data?.error,
+        variant: 'destructive',
+      });
+      return false;
+    }
+    return true;
+  };
+
+  const signal = (action: string, target: string) => {
+    room.localParticipant.publishData(
+      new TextEncoder().encode(JSON.stringify({ action, target })),
+      { reliable: true },
+    );
+  };
+
+  const enableMic = async (identity: string) => {
+    const ok = await updatePermission(identity, {
+      canPublish: true,
+      sources: ['microphone', 'camera', 'screen_share', 'screen_share_audio'],
+    });
+    if (ok) {
+      signal('enable_audio', identity);
+      toast({ title: 'Microphone enabled for participant' });
+    }
+  };
+
+  const enableCamera = async (identity: string) => {
+    const ok = await updatePermission(identity, {
+      canPublish: true,
+      sources: ['microphone', 'camera', 'screen_share', 'screen_share_audio'],
+    });
+    if (ok) {
+      signal('enable_camera', identity);
+      toast({ title: 'Camera enabled for participant' });
+    }
+  };
 
   const muteAllMics = async () => {
     for (const p of remoteParticipants) {
@@ -44,20 +99,16 @@ export function TeacherControls() {
     });
   };
 
-  const muteParticipant = (identity: string) => {
-    room.localParticipant.publishData(
-      new TextEncoder().encode(JSON.stringify({ action: 'mute_audio', target: identity })),
-      { reliable: true }
-    );
-    toast({ title: `Mute request sent to participant` });
+  const muteParticipant = async (identity: string) => {
+    signal('mute_audio', identity);
+    await updatePermission(identity, { canPublish: false, sources: [] });
+    toast({ title: 'Participant muted' });
   };
 
-  const disableCamera = (identity: string) => {
-    room.localParticipant.publishData(
-      new TextEncoder().encode(JSON.stringify({ action: 'disable_camera', target: identity })),
-      { reliable: true }
-    );
-    toast({ title: `Disable camera request sent` });
+  const disableCamera = async (identity: string) => {
+    signal('disable_camera', identity);
+    await updatePermission(identity, { canPublish: false, sources: [] });
+    toast({ title: 'Participant camera disabled' });
   };
 
   const removeParticipant = (identity: string) => {
@@ -124,6 +175,12 @@ export function TeacherControls() {
                 <DropdownMenuLabel className="font-normal text-xs text-muted-foreground py-1">
                   {p.name || p.identity}
                 </DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => enableMic(p.identity)} className="gap-2 text-xs">
+                  <Mic className="h-3.5 w-3.5" /> Enable Mic
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => enableCamera(p.identity)} className="gap-2 text-xs">
+                  <Video className="h-3.5 w-3.5" /> Enable Camera
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => muteParticipant(p.identity)} className="gap-2 text-xs">
                   <MicOff className="h-3.5 w-3.5" /> Mute
                 </DropdownMenuItem>
