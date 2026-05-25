@@ -13,6 +13,8 @@ import { AppLayout } from "@/components/layout/AppLayout";
 // Eager: landing + auth (first paint critical)
 import LandingPage from "@/pages/LandingPage";
 import Login from "@/pages/Login";
+import { useIsMobileApp } from "@/hooks/useIsMobileApp";
+import { Navigate } from "react-router-dom";
 import Signup from "@/pages/Signup";
 import NotFound from "@/pages/NotFound";
 import Unauthorized from "@/pages/Unauthorized";
@@ -62,6 +64,12 @@ const RouteFallback = () => (
     <div className="h-8 w-8 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
   </div>
 );
+
+const RootRoute = () => {
+  const isMobile = useIsMobileApp();
+  if (isMobile) return <Navigate to="/login" replace />;
+  return <LandingPage />;
+};
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -87,7 +95,7 @@ const App = () => (
             <Suspense fallback={<RouteFallback />}>
             <Routes>
               {/* Public routes */}
-              <Route path="/" element={<LandingPage />} />
+              <Route path="/" element={<RootRoute />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/checkout" element={<CheckoutPage />} />
