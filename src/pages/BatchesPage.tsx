@@ -15,6 +15,8 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Plus, Trash2, Users, UserPlus, UserMinus, Layers, Wifi, Building2, Pencil, AlertCircle } from 'lucide-react';
 import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
+import { useIsMobileApp } from '@/hooks/useIsMobileApp';
+import MobileBatchesPage from './mobile/MobileBatchesPage';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -44,6 +46,8 @@ function ConflictBanner({ title, conflicts }: { title: string; conflicts: Confli
 }
 
 export default function BatchesPage() {
+  const __isMobile = useIsMobileApp();
+  if (__isMobile) return <MobileBatchesPage />;
   const { profile } = useAuth();
   const { activeOrgId } = useActiveOrg();
   const { isAdmin } = useRBAC();

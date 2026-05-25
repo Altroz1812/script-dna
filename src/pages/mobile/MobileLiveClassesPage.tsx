@@ -1,0 +1,257 @@
+import { useEffect, useMemo, useState, useCallback } from 'react';
+import { Video, Play, Square, Clock, CalendarDays, BookOpen, Loader2 } from 'lucide-react';
+import { format, parseISO, addMinutes, isSameDay } from 'date-fns';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { adminQuery } from '@/services/api/adminService';
+import { useAuth } from '@/contexts/AuthContext';
+import { useRBAC } from '@/hooks/useRBAC';
+import { startLiveClass } from '@/services/classroom/startClass';
+import { VideoClassroom } from '@/components/classroom/VideoClassroom';
+import { EndClassAttendanceDialog } from '@/components/classroom/EndClassAttendanceDialog';
+import { MobilePage } from '@/components/mobile/ui/MobilePage';
+import { ShimmerCard } from '@/components/mobile/ui/Shimmer';
+import { EmptyState } from '@/components/mobile/ui/EmptyState';
+import { TouchPress } from '@/components/mobile/ui/TouchPress';
+import { cn } from '@/lib/utils';
+
+type LC = any;
+type Filter = 'live' | 'today' | 'upcoming' | 'past';
+
+function classify(cls: LC, now: Date): Filter {
+  if (cls.status === 'cancelled' || cls.status === 'completed') return 'past';
+  if (cls.status === 'live') return 'live';
+  if (!cls.scheduled_at) return 'upcoming';
+  const start = parseISO(cls.scheduled_at);
+  const end = addMinutes(start, cls.duration_minutes || 60);
+  if (now >= start && now <= end) return 'live';
+  if (isSameDay(start, now)) return 'today';
+  if (start > now) return 'upcoming';
+  return 'past';
+}
+
+export default function MobileLiveClassesPage() {
+  const { profile } = useAuth();
+  const { isAdmin, role } = useRBAC();
+  const isTeacher = role === 'teacher';
+  const isStudent = role === 'student';
+  const canManage = isAdmin || isTeacher;
+
+  const [classes, setClasses] = useState<LC[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [now, setNow] = useState(() => new Date());
+  const [tab, setTab] = useState<Filter>('live');
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [endingClass, setEndingClass] = useState<LC | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      let raw: any[] = [];
+      if (isAdmin) {
+        const r = await adminQuery('list_live_classes');
+        raw = Array.isArray(r) ? r : [];
+      } else {
+        const { data } = await supabase
+          .from('live_classes')
+          .select('*, batches:batch_id(name, courses:course_id(name))')
+          .order('scheduled_at', { ascending: true });
+        raw = data || [];
+      }
+      setClasses(
+        raw.map((c: any) => ({
+          ...c,
+          status: (c.status || 'scheduled').toLowerCase(),
+          batch_name: c.batch_name || c.batches?.name || '—',
+          course_name: c.course_name || c.batches?.courses?.name || '—',
+        })),
+      );
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to load classes');
+    } finally {
+      setLoading(false);
+    }
+  }, [isAdmin]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  const grouped = useMemo(() => {
+    const out: Record<Filter, LC[]> = { live: [], today: [], upcoming: [], past: [] };
+    for (const c of classes) {
+      if (c.id === activeId) continue;
+      out[classify(c, now)].push(c);
+    }
+    return out;
+  }, [classes, now, activeId]);
+
+  const activeClass = useMemo(() => classes.find((c) => c.id === activeId) || null, [classes, activeId]);
+
+  const onStart = async (c: LC) => {
+    if (!profile?.id) return;
+    try {
+      await startLiveClass({ classId: c.id, startedBy: profile.id, isAdmin });
+      toast.success('Class started');
+      await load();
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to start');
+    }
+  };
+
+  const tabs: { key: Filter; label: string }[] = [
+    { key: 'live', label: 'Live' },
+    { key: 'today', label: 'Today' },
+    { key: 'upcoming', label: 'Upcoming' },
+    { key: 'past', label: 'Past' },
+  ];
+
+  return (
+    <MobilePage onRefresh={load}>
+      <div>
+        <h1 className="text-2xl font-bold font-display text-gradient">
+          {isStudent ? 'My Classes' : isTeacher ? 'Teaching' : 'Live Classes'}
+        </h1>
+        <p className="text-xs text-muted-foreground mt-1">Live, today, and upcoming sessions</p>
+      </div>
+
+      {activeClass && (
+        <div className="rounded-2xl overflow-hidden border border-success/30 bg-black">
+          <div className="aspect-video w-full relative">
+            <VideoClassroom
+              roomName={`edu-room-${activeClass.id}`}
+              displayName={profile?.displayName || profile?.email || 'User'}
+              isTeacher={isTeacher}
+              classStatus={activeClass.status}
+              classId={activeClass.id}
+              onClose={() => {
+                setActiveId(null);
+                load();
+              }}
+              onMinimize={() => {}}
+              onClassStarted={load}
+            />
+          </div>
+          {canManage && (
+            <div className="p-2 flex justify-end bg-card/80">
+              <button
+                className="text-xs px-3 py-1.5 rounded-md bg-destructive text-destructive-foreground flex items-center gap-1.5"
+                onClick={() => setEndingClass(activeClass)}
+              >
+                <Square className="w-3 h-3" /> End Session
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Segmented tabs */}
+      <div className="flex items-center gap-1 p-1 rounded-full bg-card border border-white/[0.06] sticky top-0">
+        {tabs.map((t) => (
+          <TouchPress
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={cn(
+              'flex-1 h-9 rounded-full text-xs font-medium flex items-center justify-center gap-1.5 transition-colors',
+              tab === t.key
+                ? 'bg-gradient-to-br from-primary/30 to-accent/20 text-foreground'
+                : 'text-muted-foreground',
+            )}
+          >
+            {t.key === 'live' && <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />}
+            {t.label}
+            <span className="text-[10px] opacity-70">({grouped[t.key].length})</span>
+          </TouchPress>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="space-y-3">
+          <ShimmerCard />
+          <ShimmerCard />
+        </div>
+      ) : grouped[tab].length === 0 ? (
+        <EmptyState icon={Video} title={`No ${tab} classes`} message="Pull down to refresh." />
+      ) : (
+        <div className="space-y-3">
+          {grouped[tab].map((c) => {
+            const status = classify(c, now);
+            const isLive = status === 'live';
+            const isToday = status === 'today';
+            const start = c.scheduled_at ? parseISO(c.scheduled_at) : null;
+            const canStart = canManage && (isLive || isToday) && c.status !== 'completed';
+            const canJoin = isLive || (isStudent && isToday && start && now >= addMinutes(start, -10));
+            return (
+              <div
+                key={c.id}
+                className={cn(
+                  'rounded-2xl p-4 bg-card border text-left',
+                  isLive ? 'border-success/40' : isToday ? 'border-orange-500/30' : 'border-white/[0.06]',
+                )}
+              >
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span
+                    className={cn(
+                      'text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full',
+                      isLive
+                        ? 'bg-success/20 text-success'
+                        : isToday
+                        ? 'bg-orange-500/20 text-orange-400'
+                        : 'bg-muted/30 text-muted-foreground',
+                    )}
+                  >
+                    {isLive && <span className="inline-block h-1.5 w-1.5 rounded-full bg-success animate-pulse mr-1" />}
+                    {status}
+                  </span>
+                </div>
+                <div className="font-semibold text-sm leading-snug">{c.title}</div>
+                <div className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
+                  <BookOpen className="w-3 h-3" /> {c.course_name} · {c.batch_name}
+                </div>
+                {start && (
+                  <div className="text-[11px] text-muted-foreground mt-1 flex items-center gap-2">
+                    <span className="flex items-center gap-1"><CalendarDays className="w-3 h-3" />{format(start, 'MMM d')}</span>
+                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{format(start, 'h:mm a')}</span>
+                  </div>
+                )}
+                {(canJoin || canStart) && (
+                  <div className="flex gap-2 mt-3">
+                    {canJoin && (
+                      <TouchPress
+                        onClick={() => setActiveId(c.id)}
+                        className="flex-1 h-10 rounded-xl bg-gradient-to-r from-success to-emerald-500 text-white text-sm font-semibold flex items-center justify-center gap-1.5"
+                      >
+                        <Video className="w-4 h-4" /> {isLive ? 'Join' : 'Waiting Room'}
+                      </TouchPress>
+                    )}
+                    {canStart && !isLive && (
+                      <TouchPress
+                        onClick={() => onStart(c)}
+                        className="flex-1 h-10 rounded-xl bg-primary/20 border border-primary/40 text-primary text-sm font-semibold flex items-center justify-center gap-1.5"
+                      >
+                        <Play className="w-4 h-4 fill-current" /> Start
+                      </TouchPress>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <EndClassAttendanceDialog
+        open={!!endingClass}
+        onOpenChange={(o) => { if (!o) setEndingClass(null); }}
+        liveClass={endingClass}
+        isTeacher={isTeacher}
+        isAdmin={isAdmin}
+        onClassEnded={() => { setActiveId(null); load(); }}
+      />
+    </MobilePage>
+  );
+}

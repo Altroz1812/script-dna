@@ -6,8 +6,12 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { BookOpen, TrendingUp, FileCheck, Brain, Target, BarChart3 } from 'lucide-react';
 import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
+import { useIsMobileApp } from '@/hooks/useIsMobileApp';
+import MobileStudentProgressPage from './mobile/MobileStudentProgressPage';
 
 export default function StudentProgressPage() {
+  const __isMobile = useIsMobileApp();
+  if (__isMobile) return <MobileStudentProgressPage />;
   const { profile } = useAuth();
 
   const { data: progress = [], isLoading: loadingProgress } = useQuery({

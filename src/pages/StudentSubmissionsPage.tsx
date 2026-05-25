@@ -16,8 +16,14 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Upload, MessageSquare, FileCheck, Camera } from 'lucide-react';
 import { TableSkeleton } from '@/components/ui/loading-skeletons';
+import { useIsMobileApp } from '@/hooks/useIsMobileApp';
+import { useRBAC as __useRBAC2 } from '@/hooks/useRBAC';
+import MobileStudentSubmissionsPage from './mobile/MobileStudentSubmissionsPage';
 
 export default function StudentSubmissionsPage() {
+  const __isMobile = useIsMobileApp();
+  const __role = __useRBAC2().role;
+  if (__isMobile && __role === 'student') return <MobileStudentSubmissionsPage />;
   const { profile } = useAuth();
   const { role } = useRBAC();
   const isTeacher = role === 'teacher';

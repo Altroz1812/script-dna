@@ -13,6 +13,8 @@ import { startLiveClass } from '@/services/classroom/startClass';
 import { EndClassAttendanceDialog } from '@/components/classroom/EndClassAttendanceDialog';
 import { VideoClassroom } from '@/components/classroom/VideoClassroom';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { useIsMobileApp } from '@/hooks/useIsMobileApp';
+import MobileLiveClassesPage from './mobile/MobileLiveClassesPage';
 
 const STATUS_COLORS: Record<string, string> = {
   scheduled: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
@@ -80,6 +82,8 @@ function classifyClass(cls: LiveClass, now: Date): ClassStatus {
 }
 
 export default function LiveClassesPage() {
+  const __isMobile = useIsMobileApp();
+  if (__isMobile) return <MobileLiveClassesPage />;
   const { isAdmin, role } = useRBAC();
   const { profile } = useAuth();
   
