@@ -431,7 +431,7 @@ Deno.serve(async (req) => {
           scopedBatchIds = (ob ?? []).map((b: any) => b.id)
           if (scopedBatchIds.length === 0) { result = []; break }
         }
-        let lcQ: any = supabase.from('live_classes').select('*, batches(name, teacher_id, organization_id, courses(delivery_mode)), schedules(date, start_time, end_time, title, room)').order('scheduled_at', { ascending: false })
+        let lcQ: any = supabase.from('live_classes').select('*, batches(name, teacher_id, organization_id, courses(name, total_hours, duration_days, delivery_mode)), schedules(date, start_time, end_time, title, room)').order('scheduled_at', { ascending: false })
         if (scopedBatchIds) lcQ = lcQ.in('batch_id', scopedBatchIds)
         const { data } = await lcQ
         result = data ?? []
