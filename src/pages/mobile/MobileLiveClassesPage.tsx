@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { Video, Play, Square, Clock, CalendarDays, BookOpen, Loader2 } from 'lucide-react';
+import { Video, Play, Square, Clock, CalendarDays, BookOpen, Loader2, User, Timer } from 'lucide-react';
 import { format, parseISO, addMinutes, isSameDay } from 'date-fns';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -54,16 +54,41 @@ export default function MobileLiveClassesPage() {
       } else {
         const { data } = await supabase
           .from('live_classes')
-          .select('*, batches:batch_id(name, courses:course_id(name))')
+          .select('*, batches:batch_id(name, teacher_id, courses:course_id(name, total_hours))')
           .order('scheduled_at', { ascending: true });
         raw = data || [];
       }
+
+      const processed = raw.map((c: any) => ({
+        ...c,
+        status: (c.status || 'scheduled').toLowerCase(),
+        batch_name: c.batch_name || c.batches?.name || '—',
+        course_name: c.course_name || c.batches?.courses?.name || '—',
+        course_total_hours: c.course_total_hours ?? c.batches?.courses?.total_hours ?? null,
+        teacher_id_lookup: c.teacher_id || c.batches?.teacher_id || null,
+        teacher_name: c.teacher_name || '—',
+      }));
+
+      // Resolve teacher display names via profiles (auth uid → user_id)
+      const teacherIds = [...new Set(processed.map((c) => c.teacher_id_lookup).filter(Boolean))] as string[];
+      const teacherMap: Record<string, string> = {};
+      if (teacherIds.length > 0) {
+        const { data: profs } = await supabase
+          .from('profiles')
+          .select('user_id, display_name, email')
+          .in('user_id', teacherIds);
+        (profs || []).forEach((p: any) => {
+          teacherMap[p.user_id] = p.display_name || p.email || '—';
+        });
+      }
+
       setClasses(
-        raw.map((c: any) => ({
+        processed.map((c) => ({
           ...c,
-          status: (c.status || 'scheduled').toLowerCase(),
-          batch_name: c.batch_name || c.batches?.name || '—',
-          course_name: c.course_name || c.batches?.courses?.name || '—',
+          teacher_name:
+            c.teacher_id_lookup && teacherMap[c.teacher_id_lookup]
+              ? teacherMap[c.teacher_id_lookup]
+              : c.teacher_name,
         })),
       );
     } catch (e: any) {
@@ -212,9 +237,18 @@ export default function MobileLiveClassesPage() {
                 <div className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
                   <BookOpen className="w-3 h-3" /> {c.course_name} · {c.batch_name}
                 </div>
+                <div className="text-[11px] text-muted-foreground mt-1 flex items-center gap-3 flex-wrap">
+                  <span className="flex items-center gap-1"><User className="w-3 h-3" />{c.teacher_name}</span>
+                  {c.duration_minutes ? (
+                    <span className="flex items-center gap-1"><Timer className="w-3 h-3" />{c.duration_minutes} min</span>
+                  ) : null}
+                  {c.course_total_hours ? (
+                    <span className="opacity-80">Course: {c.course_total_hours}h</span>
+                  ) : null}
+                </div>
                 {start && (
                   <div className="text-[11px] text-muted-foreground mt-1 flex items-center gap-2">
-                    <span className="flex items-center gap-1"><CalendarDays className="w-3 h-3" />{format(start, 'MMM d')}</span>
+                    <span className="flex items-center gap-1"><CalendarDays className="w-3 h-3" />{format(start, 'EEE, MMM d')}</span>
                     <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{format(start, 'h:mm a')}</span>
                   </div>
                 )}
