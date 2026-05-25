@@ -124,27 +124,27 @@ export function TeacherControls() {
   };
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-1 flex-nowrap">
       {/* Bulk actions */}
       <Button
         variant="ghost"
         size="sm"
-        className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
+        className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground px-2"
         onClick={muteAllMics}
         title="Mute all participants"
       >
         <MicOff className="h-3.5 w-3.5" />
-        Mute All
+        <span className="hidden sm:inline">Mute All</span>
       </Button>
       <Button
         variant="ghost"
         size="sm"
-        className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
+        className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground px-2"
         onClick={disableAllCameras}
         title="Disable all cameras"
       >
         <VideoOff className="h-3.5 w-3.5" />
-        Cams Off
+        <span className="hidden sm:inline">Cams Off</span>
       </Button>
 
       {/* Per-participant dropdown */}
@@ -153,10 +153,10 @@ export function TeacherControls() {
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
+            className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground px-2"
           >
             <Users className="h-3.5 w-3.5" />
-            Manage ({remoteParticipants.length})
+            <span className="hidden sm:inline">Manage</span> ({remoteParticipants.length})
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">

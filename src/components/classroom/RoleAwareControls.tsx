@@ -36,7 +36,7 @@ export function RoleAwareControls({ onLeave }: { onLeave?: () => void }) {
 
   return (
     <div className="flex flex-col">
-      <div className="flex items-center justify-end gap-2 px-3 py-1.5 border-t border-border bg-muted/30">
+      <div className="flex items-center justify-end gap-1 px-2 py-1.5 border-t border-border bg-muted/30 overflow-x-auto">
         <TeacherControls />
       </div>
       <ControlBar
