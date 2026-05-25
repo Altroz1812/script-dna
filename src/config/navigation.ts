@@ -56,6 +56,7 @@ export const navigationConfig: NavGroup[] = [
       { title: 'Live Classes', url: '/live-classes', icon: Video, roles: ['superadmin', 'admin', 'teacher', 'student'] },
       { title: 'Materials', url: '/materials', icon: FileText, roles: ['superadmin', 'admin'] },
       { title: 'Practice', url: '/practice', icon: NotebookPen, roles: ['superadmin', 'admin', 'teacher', 'student'] },
+      { title: 'Practice Canvas', url: '/practice-canvas', icon: PenTool, roles: ['student', 'teacher', 'superadmin', 'admin'] },
       { title: 'Submissions', url: '/submissions', icon: FileCheck, roles: ['superadmin', 'admin', 'teacher', 'student'] },
     ],
   },
