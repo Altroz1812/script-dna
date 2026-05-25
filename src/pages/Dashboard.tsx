@@ -31,6 +31,11 @@ import { readActiveOrgFromStorage } from "@/contexts/ActiveOrgContext";
 import { useActiveOrg } from "@/contexts/ActiveOrgContext";
 import { ClassQuickJoinCards } from "@/components/classroom/ClassQuickJoinCards";
 import { useTodayClasses } from "@/hooks/useTodayClasses";
+import { useIsMobileApp } from "@/hooks/useIsMobileApp";
+import StudentHome from "@/pages/mobile/StudentHome";
+import TeacherHome from "@/pages/mobile/TeacherHome";
+import AdminHome from "@/pages/mobile/AdminHome";
+import ParentHome from "@/pages/mobile/ParentHome";
 
 interface Stats {
   totalUsers: number;
@@ -107,6 +112,14 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const { activeOrgId, activeOrgName } = useActiveOrg(); // Add this
+  const isMobileApp = useIsMobileApp();
+
+  if (isMobileApp && profile) {
+    if (profile.role === 'student') return <StudentHome />;
+    if (profile.role === 'parent') return <ParentHome />;
+    if (profile.role === 'teacher') return <TeacherHome />;
+    return <AdminHome />;
+  }
 
   const role = profile?.role;
   const isStudent = role === "student";
