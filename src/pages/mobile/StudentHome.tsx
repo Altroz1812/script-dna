@@ -142,8 +142,17 @@ export default function StudentHome() {
                   <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{c.status}</span>
                 </div>
                 <div className="font-semibold mt-2 truncate">{c.title}</div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  {new Date(c.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                <div className="text-[11px] text-muted-foreground mt-1 truncate">
+                  {c.course_name || '—'}{c.teacher_name && c.teacher_name !== '—' ? ` · ${c.teacher_name}` : ''}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
+                  <span>
+                    {new Date(c.scheduled_at).toLocaleString('en-IN', {
+                      day: '2-digit', month: 'short',
+                      hour: '2-digit', minute: '2-digit', hour12: true,
+                    })}
+                  </span>
+                  {c.duration_minutes ? <span>· {c.duration_minutes} min</span> : null}
                 </div>
               </TouchPress>
             ))}
