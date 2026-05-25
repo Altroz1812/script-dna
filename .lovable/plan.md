@@ -1,79 +1,43 @@
+# Native mobile fullscreen video classroom
 
-## Performance Audit — what's actually slow
+## Goal
+On mobile, the live class must take over the whole screen with all controls accessible, the host (or active screen-share) always occupies the main stage, and other participants render as small chromeless tiles — no card frames around any participant.
 
-### 1. The biggest offender: `admin-query` edge function (~2,000 LOC, single function)
-Almost every admin/staff page funnels through ONE edge function (`supabase/functions/admin-query/index.ts`). Each call pays:
-- Edge cold start (~200–800 ms on first hit per region)
-- Service-role auth check
-- JSON router overhead
+## Changes
 
-Top callers (from code scan):
-```
-update_batch / get_stats           — Dashboard, Batches
-list_batches / list_batch_students — Batches, BatchDetail
-list_leads / list_enrollments / list_payments — Dashboard support tab
-list_courses / list_teachers / list_all_students — Courses, dialogs
-check_*_conflicts                   — Schedule
-```
-Dashboard alone fires **4 parallel admin-query calls** (`list_leads`, `list_enrollments`, `list_payments`, `get_stats`) on every mount. `list_batches` was recently enriched to compute `sessionStats` per batch (loops sessions for every batch) — adds DB cost.
+### 1. `src/pages/mobile/MobileLiveClassesPage.tsx` — render the active class as a fullscreen overlay
+- Remove the in-page `aspect-video` card wrapper around `<VideoClassroom>`.
+- When `activeClass` exists, render `<VideoClassroom>` inside a `fixed inset-0 z-[100] bg-black` container that respects safe-area insets (`env(safe-area-inset-top/bottom)`).
+- Move the "End Session" button into a small floating action pinned to the top-right of the overlay (so all LiveKit controls remain reachable at the bottom).
+- Keep the list view rendering underneath; the overlay simply covers it while a class is active.
 
-### 2. Frontend pages bypassing React Query (37 pages!)
-Only ~10 pages use `useQuery`. The other 37 (UsersPage, StudentsPage, OrganizationsPage, AttendancePage, LiveClassesPage, PaymentsPage, ReportsPage, etc.) refetch on every mount via `useEffect`. No cache → every navigation is a fresh round-trip.
+### 2. `src/components/classroom/VideoClassroom.tsx` — make the shell mobile-fullscreen friendly
+- Container already uses `w-full h-full` — verified compatible with the new fullscreen parent.
+- Replace `ClassroomStage` (currently a `GridLayout` of `ParticipantTile`) with a new `FocusedStage` component (below) so the host/screen-share is the focal point and others are pip-style tiles.
+- On mobile, render `ClassroomChat` as a bottom sheet (`inset-x-0 bottom-0 h-[70vh] rounded-t-2xl`) instead of a right-side panel, so it overlays the video without squeezing it.
 
-### 3. Direct `supabase.from(...)` from client = extra hops + RLS recursion risk
-50 direct table queries from client code. Many run alongside admin-query for the same data (e.g., Dashboard teacher branch queries `practice_assignments` then `student_submissions` separately instead of one server-side join).
+### 3. New focused stage layout (inside `VideoClassroom.tsx`)
+Replace `ClassroomStage` with `FocusedStage`:
 
-### 4. Polling timers stacking up
-- `useTodayClasses` refetches every 60 s
-- `MobileLiveClassesPage`, `LiveClassesPage`, `SchedulePage`, `ActivityLogsPage` all `setInterval` 30–60 s
-- `AuthContext` heartbeat every 60 s
-These run even when the tab is backgrounded or page is not visible.
+- Use `useTracks([Camera with placeholder, ScreenShare])` and additionally `useParticipants()` to know who's the teacher (moderator metadata from `useParticipantRole`).
+- Pick the **main track** with this priority:
+  1. Any active `ScreenShare` track → main stage shows the projection.
+  2. Else the teacher/moderator's camera track → host on max screen.
+  3. Else the local participant's camera as fallback.
+- Render the main track full-bleed (`absolute inset-0 object-cover`, no border, no rounded card, no name overlay box — just a subtle gradient-bottom name label).
+- Render every other participant as small **chromeless** floating tiles in a horizontal strip at the top-right (or bottom-left above the control bar): plain `<video>` element wrapped in a `rounded-xl overflow-hidden w-20 h-28` div, no card background, no border ring except a thin `ring-1 ring-white/10` for separation. Mic-muted indicator is a tiny icon corner-pinned.
+- When screen-share is the main stage, the host's camera becomes one of the floating tiles (pinned first), satisfying "when projected it's rendered in the card".
+- No `<Card>` / `ParticipantTile` chrome anywhere — strictly plain video elements with minimal overlays.
 
-### 5. Database — missing indexes likely on hot paths
-`batches.organization_id`, `batches.teacher_id`, `batch_students.batch_id`, `live_classes.batch_id + scheduled_at`, `schedules.batch_id + date`, `attendance.batch_id + date` — need verification.
+### 4. Controls remain available
+- Keep `<RoleAwareControls>` rendered at the bottom of the fullscreen stage (it already exposes mic / camera / screenshare / leave for moderators and Leave for viewers).
+- Header bar (chat, minimize, close buttons) stays at the top inside the safe area.
 
-### 6. Initial bundle (already partially fixed)
-Route-level `React.lazy` is in place ✅, but heavy libs (`fabric` 300 KB, `recharts`, `framer-motion`, `livekit-client`) are pulled into the main chunk via shared components. Need to confirm via `vite build` stats.
+## Technical notes
+- Use `useParticipants` and `useTracks` from `@livekit/components-react`; attach tracks manually with `<VideoTrack trackRef={…} />` (or the `useTrackRefContext`-free `<ParticipantTile disableSpeakingIndicator>` styled to remove its chrome via `[&_.lk-participant-metadata]:hidden [&]:bg-transparent [&]:border-0`).
+- No backend, RLS, or schema changes.
+- Desktop behavior is preserved because the fullscreen overlay is only applied in the mobile page wrapper; the existing `GlobalClassroomOverlay` (desktop) continues using its current layout, but it will inherit the new `FocusedStage` — which is the desired UX on desktop too (host max, participants chromeless).
 
----
-
-## Phased Fix Plan (highest impact first, smallest changes)
-
-### Phase 1 — Quick wins (1 build pass, ~150 LOC, biggest gain)
-1. **Add React Query to top 5 hot pages** that currently re-fetch on every mount:
-   `UsersPage`, `StudentsPage`, `OrganizationsPage`, `PaymentsPage`, `LiveClassesPage`.
-   Wrap existing fetch logic in `useQuery` with `staleTime: 2 min`. Zero behavior change, 60–90 % fewer network calls on navigation.
-2. **Collapse Dashboard support tab** from 3 admin-query calls into one new `admin-query` action `get_support_overview` that returns counts only (cheap aggregate SQL on the server).
-3. **Pause background polling** when tab hidden — wrap each `setInterval` in `document.visibilityState === 'visible'` check (5 files).
-
-### Phase 2 — DB & server (1 migration + 1 edge function pass)
-4. **Add indexes** verified missing via `supabase--linter` and a quick `pg_stat_user_indexes` query:
-   `batches(organization_id)`, `batch_students(batch_id)`, `live_classes(batch_id, scheduled_at)`, `schedules(batch_id, date)`, `attendance(batch_id, date)`.
-5. **Move `sessionStats` aggregation in `list_batches`** from JS loop to a single SQL `GROUP BY` (one query instead of N+1).
-6. **Split monolithic `admin-query`** is NOT recommended yet (high churn risk) — but **add a 5-second in-memory LRU cache** inside it for read-only actions (`list_courses`, `list_teachers`, `get_stats`) keyed by `(action, org_id, user_id)`. Trivial code, huge effect on bursty navigation.
-
-### Phase 3 — Bundle & perceived perf (optional polish)
-7. Run `vite build` and inspect `dist/assets/*`. Move `fabric`, `livekit-client`, `recharts` behind dynamic `import()` inside the components that actually need them (FontCompiler, VideoClassroom, charts).
-8. Add `Skeleton` placeholders to the 5 hot pages above so navigation feels instant.
-
-### What I will NOT change
-- Auth flow, RLS policies, multi-tenancy logic, AuthContext singleton.
-- The 35 lazy routes (already done).
-- Realtime channels (already correctly scoped).
-
----
-
-## Technical details
-
-- React Query is already mounted (`QueryClientProvider` in `App.tsx`) with `staleTime: 60s` and `refetchOnMount: false` — so just converting `useEffect`-based fetchers into `useQuery` will immediately benefit from existing cache.
-- Edge function in-memory cache is per-instance and lives only while the worker is warm; safe for read actions, expires fast enough to avoid staleness complaints.
-- All index migrations will be `CREATE INDEX CONCURRENTLY IF NOT EXISTS` to avoid lock issues.
-
----
-
-## Question before I start building
-
-Which scope do you want me to implement now?
-- **A) Phase 1 only** (smallest diff, biggest perceived gain, ~30 min work) — recommended
-- **B) Phase 1 + Phase 2** (also DB indexes + server cache) — best ROI
-- **C) All three phases** (also bundle splitting) — most thorough, more risk
+## Files touched
+- `src/pages/mobile/MobileLiveClassesPage.tsx`
+- `src/components/classroom/VideoClassroom.tsx`
