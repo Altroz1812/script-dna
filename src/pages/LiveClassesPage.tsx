@@ -306,6 +306,7 @@ export default function LiveClassesPage() {
     let canStart = false;
     let canJoinWaitingRoom = false;
     let targetStartDate: Date | null = null;
+    let windowEnded = false;
     
     if (cls.scheduled_at) {
       try {
@@ -327,6 +328,7 @@ export default function LiveClassesPage() {
             const endDate = addMinutes(targetStartDate, cls.duration_minutes);
             if (!isNaN(endDate.getTime())) {
               endTimeStr = ` - ${format(endDate, 'h:mm a')}`;
+              if (now > endDate) windowEnded = true;
             }
           }
         }
@@ -334,6 +336,10 @@ export default function LiveClassesPage() {
         console.error('Error parsing date:', error);
       }
     }
+
+    // After the scheduled window ends, students/parents lose Join until teacher ends or restarts.
+    // Teacher/Admin keep Start/Join controls so they can still run/close the session manually.
+    const showJoinButton = (isLive || isToday_) && (!windowEnded || canManage);
 
     // Determine display status text
     let displayStatus = cls.status;
@@ -385,7 +391,7 @@ export default function LiveClassesPage() {
           </div>
 
           <div className="flex sm:flex-col items-end justify-between sm:justify-center gap-2 shrink-0 border-t sm:border-t-0 pt-3 sm:pt-0 border-border/60">
-            {(isLive || isToday_) && (
+            {showJoinButton && (
               <Button 
                 size="sm" 
                 variant={isLive ? "default" : "outline"}
