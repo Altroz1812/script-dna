@@ -816,6 +816,94 @@ Deno.serve(async (req) => {
         result = { success: true }
         break
       }
+      case 'get_batch_detail': {
+        const { id } = params
+        if (!id) throw new Error('batch id required')
+        const { data: batch, error: bErr } = await supabase
+          .from('batches')
+          .select('*, courses(*)')
+          .eq('id', id)
+          .maybeSingle()
+        if (bErr) throw bErr
+        if (!batch) throw new Error('Batch not found')
+        if (targetOrgId && batch.organization_id !== targetOrgId) {
+          throw new Error('Batch is outside your organization')
+        }
+
+        // Teacher profile
+        let teacher: any = null
+        if (batch.teacher_id) {
+          const { data: t } = await supabase
+            .from('profiles')
+            .select('user_id, display_name, email, avatar_url')
+            .eq('user_id', batch.teacher_id)
+            .maybeSingle()
+          teacher = t || null
+        }
+
+        // Enrolled students + progress
+        const { data: enrollRows } = await supabase
+          .from('batch_students')
+          .select('student_id, enrolled_at')
+          .eq('batch_id', id)
+        const studentIds = (enrollRows ?? []).map((r: any) => r.student_id)
+        let studentProfiles: any[] = []
+        let progressRows: any[] = []
+        if (studentIds.length) {
+          const [{ data: profs }, { data: progs }] = await Promise.all([
+            supabase.from('profiles').select('user_id, display_name, email, avatar_url').in('user_id', studentIds),
+            supabase.from('student_progress').select('student_id, completion_pct, sessions_attended, total_sessions').eq('batch_id', id),
+          ])
+          studentProfiles = profs ?? []
+          progressRows = progs ?? []
+        }
+        const profMap: Record<string, any> = {}
+        for (const p of studentProfiles) profMap[p.user_id] = p
+        const progMap: Record<string, any> = {}
+        for (const p of progressRows) progMap[p.student_id] = p
+        const students = (enrollRows ?? []).map((r: any) => ({
+          student_id: r.student_id,
+          enrolled_at: r.enrolled_at,
+          display_name: profMap[r.student_id]?.display_name || null,
+          email: profMap[r.student_id]?.email || null,
+          avatar_url: profMap[r.student_id]?.avatar_url || null,
+          completion_pct: progMap[r.student_id]?.completion_pct ?? 0,
+        }))
+
+        // Sessions (live_classes) ordered by date
+        const { data: sessions } = await supabase
+          .from('live_classes')
+          .select('id, title, scheduled_at, duration_minutes, status, meeting_url, schedule_id')
+          .eq('batch_id', id)
+          .order('scheduled_at', { ascending: true })
+
+        const sList = sessions ?? []
+        const completedMinutes = sList
+          .filter((s: any) => s.status === 'completed')
+          .reduce((sum: number, s: any) => sum + (s.duration_minutes || 0), 0)
+        const totalHours = batch.courses?.total_hours ?? null
+        const hoursCompleted = +(completedMinutes / 60).toFixed(1)
+        const hoursPending = totalHours != null ? Math.max(0, +(totalHours - hoursCompleted).toFixed(1)) : null
+
+        result = {
+          batch,
+          teacher,
+          students,
+          student_count: students.length,
+          sessions: sList,
+          progress: {
+            total_hours: totalHours,
+            hours_completed: hoursCompleted,
+            hours_pending: hoursPending,
+            sessions_total: sList.length,
+            sessions_completed: sList.filter((s: any) => s.status === 'completed').length,
+            sessions_live: sList.filter((s: any) => s.status === 'live').length,
+            sessions_upcoming: sList.filter((s: any) => s.status === 'scheduled' && new Date(s.scheduled_at) > new Date()).length,
+            sessions_cancelled: sList.filter((s: any) => s.status === 'cancelled').length,
+          },
+        }
+        break
+      }
       case 'list_batch_students': {
         const { data } = await supabase.from('batch_students').select('*').eq('batch_id', params.batch_id)
         const sIds = (data ?? []).map((d: any) => d.student_id)
