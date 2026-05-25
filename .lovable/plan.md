@@ -1,49 +1,89 @@
-# Prevent Page Reinitialization on Resume
+## Goal
 
-When the user switches tabs / apps and returns, the current page reloads its data, the classroom reconnects, and local state appears to reset. Root causes: React Query's default `refetchOnWindowFocus`/`refetchOnReconnect`, an aggressive `refetchInterval`, and the auth provider flipping `loading=true` on every `onAuthStateChange` event (including `TOKEN_REFRESHED` fired on focus), which unmounts protected routes.
+Deliver a native-app feel for AuraPen on iOS/Android (via Capacitor) and small viewports, without touching the existing desktop experience. First pass = navigation shell + 4 role homes + reusable mobile UI primitives. Haptics/offline deferred.
 
-## Changes
+## Activation strategy
 
-### 1. Global React Query defaults — `src/App.tsx`
-Configure the shared `QueryClient` with safe defaults so every page inherits them:
-```ts
-new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: false,
-      refetchOnMount: false,
-      staleTime: 60_000,
-      retry: 1,
-    },
-  },
-})
-```
-This single change kills the bulk of the "everything reloads on resume" behavior across Dashboard, Schedule, Courses, Student/Parent pages, etc.
+A new `useIsMobileApp()` hook returns true when **either**:
+- `window.matchMedia('(max-width: 767px)').matches`, or
+- Capacitor is detected (`window.Capacitor?.isNativePlatform?.()`).
 
-### 2. Stop auth-driven remounts — `src/contexts/AuthContext.tsx`
-- Do **not** set `loading=true` inside `onAuthStateChange`. Only set it on the initial `getSession()` pass.
-- Ignore `TOKEN_REFRESHED` and `INITIAL_SESSION` events for profile reload — only react to `SIGNED_IN` (when user id actually changes) and `SIGNED_OUT`.
-- Keep the existing `setTimeout(0)` deadlock guard.
+`AppLayout.tsx` branches: mobile → `<MobileAppShell />`, desktop → existing sidebar layout. `GlobalClassroomOverlay` stays mounted in both.
 
-Effect: `ProtectedRoute` no longer briefly renders its loader on tab return, so the `<Outlet/>` tree (and the page component) is not unmounted.
+## Navigation shell
 
-### 3. Tame the classroom hook — `src/hooks/useTodayClasses.ts`
-- Replace `refetchInterval: 30s` with `refetchInterval: 60s` and add `refetchIntervalInBackground: false` so polling pauses when hidden and doesn't fire a burst on resume.
-- Explicitly set `refetchOnWindowFocus: false`.
+`src/components/mobile/MobileAppShell.tsx`
+- Sticky top bar: hamburger (opens drawer), centered page title, right-side notifications bell.
+- `<Outlet />` in a scroll container with safe-area padding (`env(safe-area-inset-*)`).
+- Sticky bottom tab bar (`fixed bottom-0`, `h-16`, blurred glass): **Home · Courses · Classes · Profile**. Active tab shows gradient pill + label; 44px touch targets; `active:scale-95` press feedback; 180ms transitions.
+- Routes map by role:
+  - Home → `/dashboard`
+  - Courses → student/parent: `/courses`; teacher/admin: `/batches`
+  - Classes → `/live-classes`
+  - Profile → `/profile`
+- Sub-pages show a back chevron in the top bar (uses `navigate(-1)`).
 
-### 4. Keep the LiveKit session alive
-`GlobalClassroomOverlay` already lives in `AppLayout` and stays mounted while routes change, so the LiveKit room will no longer be torn down once items 1–2 above stop the layout from remounting. No structural change needed here — verify only.
+`src/components/mobile/MobileDrawer.tsx`
+- Slide-in left drawer (use existing `Sheet`/`Drawer` primitive), grouped sections built from `src/config/navigation.ts` filtered by role.
+- Header: user avatar, name, role badge, active org chip.
+- Footer: theme toggle + Sign out.
 
-### 5. Light visibility audit
-- `src/pages/ActivityLogsPage.tsx` and `src/pages/SchedulePage.tsx` use raw `setInterval` for polling. Gate them with `document.visibilityState === 'visible'` inside the tick so hidden tabs don't queue work that floods on resume. No refetch on focus is added.
+## Role home dashboards
 
-## Out of scope
-- No changes to LiveKit reconnect logic itself (LiveKit handles its own resume).
-- No router/layout restructuring — the existing `AppLayout` already persists across route changes; the fix is to stop the auth context from forcing it to unmount.
-- Form/scroll state is preserved automatically once remounts stop; no per-page work needed.
+New `src/pages/mobile/` directory. `Dashboard.tsx` detects mobile and renders the role-specific home; desktop dashboard unchanged.
 
-## Verification
-1. Open Dashboard, switch tabs for 30s, return → no network burst, no skeleton flash.
-2. Join a live class, minimize, switch to another app, return → still connected, no reconnect.
-3. Fill a form, switch tabs, return → inputs intact.
+1. **StudentHome** — Greeting, large circular progress ring (overall completion), "Today's Classes" horizontal scroller, quick-action grid (Practice, Submit, Materials, Progress), Recent Submissions list.
+2. **TeacherHome** — Stat tiles (Active batches, Today's classes, Pending reviews), Live-class indicator banner (pulses when a class is live), Pending submissions list, floating FAB (bottom-right above tab bar) → quick-create menu (New Class, New Assignment).
+3. **AdminHome** — Revenue card (₹ today/this month, sparkline), user stats grid (Students, Teachers, Active orgs), quick actions, Activity feed from `activity_logs`.
+4. **ParentHome** — Children list cards with mini progress bars, Upcoming classes section, Payments summary.
+
+All cards reuse existing AuraPen tokens (glassmorphism, gradient accents) — no new design system.
+
+## Reusable mobile UI primitives
+
+Under `src/components/mobile/ui/`:
+- `MobilePage.tsx` — wrapper that sets title via context, applies pull-to-refresh.
+- `PullToRefresh.tsx` — touch-based, CSS transform spring-back, calls a passed `onRefresh` (returns Promise).
+- `Shimmer.tsx` — skeleton variants: card, list-row, stat-tile, ring. Used during data fetch so screens never blank-flash.
+- `EmptyState.tsx` — icon + headline + helper + optional CTA.
+- `ErrorState.tsx` — icon + message + retry button.
+- `TouchPress.tsx` — wrapper adding `active:scale-[0.97] transition-transform duration-150` + role="button".
+- `OfflineBanner.tsx` — placeholder that listens to `navigator.onLine` (true offline cache lands next pass).
+- `FAB.tsx` — floating action button positioned above the tab bar.
+
+All animations capped at 200ms.
+
+## Capacitor alignment
+
+- No new native plugins this pass (haptics deferred).
+- `index.html` viewport already includes `viewport-fit=cover`; verify and add safe-area CSS vars in `index.css`.
+- Bottom tab bar respects `env(safe-area-inset-bottom)`; top bar respects `env(safe-area-inset-top)`.
+- Status bar styling left to existing Capacitor config.
+
+## Performance guardrails
+
+- Mobile shell + pages are code-split via `React.lazy` so desktop bundle is unaffected.
+- Reuse existing React Query caches — homes call the same hooks the current dashboard already uses (e.g. `useTodayClasses`, dashboard `getStats` RPC). No new network calls beyond what already runs.
+- Shimmer renders for max 1 frame when cached; cached-first via existing localStorage dashboard cache.
+
+## Out of scope (next pass)
+
+- Haptics (`@capacitor/haptics`), offline cache (`@capacitor/network` + React Query persistence).
+- Native treatment of secondary pages (Materials, Payments, Reports, etc.) — they render inside the mobile shell but keep current responsive layout.
+- iOS vs Android platform-adaptive styling (unified AuraPen look chosen).
+
+## Files
+
+New:
+- `src/hooks/useIsMobileApp.ts`
+- `src/components/mobile/MobileAppShell.tsx`
+- `src/components/mobile/MobileTopBar.tsx`
+- `src/components/mobile/MobileBottomTabs.tsx`
+- `src/components/mobile/MobileDrawer.tsx`
+- `src/components/mobile/ui/{MobilePage,PullToRefresh,Shimmer,EmptyState,ErrorState,TouchPress,OfflineBanner,FAB}.tsx`
+- `src/pages/mobile/{StudentHome,TeacherHome,AdminHome,ParentHome}.tsx`
+
+Edited:
+- `src/components/layout/AppLayout.tsx` — branch on `useIsMobileApp()`.
+- `src/pages/Dashboard.tsx` — render role home on mobile.
+- `src/index.css` — safe-area CSS vars + a few mobile utilities.
