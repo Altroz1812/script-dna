@@ -1,115 +1,79 @@
 
-## Goals
+## Performance Audit — what's actually slow
 
-1. **One permanent meeting link per batch** — generated once at batch creation, reused for every session.
-2. **Comprehensive Batch detail page** showing teacher, course, students, progress, day-wise session status.
-3. **Clear separation** between auto-schedule (recurring template) and manual schedule (one-off exceptions).
-4. **Reduce DB writes & token use** — no per-day meeting-link generation, no duplicate live_classes.
+### 1. The biggest offender: `admin-query` edge function (~2,000 LOC, single function)
+Almost every admin/staff page funnels through ONE edge function (`supabase/functions/admin-query/index.ts`). Each call pays:
+- Edge cold start (~200–800 ms on first hit per region)
+- Service-role auth check
+- JSON router overhead
 
----
-
-## 1. Unified Meeting Link Per Batch
-
-**Schema change** (migration):
-- Add `batches.meeting_room` (text) and `batches.meeting_link_expires_at` (timestamptz, nullable = batch end + grace).
-- On batch INSERT, a trigger sets `meeting_room = 'batch-' || substr(id::text, 1, 8)` if null.
-- Backfill existing batches with the same scheme.
-
-**Behavior change**:
-- `startLiveClass` (`src/services/classroom/startClass.ts`) no longer mints a per-class room. It reads `batches.meeting_room` and just flips the `live_classes.status` to `'live'`. The `meeting_url` column on `live_classes` becomes a denormalized mirror of the batch room (kept for back-compat; populated by trigger from the batch row, never client-generated).
-- `livekit-token` edge function uses `roomName` from the request as-is. No edge-function change required; client sends batch's room.
-- `auto_create_live_class` trigger (on schedules INSERT) updated to copy `meeting_url` from the parent batch instead of leaving null.
-
-**Result**: A batch has one room for its lifetime. Joining any of its sessions (live, today, upcoming) drops the user into the same LiveKit room.
-
----
-
-## 2. Cleaner Auto vs Manual Schedule
-
-- **Auto-schedule** = the canonical recurring template (working days × time-of-day × N course-days). Generates the full session itinerary at batch-creation time (already happens; we keep this).
-- **Manual schedule** = additive only. Used for extra/substitute/holiday-rescheduled sessions. The "Add Manually" dialog in `SchedulePage` will be relabelled **"Add Extra / Reschedule Session"**, default-restricted to dates outside the auto-set, and warn if the chosen slot already has an auto-session.
-- Remove the duplicate auto-generation path inside `BatchesPage.handleCreateBatch` if the dedicated Auto-Schedule generator in `SchedulePage` will own it. Decision: keep batch-creation generation (single source) and **remove** the standalone Auto-Schedule dialog on `SchedulePage`, leaving only Manual + filter/list views. This guarantees one canonical generation pass per batch.
-- Add a guard on `scheduleService.bulkCreateSchedules` that rejects (or de-dupes) any row whose `(batch_id, date, start_time)` already exists.
-
----
-
-## 3. New Batch Detail Page (Desktop + Mobile)
-
-Route: `/batches/:batchId` → `src/pages/BatchDetailPage.tsx` (desktop) and `src/pages/mobile/MobileBatchDetailPage.tsx`. Cards in `BatchesPage` / `MobileBatchesPage` open this page on click.
-
-**Sections** (single page, lazy-loaded):
-
-| Section | Source |
-|---|---|
-| Header: batch name, course name, status pill | `batches` + `courses` |
-| Meeting link card with Copy / Open buttons, validity dates | `batches.meeting_room` + computed `wss://…` |
-| Teacher card: name, email, avatar | `profiles` via `batches.teacher_id` |
-| Course card: name, description, total_hours, duration_days, daily_hours | `courses` |
-| Students table: name, email, % progress | `batch_students` + `student_progress` |
-| Progress summary: hours completed (sum of completed live_classes.duration_minutes ÷ 60), pending = total_hours − completed | aggregated |
-| Day-wise session status timeline: each `live_classes` row with badge ✅ Completed / 🔴 Live / ⏳ Upcoming / ❌ Cancelled | `live_classes` ordered by `scheduled_at` |
-| Footer action: "Add Extra Session" → opens manual-schedule dialog pre-filled for this batch | reused |
-
-**Data fetching**:
-- Single `admin-query` action `get_batch_detail(batch_id)` returns batch + course + teacher + students + sessions in one round-trip. Cached for 5 min with React Query; refetch on focus disabled to save tokens.
-- Mobile reuses the same query and renders the same sections inside `MobilePage` with stacked cards.
-
----
-
-## 4. Cost / Token Efficiency Measures
-
-- One `get_batch_detail` call replaces 4–5 separate fetches.
-- React Query `staleTime: 5 min`, no `refetchOnWindowFocus`.
-- No per-day meeting-link generation, no extra writes when joining a class.
-- `bulkCreateSchedules` uses `ON CONFLICT DO NOTHING` so the auto-trigger never spawns duplicate live_classes if re-run.
-
----
-
-## Technical Details
-
-**Migration (new file)**
-```sql
-ALTER TABLE public.batches
-  ADD COLUMN IF NOT EXISTS meeting_room text,
-  ADD COLUMN IF NOT EXISTS meeting_link_expires_at timestamptz;
-
--- backfill
-UPDATE public.batches SET meeting_room = 'batch-' || substr(id::text, 1, 8)
-  WHERE meeting_room IS NULL;
-
--- trigger to auto-fill on insert
-CREATE OR REPLACE FUNCTION public.set_batch_meeting_room()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-BEGIN
-  IF NEW.meeting_room IS NULL THEN
-    NEW.meeting_room := 'batch-' || substr(NEW.id::text, 1, 8);
-  END IF;
-  RETURN NEW;
-END $$;
-CREATE TRIGGER trg_set_batch_meeting_room
-  BEFORE INSERT ON public.batches
-  FOR EACH ROW EXECUTE FUNCTION public.set_batch_meeting_room();
-
--- update auto_create_live_class to pull meeting_url from batch
--- (re-create with the same body, adding meeting_url select from batches)
+Top callers (from code scan):
 ```
+update_batch / get_stats           — Dashboard, Batches
+list_batches / list_batch_students — Batches, BatchDetail
+list_leads / list_enrollments / list_payments — Dashboard support tab
+list_courses / list_teachers / list_all_students — Courses, dialogs
+check_*_conflicts                   — Schedule
+```
+Dashboard alone fires **4 parallel admin-query calls** (`list_leads`, `list_enrollments`, `list_payments`, `get_stats`) on every mount. `list_batches` was recently enriched to compute `sessionStats` per batch (loops sessions for every batch) — adds DB cost.
 
-**Files to add**
-- `src/pages/BatchDetailPage.tsx`
-- `src/pages/mobile/MobileBatchDetailPage.tsx`
-- `src/components/batches/MeetingLinkCard.tsx`
-- `src/components/batches/SessionTimeline.tsx`
+### 2. Frontend pages bypassing React Query (37 pages!)
+Only ~10 pages use `useQuery`. The other 37 (UsersPage, StudentsPage, OrganizationsPage, AttendancePage, LiveClassesPage, PaymentsPage, ReportsPage, etc.) refetch on every mount via `useEffect`. No cache → every navigation is a fresh round-trip.
 
-**Files to edit**
-- `src/App.tsx` — add `/batches/:batchId` route
-- `src/pages/BatchesPage.tsx` — card → `navigate('/batches/' + id)`; remove duplicate schedule generation (keep one path); show meeting_room badge
-- `src/pages/mobile/MobileBatchesPage.tsx` — same nav
-- `src/pages/SchedulePage.tsx` — remove Auto-Schedule dialog, rename "Add Manually" → "Add Extra / Reschedule"
-- `src/services/classroom/startClass.ts` — read batch.meeting_room instead of minting `class-<id8>`
-- `src/services/api/courseService.ts` — `Batch` type gets `meeting_room`, `meeting_link_expires_at`; add `batchService.getBatchDetail(id)`
-- `supabase/functions/admin-query/index.ts` — add `get_batch_detail` action; ensure `list_batches` returns `meeting_room`
+### 3. Direct `supabase.from(...)` from client = extra hops + RLS recursion risk
+50 direct table queries from client code. Many run alongside admin-query for the same data (e.g., Dashboard teacher branch queries `practice_assignments` then `student_submissions` separately instead of one server-side join).
 
-**Out of scope**
-- Changing LiveKit token semantics or `livekit-token` edge function.
-- Any change to font / handwriting modules.
-- Roles, RLS, payments, attendance flow — untouched.
+### 4. Polling timers stacking up
+- `useTodayClasses` refetches every 60 s
+- `MobileLiveClassesPage`, `LiveClassesPage`, `SchedulePage`, `ActivityLogsPage` all `setInterval` 30–60 s
+- `AuthContext` heartbeat every 60 s
+These run even when the tab is backgrounded or page is not visible.
+
+### 5. Database — missing indexes likely on hot paths
+`batches.organization_id`, `batches.teacher_id`, `batch_students.batch_id`, `live_classes.batch_id + scheduled_at`, `schedules.batch_id + date`, `attendance.batch_id + date` — need verification.
+
+### 6. Initial bundle (already partially fixed)
+Route-level `React.lazy` is in place ✅, but heavy libs (`fabric` 300 KB, `recharts`, `framer-motion`, `livekit-client`) are pulled into the main chunk via shared components. Need to confirm via `vite build` stats.
+
+---
+
+## Phased Fix Plan (highest impact first, smallest changes)
+
+### Phase 1 — Quick wins (1 build pass, ~150 LOC, biggest gain)
+1. **Add React Query to top 5 hot pages** that currently re-fetch on every mount:
+   `UsersPage`, `StudentsPage`, `OrganizationsPage`, `PaymentsPage`, `LiveClassesPage`.
+   Wrap existing fetch logic in `useQuery` with `staleTime: 2 min`. Zero behavior change, 60–90 % fewer network calls on navigation.
+2. **Collapse Dashboard support tab** from 3 admin-query calls into one new `admin-query` action `get_support_overview` that returns counts only (cheap aggregate SQL on the server).
+3. **Pause background polling** when tab hidden — wrap each `setInterval` in `document.visibilityState === 'visible'` check (5 files).
+
+### Phase 2 — DB & server (1 migration + 1 edge function pass)
+4. **Add indexes** verified missing via `supabase--linter` and a quick `pg_stat_user_indexes` query:
+   `batches(organization_id)`, `batch_students(batch_id)`, `live_classes(batch_id, scheduled_at)`, `schedules(batch_id, date)`, `attendance(batch_id, date)`.
+5. **Move `sessionStats` aggregation in `list_batches`** from JS loop to a single SQL `GROUP BY` (one query instead of N+1).
+6. **Split monolithic `admin-query`** is NOT recommended yet (high churn risk) — but **add a 5-second in-memory LRU cache** inside it for read-only actions (`list_courses`, `list_teachers`, `get_stats`) keyed by `(action, org_id, user_id)`. Trivial code, huge effect on bursty navigation.
+
+### Phase 3 — Bundle & perceived perf (optional polish)
+7. Run `vite build` and inspect `dist/assets/*`. Move `fabric`, `livekit-client`, `recharts` behind dynamic `import()` inside the components that actually need them (FontCompiler, VideoClassroom, charts).
+8. Add `Skeleton` placeholders to the 5 hot pages above so navigation feels instant.
+
+### What I will NOT change
+- Auth flow, RLS policies, multi-tenancy logic, AuthContext singleton.
+- The 35 lazy routes (already done).
+- Realtime channels (already correctly scoped).
+
+---
+
+## Technical details
+
+- React Query is already mounted (`QueryClientProvider` in `App.tsx`) with `staleTime: 60s` and `refetchOnMount: false` — so just converting `useEffect`-based fetchers into `useQuery` will immediately benefit from existing cache.
+- Edge function in-memory cache is per-instance and lives only while the worker is warm; safe for read actions, expires fast enough to avoid staleness complaints.
+- All index migrations will be `CREATE INDEX CONCURRENTLY IF NOT EXISTS` to avoid lock issues.
+
+---
+
+## Question before I start building
+
+Which scope do you want me to implement now?
+- **A) Phase 1 only** (smallest diff, biggest perceived gain, ~30 min work) — recommended
+- **B) Phase 1 + Phase 2** (also DB indexes + server cache) — best ROI
+- **C) All three phases** (also bundle splitting) — most thorough, more risk
