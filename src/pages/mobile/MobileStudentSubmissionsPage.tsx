@@ -73,12 +73,12 @@ export default function MobileStudentSubmissionsPage() {
         const { data } = supabase.storage.from('submissions').getPublicUrl(path);
         fileUrl = data.publicUrl;
       }
-      const { error } = await supabase.from('student_submissions').insert({
+      const { error } = await supabase.from('student_submissions').insert([{
         student_id: profile!.id,
         assignment_id: form.assignment_id,
-        file_url: fileUrl,
-        status: 'submitted',
-      });
+        file_url: fileUrl ?? undefined,
+        status: 'pending',
+      }]);
       if (error) throw error;
       toast.success('Submitted');
       setOpen(false);
