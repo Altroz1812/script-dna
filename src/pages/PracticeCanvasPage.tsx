@@ -7,7 +7,8 @@ import { Slider } from '@/components/ui/slider';
 import { CharacterGrid } from '@/components/handwriting/CharacterGrid';
 import { FourLineCanvas } from '@/components/handwriting/FourLineCanvas';
 import { CanvasToolbar } from '@/components/handwriting/CanvasToolbar';
-import { FontUploadPanel, UploadedFont } from '@/components/handwriting/FontUploadPanel';
+import { FontPicker } from '@/components/handwriting/FontPicker';
+import type { UploadedFont } from '@/components/handwriting/FontUploadPanel';
 import { useStrokeCapture } from '@/hooks/useStrokeCapture';
 import { ToolbarConfig } from '@/types/handwriting';
 import { useIsMobileApp } from '@/hooks/useIsMobileApp';
@@ -97,7 +98,7 @@ export default function PracticeCanvasPage() {
         <div className={cn('grid gap-4', isMobile ? 'grid-cols-1' : 'grid-cols-1 xl:grid-cols-12 gap-6')}>
           {/* Left: trace font + character picker */}
           <div className={cn('space-y-3', !isMobile && 'xl:col-span-4 space-y-4')}>
-            <FontUploadPanel activeFont={activeFont} onFontSelect={setActiveFont} />
+            <FontPicker activeFont={activeFont} onFontSelect={setActiveFont} />
 
             {activeFont && (
               <div className="panel-glass rounded-xl p-4 space-y-3">
