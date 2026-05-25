@@ -13,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Trash2, Users, UserPlus, UserMinus, Layers, Wifi, Building2, Pencil, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Users, UserPlus, UserMinus, Layers, Wifi, Building2, Pencil, AlertCircle, Radio, Clock, Calendar, BookOpen, User as UserIcon, ChevronRight, Copy } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
 import { useIsMobileApp } from '@/hooks/useIsMobileApp';
@@ -483,59 +484,159 @@ export default function BatchesPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {batches.map(b => (
-            <Card key={b.id} className="hover:border-primary/40 transition-colors">
-              <CardHeader className="cursor-pointer" onClick={() => navigate(`/batches/${b.id}`)}>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="text-lg">{b.name}</CardTitle>
-                    <CardDescription>{(b as any).courses?.name ?? 'Unknown course'}</CardDescription>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {batches.map((b: any) => {
+            const next = b.next_session;
+            const pct = b.progress_pct ?? 0;
+            const meetingUrl = b.meeting_room
+              ? `${window.location.origin}/live-classes?room=${encodeURIComponent(b.meeting_room)}`
+              : null;
+            const isOffline = b.courses?.delivery_mode === 'offline';
+            return (
+              <Card
+                key={b.id}
+                className="group relative overflow-hidden border-border/60 hover:border-primary/50 transition-all hover:shadow-lg hover:shadow-primary/5"
+              >
+                {/* Top accent bar */}
+                <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-accent to-primary opacity-60" />
+
+                <CardHeader
+                  className="pb-3 cursor-pointer"
+                  onClick={() => navigate(`/batches/${b.id}`)}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-accent/15 flex items-center justify-center shrink-0">
+                        <Layers className="w-5 h-5 text-primary" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <CardTitle className="text-base truncate group-hover:text-primary transition-colors">
+                          {b.name}
+                        </CardTitle>
+                        <CardDescription className="text-xs flex items-center gap-1 mt-0.5 truncate">
+                          <BookOpen className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{b.courses?.name ?? 'Unknown course'}</span>
+                        </CardDescription>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      {isAdmin && (
+                        <>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditDialog(b)}>
+                            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => deleteMutation.mutate(b.id)}>
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          </Button>
+                        </>
+                      )}
+                      <ChevronRight
+                        className="h-4 w-4 text-muted-foreground cursor-pointer"
+                        onClick={() => navigate(`/batches/${b.id}`)}
+                      />
+                    </div>
                   </div>
-                  {isAdmin && (
-                    <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                      <Button variant="ghost" size="icon" onClick={() => openEditDialog(b)}>
-                        <Pencil className="h-4 w-4 text-muted-foreground" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(b.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
+                </CardHeader>
+
+                <CardContent className="space-y-3.5 pt-0">
+                  {/* Tags */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {isOffline ? (
+                      <Badge variant="outline" className="gap-1 text-[10px] h-5"><Building2 className="h-2.5 w-2.5" /> Offline</Badge>
+                    ) : (
+                      <Badge variant="outline" className="gap-1 text-[10px] h-5"><Wifi className="h-2.5 w-2.5" /> Online</Badge>
+                    )}
+                    <Badge variant="secondary" className="gap-1 text-[10px] h-5">
+                      <Users className="h-2.5 w-2.5" /> {b.enrolled_count ?? 0}/{b.max_students}
+                    </Badge>
+                    {b.courses?.total_hours != null && (
+                      <Badge variant="secondary" className="gap-1 text-[10px] h-5">
+                        <Clock className="h-2.5 w-2.5" /> {b.courses.total_hours}h
+                      </Badge>
+                    )}
+                  </div>
+
+                  {/* Teacher row */}
+                  <div className="flex items-center gap-2 text-xs">
+                    <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center shrink-0">
+                      <UserIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Teacher</div>
+                      <div className="font-medium truncate text-foreground">
+                        {b.teacher_name || (b.teacher_id ? 'Assigned' : 'Not assigned')}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Next session */}
+                  <div className="rounded-lg bg-muted/30 border border-border/40 p-2.5">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 flex items-center gap-1">
+                      <Calendar className="h-2.5 w-2.5" /> Next Session
+                    </div>
+                    {next ? (
+                      <div className="text-xs font-medium text-foreground flex items-center gap-2 flex-wrap">
+                        <span>{format(parseISO(next.scheduled_at), 'EEE, MMM d · h:mm a')}</span>
+                        <span className="text-muted-foreground">· {next.duration_minutes} min</span>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-muted-foreground italic">No upcoming sessions</div>
+                    )}
+                  </div>
+
+                  {/* Progress */}
+                  <div>
+                    <div className="flex items-center justify-between text-[10px] mb-1.5">
+                      <span className="uppercase tracking-wider text-muted-foreground">Progress</span>
+                      <span className="font-mono font-semibold text-foreground">
+                        {b.sessions_completed ?? 0}/{b.sessions_total ?? 0} sessions · {pct}%
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-primary to-accent transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Meeting link */}
+                  {meetingUrl && !isOffline && (
+                    <div className="flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/5 px-2 py-1.5">
+                      <Radio className="h-3 w-3 text-primary shrink-0" />
+                      <span className="text-[10px] font-mono truncate flex-1 text-muted-foreground">
+                        {b.meeting_room}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigator.clipboard.writeText(meetingUrl);
+                          toast.success('Meeting link copied');
+                        }}
+                      >
+                        <Copy className="h-3 w-3" />
                       </Button>
                     </div>
                   )}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center gap-2 text-sm flex-wrap">
-                  <Badge variant="secondary">Max {b.max_students}</Badge>
-                  {(b as any).courses?.delivery_mode === 'offline' ? (
-                    <Badge variant="outline" className="gap-1"><Building2 className="h-3 w-3" /> Offline</Badge>
-                  ) : (
-                    <Badge variant="outline" className="gap-1"><Wifi className="h-3 w-3" /> Online</Badge>
+
+                  {/* Admin actions */}
+                  {isAdmin && (
+                    <div className="flex gap-2 pt-1">
+                      <Button variant="outline" size="sm" className="flex-1 text-xs h-7" onClick={() => openTeacherDialog(b.id)}>
+                        <UserPlus className="mr-1 h-3 w-3" /> Teacher
+                      </Button>
+                      <Button variant="outline" size="sm" className="flex-1 text-xs h-7" onClick={() => openStudentDialog(b)}>
+                        <Users className="mr-1 h-3 w-3" /> Students
+                      </Button>
+                    </div>
                   )}
-                  {typeof (b as any).enrolled_count === 'number' && (
-                    <Badge variant="secondary" className="gap-1">
-                      <Users className="h-3 w-3" /> {(b as any).enrolled_count}/{b.max_students}
-                    </Badge>
-                  )}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Teacher: {(b as any).teacher_name
-                    ? (b as any).teacher_name
-                    : (b.teacher_id ? 'Assigned' : 'None')}
-                </div>
-                {isAdmin && (
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => openTeacherDialog(b.id)}>
-                      <UserPlus className="mr-1 h-3 w-3" /> Teacher
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => openStudentDialog(b)}>
-                      <Users className="mr-1 h-3 w-3" /> Students
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
