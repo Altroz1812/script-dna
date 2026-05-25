@@ -3,8 +3,21 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
 import { AppHeader } from './AppHeader';
 import { GlobalClassroomOverlay } from '@/components/classroom/GlobalClassroomOverlay';
+import { MobileAppShell } from '@/components/mobile/MobileAppShell';
+import { useIsMobileApp } from '@/hooks/useIsMobileApp';
 
 export function AppLayout() {
+  const isMobileApp = useIsMobileApp();
+
+  if (isMobileApp) {
+    return (
+      <>
+        <MobileAppShell />
+        <GlobalClassroomOverlay />
+      </>
+    );
+  }
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
