@@ -1,43 +1,39 @@
-# Native mobile fullscreen video classroom
+# Fix wrong live-class times (timezone bug)
 
-## Goal
-On mobile, the live class must take over the whole screen with all controls accessible, the host (or active screen-share) always occupies the main stage, and other participants render as small chromeless tiles — no card frames around any participant.
+## Root cause
+The DB trigger `public.auto_create_live_class` constructs the `scheduled_at` value as:
 
-## Changes
+```sql
+(NEW.date || 'T' || NEW.start_time)::timestamptz
+```
 
-### 1. `src/pages/mobile/MobileLiveClassesPage.tsx` — render the active class as a fullscreen overlay
-- Remove the in-page `aspect-video` card wrapper around `<VideoClassroom>`.
-- When `activeClass` exists, render `<VideoClassroom>` inside a `fixed inset-0 z-[100] bg-black` container that respects safe-area insets (`env(safe-area-inset-top/bottom)`).
-- Move the "End Session" button into a small floating action pinned to the top-right of the overlay (so all LiveKit controls remain reachable at the bottom).
-- Keep the list view rendering underneath; the overlay simply covers it while a class is active.
+Casting a string straight to `timestamptz` makes Postgres apply the **session timezone**, which on Supabase is **UTC**. So a schedule entry `date=2026-05-26, start_time=19:36` ends up stored as `2026-05-26 19:36:00+00` (= **7:36 PM UTC**). When the browser then renders it with `format(parseISO(scheduled_at), 'h:mm a')` it converts UTC → local. For an IST user (UTC+5:30) that schedule shows **01:06 AM next day**, and conversely a teacher who scheduled `01:06 AM IST` sees `7:36 PM`. This matches the symptom (card showing 7:36 PM – 8:36 PM while the scheduled time was different).
 
-### 2. `src/components/classroom/VideoClassroom.tsx` — make the shell mobile-fullscreen friendly
-- Container already uses `w-full h-full` — verified compatible with the new fullscreen parent.
-- Replace `ClassroomStage` (currently a `GridLayout` of `ParticipantTile`) with a new `FocusedStage` component (below) so the host/screen-share is the focal point and others are pip-style tiles.
-- On mobile, render `ClassroomChat` as a bottom sheet (`inset-x-0 bottom-0 h-[70vh] rounded-t-2xl`) instead of a right-side panel, so it overlays the video without squeezing it.
+Front-end formatting itself is fine — `parseISO` + `format` already render in the user's local TZ. The bug is purely in how the trigger writes the timestamp.
 
-### 3. New focused stage layout (inside `VideoClassroom.tsx`)
-Replace `ClassroomStage` with `FocusedStage`:
+## Fix
 
-- Use `useTracks([Camera with placeholder, ScreenShare])` and additionally `useParticipants()` to know who's the teacher (moderator metadata from `useParticipantRole`).
-- Pick the **main track** with this priority:
-  1. Any active `ScreenShare` track → main stage shows the projection.
-  2. Else the teacher/moderator's camera track → host on max screen.
-  3. Else the local participant's camera as fallback.
-- Render the main track full-bleed (`absolute inset-0 object-cover`, no border, no rounded card, no name overlay box — just a subtle gradient-bottom name label).
-- Render every other participant as small **chromeless** floating tiles in a horizontal strip at the top-right (or bottom-left above the control bar): plain `<video>` element wrapped in a `rounded-xl overflow-hidden w-20 h-28` div, no card background, no border ring except a thin `ring-1 ring-white/10` for separation. Mic-muted indicator is a tiny icon corner-pinned.
-- When screen-share is the main stage, the host's camera becomes one of the floating tiles (pinned first), satisfying "when projected it's rendered in the card".
-- No `<Card>` / `ParticipantTile` chrome anywhere — strictly plain video elements with minimal overlays.
+### 1. New migration: correct the trigger and backfill existing rows
 
-### 4. Controls remain available
-- Keep `<RoleAwareControls>` rendered at the bottom of the fullscreen stage (it already exposes mic / camera / screenshare / leave for moderators and Leave for viewers).
-- Header bar (chat, minimize, close buttons) stays at the top inside the safe area.
+- Replace `auto_create_live_class` so it builds a `timestamp` first (no TZ), then converts using `AT TIME ZONE 'Asia/Kolkata'` (the project's operational locale per `mem://style/localization`):
 
-## Technical notes
-- Use `useParticipants` and `useTracks` from `@livekit/components-react`; attach tracks manually with `<VideoTrack trackRef={…} />` (or the `useTrackRefContext`-free `<ParticipantTile disableSpeakingIndicator>` styled to remove its chrome via `[&_.lk-participant-metadata]:hidden [&]:bg-transparent [&]:border-0`).
-- No backend, RLS, or schema changes.
-- Desktop behavior is preserved because the fullscreen overlay is only applied in the mobile page wrapper; the existing `GlobalClassroomOverlay` (desktop) continues using its current layout, but it will inherit the new `FocusedStage` — which is the desired UX on desktop too (host max, participants chromeless).
+  ```sql
+  ((NEW.date || ' ' || NEW.start_time)::timestamp AT TIME ZONE 'Asia/Kolkata')
+  ```
+
+  Postgres semantics: `<timestamp> AT TIME ZONE 'Asia/Kolkata'` = "interpret this wall-clock time as IST, return the equivalent timestamptz". So `19:36` entered by a teacher is stored as `14:06 UTC` and renders back as `19:36 IST` on every IST device.
+
+- Backfill: recompute `scheduled_at` and `duration_minutes` on existing `live_classes` rows by joining their `schedule_id` to `schedules`, using the same `AT TIME ZONE 'Asia/Kolkata'` expression. Only touch rows where `schedule_id` is not null (auto-generated ones). Manually-created live classes whose `scheduled_at` is correct stay untouched.
+
+### 2. No front-end changes required
+- `LiveClassesPage.tsx`, `MobileLiveClassesPage.tsx`, `BatchDetailPage.tsx`, `useTodayClasses.ts`, `ClassQuickJoinCards.tsx` already use `parseISO(scheduled_at)` + date-fns `format` (local TZ). Once the DB value is correct, all display surfaces become correct automatically.
+- `SchedulePage.tsx` only manipulates `start_time` / `end_time` strings (no TZ involved); leave it as is.
 
 ## Files touched
-- `src/pages/mobile/MobileLiveClassesPage.tsx`
-- `src/components/classroom/VideoClassroom.tsx`
+- New SQL migration under `supabase/migrations/` (trigger replacement + one backfill `UPDATE`).
+- No code files modified.
+
+## Verification
+After the migration runs:
+1. Pick one auto-created class from `live_classes` whose `schedule_id` is set; confirm `to_char(scheduled_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD HH24:MI')` equals `schedules.date || schedules.start_time`.
+2. Reload the Live Classes page (mobile + desktop) and confirm the card time matches the teacher's intended slot.
