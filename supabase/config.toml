@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.heartbeat]
 verify_jwt = false
+
+[functions.livekit-update-participant]
+verify_jwt = false

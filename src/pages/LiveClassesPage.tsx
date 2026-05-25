@@ -173,12 +173,12 @@ export default function LiveClassesPage() {
       if (teacherIds.length > 0) {
         const { data: profiles, error: pError } = await supabase
           .from('profiles')
-          .select('id, display_name, email, full_name')
+          .select('id, display_name, email')
           .in('id', teacherIds);
         
         if (!pError && profiles) {
-          profiles.forEach(p => {
-            teacherMap[p.id] = p.display_name || p.full_name || p.email || '—';
+          profiles.forEach((p: any) => {
+            teacherMap[p.id] = p.display_name || p.email || '—';
           });
         }
       }

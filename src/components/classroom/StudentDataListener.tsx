@@ -28,6 +28,30 @@ export function StudentDataListener() {
             room.localParticipant.setCameraEnabled(false);
             toast({ title: 'Your camera was disabled by the teacher' });
             break;
+          case 'enable_audio':
+            room.localParticipant
+              .setMicrophoneEnabled(true)
+              .then(() => toast({ title: 'Teacher enabled your microphone' }))
+              .catch((e) =>
+                toast({
+                  title: 'Could not enable microphone',
+                  description: e?.message || 'Check browser permissions',
+                  variant: 'destructive',
+                }),
+              );
+            break;
+          case 'enable_camera':
+            room.localParticipant
+              .setCameraEnabled(true)
+              .then(() => toast({ title: 'Teacher enabled your camera' }))
+              .catch((e) =>
+                toast({
+                  title: 'Could not enable camera',
+                  description: e?.message || 'Check browser permissions',
+                  variant: 'destructive',
+                }),
+              );
+            break;
           case 'remove':
             toast({
               title: 'You have been removed from the classroom',
