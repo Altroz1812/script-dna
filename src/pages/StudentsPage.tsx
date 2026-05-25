@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { adminQuery } from '@/services/api/adminService';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -17,11 +17,10 @@ export default function StudentsPage() {
   const { role } = useRBAC();
   const isTeacher = role === 'teacher';
 
-  const [students, setStudents] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const load = async () => {
+  const { data: students = [], isLoading: loading } = useQuery<any[]>({
+    queryKey: ['students_page', isTeacher],
+    staleTime: 2 * 60 * 1000,
+    queryFn: async () => {
       try {
         if (isTeacher) {
           // Teacher: get batches, then students from those batches with profiles
@@ -31,7 +30,7 @@ export default function StudentsPage() {
           if (bErr) throw bErr;
 
           const batchIds = (batches || []).map(b => b.id);
-          if (batchIds.length === 0) { setStudents([]); return; }
+          if (batchIds.length === 0) return [];
 
           const { data: batchStudents, error: sErr } = await supabase
             .from('batch_students')
@@ -50,7 +49,7 @@ export default function StudentsPage() {
 
           // Fetch profiles for these students
           const studentIds = Object.keys(studentMap);
-          if (studentIds.length === 0) { setStudents([]); return; }
+          if (studentIds.length === 0) return [];
 
           const { data: profiles, error: pErr } = await supabase
             .from('profiles')
@@ -61,25 +60,23 @@ export default function StudentsPage() {
           const profileMap: Record<string, any> = {};
           for (const p of profiles || []) profileMap[p.user_id] = p;
 
-          const result = Object.values(studentMap).map(s => ({
+          return Object.values(studentMap).map(s => ({
             user_id: s.student_id,
             display_name: profileMap[s.student_id]?.display_name || null,
             email: profileMap[s.student_id]?.email || null,
             enrollments: s.batches.map(name => ({ batches: { name } })),
           }));
-          setStudents(result);
         } else {
           const data = await adminQuery('list_students_with_batches');
-          setStudents(data);
+          return data ?? [];
         }
       } catch (e: any) {
         toast.error(e.message);
-      } finally {
-        setLoading(false);
+        throw e;
       }
-    };
-    load();
-  }, [isTeacher]);
+      return [];
+    },
+  });
 
   return (
     <div className="p-6 space-y-6">

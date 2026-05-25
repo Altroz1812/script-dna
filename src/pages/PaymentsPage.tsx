@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { adminQuery } from '@/services/api/adminService';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -19,42 +20,46 @@ export default function PaymentsPage() {
   const isParent = profile?.role === 'parent';
   const isStudent = profile?.role === 'student';
   const canRecord = !isStudent; // students see history only
-  const [payments, setPayments] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [students, setStudents] = useState<any[]>([]);
-  const [childrenForPayment, setChildrenForPayment] = useState<{ id: string; name: string }[]>([]);
   const [form, setForm] = useState({ student_id: '', amount: '', description: '', currency: 'INR' });
 
-  const loadAdmin = async () => {
-    setLoading(true);
-    try {
+  const { data: adminData, isLoading: adminLoading } = useQuery({
+    queryKey: ['payments_admin'],
+    enabled: !!profile && !isParent,
+    staleTime: 2 * 60 * 1000,
+    queryFn: async () => {
       const [p, u] = await Promise.all([adminQuery('list_payments'), adminQuery('list_users')]);
-      setPayments(p); setStudents(u.filter((u: any) => u.role === 'student'));
-    } catch (e: any) { toast.error(e.message); } finally { setLoading(false); }
-  };
+      return { payments: p ?? [], students: (u ?? []).filter((x: any) => x.role === 'student') };
+    },
+  });
 
-  const loadParent = async () => {
-    setLoading(true);
-    try {
-      // Get children
+  const { data: parentData, isLoading: parentLoading } = useQuery({
+    queryKey: ['payments_parent', profile?.id],
+    enabled: !!profile && isParent,
+    staleTime: 2 * 60 * 1000,
+    queryFn: async () => {
       const { data: links } = await supabase.from('parent_children').select('child_id').eq('parent_id', profile!.id);
       const childIds = (links || []).map(l => l.child_id);
-      
       const [paymentsRes, profilesRes] = await Promise.all([
         supabase.from('payments').select('*').order('payment_date', { ascending: false }),
-        childIds.length > 0 ? supabase.from('profiles').select('user_id, display_name, email').in('user_id', childIds) : { data: [] },
+        childIds.length > 0
+          ? supabase.from('profiles').select('user_id, display_name, email').in('user_id', childIds)
+          : Promise.resolve({ data: [] as any[] }),
       ]);
-      
-      setPayments(paymentsRes.data || []);
-      setChildrenForPayment((profilesRes.data || []).map((p: any) => ({ id: p.user_id, name: p.display_name || p.email || p.user_id })));
-    } catch (e: any) { toast.error(e.message); } finally { setLoading(false); }
-  };
+      return {
+        payments: paymentsRes.data || [],
+        children: (profilesRes.data || []).map((p: any) => ({ id: p.user_id, name: p.display_name || p.email || p.user_id })),
+      };
+    },
+  });
 
-  useEffect(() => {
-    if (!profile) return;
-    if (isParent) loadParent(); else loadAdmin();
-  }, [profile]);
+  const loading = isParent ? parentLoading : adminLoading;
+  const payments = (isParent ? parentData?.payments : adminData?.payments) ?? [];
+  const students = adminData?.students ?? [];
+  const childrenForPayment = parentData?.children ?? [];
+  const loadAdmin = () => queryClient.invalidateQueries({ queryKey: ['payments_admin'] });
+  const loadParent = () => queryClient.invalidateQueries({ queryKey: ['payments_parent', profile?.id] });
 
   const handleCreate = async () => {
     if (!form.student_id || !form.amount) { toast.error('Student and amount required'); return; }

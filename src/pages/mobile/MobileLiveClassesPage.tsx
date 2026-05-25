@@ -102,7 +102,9 @@ export default function MobileLiveClassesPage() {
     load();
   }, [load]);
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 30000);
+    const t = setInterval(() => {
+      if (document.visibilityState === 'visible') setNow(new Date());
+    }, 30000);
     return () => clearInterval(t);
   }, []);
 

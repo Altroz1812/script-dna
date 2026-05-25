@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { adminQuery } from "@/services/api/adminService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,8 +27,13 @@ interface UserRow {
 }
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<UserRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data: users = [], isLoading: loading } = useQuery<UserRow[]>({
+    queryKey: ["admin_users"],
+    queryFn: () => adminQuery("list_users") as Promise<UserRow[]>,
+    staleTime: 2 * 60 * 1000,
+  });
+  const load = () => queryClient.invalidateQueries({ queryKey: ["admin_users"] });
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [editUser, setEditUser] = useState<UserRow | null>(null);
@@ -47,17 +53,6 @@ export default function UsersPage() {
   const [resetPassword, setResetPassword] = useState("");
   const [resetConfirm, setResetConfirm] = useState("");
   const [resetting, setResetting] = useState(false);
-
-  const load = () => {
-    setLoading(true);
-    adminQuery("list_users")
-      .then(setUsers)
-      .catch((e) => toast.error(e.message))
-      .finally(() => setLoading(false));
-  };
-  useEffect(() => {
-    load();
-  }, []);
 
   const filtered = users.filter((u) => {
     const matchSearch =
