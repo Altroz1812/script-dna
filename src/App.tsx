@@ -18,6 +18,7 @@ import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
 import CoursesPage from "@/pages/CoursesPage";
 import BatchesPage from "@/pages/BatchesPage";
+import BatchDetailPage from "@/pages/BatchDetailPage";
 import UsersPage from "@/pages/UsersPage";
 import RolesPage from "@/pages/RolesPage";
 import StudentsPage from "@/pages/StudentsPage";
@@ -97,6 +98,7 @@ const App = () => (
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/courses" element={<CoursesPage />} />
                 <Route path="/batches" element={<BatchesPage />} />
+                <Route path="/batches/:batchId" element={<BatchDetailPage />} />
                 <Route path="/schedule" element={<SchedulePage />} />
                 <Route path="/attendance" element={<AttendancePage />} />
                 <Route path="/live-classes" element={<LiveClassesPage />} />

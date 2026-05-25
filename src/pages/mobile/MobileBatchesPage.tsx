@@ -34,7 +34,7 @@ export default function MobileBatchesPage() {
           {batches.map((b: any) => (
             <TouchPress
               key={b.id}
-              onClick={() => navigate('/students')}
+              onClick={() => navigate(`/batches/${b.id}`)}
               className="w-full rounded-2xl p-4 bg-card border border-white/[0.06] text-left"
             >
               <div className="flex items-start gap-3">
