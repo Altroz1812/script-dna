@@ -1,70 +1,48 @@
+# Fix: Minimize leaves class instead of minimizing
 
-## What's actually wrong
+## Problem
 
-Two independent bugs combine to throw users into **/unauthorized** right after login or on refresh:
+Clicking the Minimize button in a live class exits the class entirely. No minimized pill appears.
 
-### Bug 1 — Race in `ProtectedRoute` for `admin / support / teacher`
-`src/components/auth/ProtectedRoute.tsx` redirects to `/unauthorized` whenever:
-```
-role ∈ [admin, support, teacher] && !orgsLoading && availableOrgs.length === 0
-```
-But `ActiveOrgContext` updates state in this order on sign-in / refresh:
-1. Previous session ends → `availableOrgs=[]`, `orgsLoading=false`.
-2. New profile loads → ProtectedRoute re-renders **before** ActiveOrg's `useEffect` fires.
-3. In that single render: `orgsLoading=false` (stale), `availableOrgs=[]` → ProtectedRoute fires `<Navigate to="/unauthorized" />`.
-4. Once on `/unauthorized`, the gate keeps firing on every refresh because the route is also "protected" indirectly (Unauthorized page never recovers — there is no auto-redirect back when orgs eventually load).
+## Root cause
 
-This affects **every admin / teacher / support login**, intermittently. It also affects refresh because the same render order repeats.
+The project already has a global minimize system:
+- `ClassroomSessionProvider` (mounted in `src/App.tsx`)
+- `GlobalClassroomOverlay` (mounted in both desktop and mobile shells via `src/components/layout/AppLayout.tsx`) — renders the full-screen classroom when a session exists, and a minimized floating pill (with Expand / Leave buttons) when `minimized` is true.
 
-### Bug 2 — Demo accounts with no org membership
-DB check on `@demo.com` accounts:
-```
-admin       2 orgs
-teacher     1 org
-student     1 org
-support     0 orgs  ← causes legitimate (not racy) Access Denied
-parent      0 orgs  (parent is not org-required, so OK)
-superadmin  0 orgs  (handled via Global view, OK)
-```
-`support@demo.com` genuinely has no org and no `profiles.organization_id`, so it correctly fails the gate — but the result is a dead-end "Access Denied" page with no recovery.
+But `LiveClassesPage` and `MobileLiveClassesPage` ignore this system. They render their **own** local `<VideoClassroom>` and wire:
+- Desktop (`src/pages/LiveClassesPage.tsx` line 455): `onMinimize={handleCloseClass}` — minimize literally calls close, dropping the session.
+- Mobile (`src/pages/mobile/MobileLiveClassesPage.tsx`): `onMinimize={() => {}}` — minimize is a no-op (and there is no minimized UI either).
 
----
+Result: pressing Minimize either disconnects you (desktop) or does nothing (mobile).
 
 ## Fix
 
-### 1. `src/components/auth/ProtectedRoute.tsx`
-- Track when the org list has actually been resolved **for the current user** (not just `!orgsLoading`). Treat the state as "not ready" until `ActiveOrgContext` has run its load effect for `session.user.id`.
-- While org state is not ready → show the same spinner used for `(session && !profile)`. Do not redirect.
-- Only after org state is ready, apply the existing "no org → unauthorized" rule.
+Delegate joining to the global classroom session so the existing overlay + minimized pill take over.
 
-### 2. `src/contexts/ActiveOrgContext.tsx`
-- Add an internal `orgsLoadedForUserId` (ref or state). Reset to `null` when session changes; set to `session.user.id` only after a successful fetch.
-- Expose it (or a derived `orgsReady` boolean) via the context so `ProtectedRoute` can gate on it.
-- Keep `orgsLoading` initialised to `true` whenever a new user id arrives, even before the effect's first `await` (eliminates the stale-`false` window).
+### 1. `src/pages/LiveClassesPage.tsx`
+- Import `useClassroomSession`.
+- Remove local `activeJoinedClassId` state, the fixed `<VideoClassroom>` block (lines ~444–470), and the `currentLiveClass` derivation that drove it.
+- `handleJoinClass(cls)` calls `joinClass({ classId, roomName: edu-room-${id}, displayName, isTeacher, classStatus })` instead of setting local state.
+- Drop the "skip the currently joined class" filter in `categorizedClasses` (or keep it by reading `session?.classId` from the context) — minor; the card just hides itself while you're in the room.
+- Keep `EndClassAttendanceDialog` triggered by the existing End button in the global overlay header (no change needed there — the global overlay already exposes its own X/Minimize; the End-attendance dialog stays page-local and is opened from the live-class card's manage actions, unchanged).
 
-### 3. `src/pages/Unauthorized.tsx`
-- When `location.state.reason === 'no-organization'`, render a clearer message: "Your account isn't linked to an organization yet. Contact your administrator." and show a **Sign out** button instead of "Go to Dashboard" (current button just loops back through the gate).
-- Otherwise keep current copy.
+### 2. `src/pages/mobile/MobileLiveClassesPage.tsx`
+- Same change: import `useClassroomSession`, remove the local full-screen `<VideoClassroom>` block and `activeId` state, route the Join button to `joinClass(...)`.
+- This automatically gives mobile users a working minimized pill (rendered by `GlobalClassroomOverlay`, already mounted in `MobileAppShell` through `AppLayout`).
 
-### 4. Data fix migration — assign `support@demo.com` to an org
-New migration that inserts an `organization_members` row + sets `profiles.organization_id` for `support@demo.com` (using the same org as `admin@demo.com`, "Bright Future" per the demo login map, or `Sunrise Academy` if Bright Future doesn't exist — query by name with a fallback).
-
-No schema change, no RLS change.
-
----
+### 3. Verify `GlobalClassroomOverlay` minimize works
+The overlay already implements minimize correctly: when `minimized` is true it hides the full-screen panel (invisible + pointer-events-none, keeping the LiveKit connection alive) and shows a floating pill with Expand and Leave. No changes needed there.
 
 ## Files touched
-- `src/components/auth/ProtectedRoute.tsx` — gate on `orgsReady`.
-- `src/contexts/ActiveOrgContext.tsx` — add `orgsReady` flag, fix stale-`orgsLoading` window.
-- `src/pages/Unauthorized.tsx` — better empty-org messaging + Sign out CTA.
-- `supabase/migrations/<new>.sql` — seed support@demo.com membership.
 
-## What we are NOT changing
-- RLS policies (verified `organization_members` policies allow self-read).
-- Login flow itself (`AuthContext`, `Login.tsx`) — they're correct.
-- Mobile vs web logic — the fix is in shared `ProtectedRoute`, so both surfaces benefit.
+- `src/pages/LiveClassesPage.tsx` — remove local VideoClassroom render, use `useClassroomSession().joinClass`.
+- `src/pages/mobile/MobileLiveClassesPage.tsx` — same.
 
-## How we'll verify
-1. Hard refresh as `admin@demo.com` (2 orgs) and `teacher@demo.com` (1 org) — should never flash `/unauthorized`; admin lands on `/select-organization`, teacher auto-selects and lands on `/dashboard`.
-2. Login as `support@demo.com` after migration — lands on `/dashboard` (org auto-selected). Without migration would show the new friendly empty-state.
-3. Login as `student@demo.com` / `parent@demo.com` — unaffected.
+No other files change. `GlobalClassroomOverlay`, `ClassroomSessionContext`, `VideoClassroom`, and the End-class dialog all stay as-is.
+
+## Verification
+
+1. Desktop: Start/Join a live class → click Minimize → full-screen collapses, floating "Class in progress" pill appears bottom-right, you can navigate the app, click Expand to come back.
+2. Mobile: Same flow — Minimize collapses the room and shows the pill; tapping it reopens the room with the LiveKit session intact.
+3. Clicking X (Leave) in either the overlay header or pill ends the session as before.
