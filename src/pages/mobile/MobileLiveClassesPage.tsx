@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { Video, Play, Square, Clock, CalendarDays, BookOpen, Loader2, User, Timer } from 'lucide-react';
+import { Video, Play, Square, Clock, CalendarDays, BookOpen, Loader2, User, Timer, Maximize2, X } from 'lucide-react';
 import { format, parseISO, addMinutes, isSameDay } from 'date-fns';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -42,6 +42,7 @@ export default function MobileLiveClassesPage() {
   const [now, setNow] = useState(() => new Date());
   const [tab, setTab] = useState<Filter>('live');
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [minimized, setMinimized] = useState(false);
   const [endingClass, setEndingClass] = useState<LC | null>(null);
 
   const load = useCallback(async () => {
@@ -148,7 +149,7 @@ export default function MobileLiveClassesPage() {
 
       {activeClass && (
         <div
-          className="fixed inset-0 z-[100] bg-black flex flex-col"
+          className={`fixed inset-0 z-[100] bg-black flex flex-col ${minimized ? 'invisible pointer-events-none' : 'visible'}`}
           style={{
             paddingTop: 'env(safe-area-inset-top)',
             paddingBottom: 'env(safe-area-inset-bottom)',
@@ -163,9 +164,10 @@ export default function MobileLiveClassesPage() {
               classId={activeClass.id}
               onClose={() => {
                 setActiveId(null);
+                setMinimized(false);
                 load();
               }}
-              onMinimize={() => {}}
+              onMinimize={() => setMinimized(true)}
               onClassStarted={load}
             />
             {canManage && (
@@ -177,6 +179,30 @@ export default function MobileLiveClassesPage() {
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {activeClass && minimized && (
+        <div className="fixed bottom-20 right-3 z-[110] flex items-center gap-2 bg-card/95 backdrop-blur-lg border border-border shadow-2xl rounded-full pl-3 pr-1.5 py-1.5">
+          <span className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
+          <Video className="h-3.5 w-3.5 text-foreground" />
+          <span className="text-xs font-medium text-foreground truncate max-w-[120px]">
+            {activeClass.title || 'In class'}
+          </span>
+          <button
+            className="h-7 w-7 rounded-full flex items-center justify-center hover:bg-muted"
+            onClick={() => setMinimized(false)}
+            title="Expand"
+          >
+            <Maximize2 className="h-3.5 w-3.5" />
+          </button>
+          <button
+            className="h-7 w-7 rounded-full flex items-center justify-center hover:bg-destructive/20 hover:text-destructive"
+            onClick={() => { setActiveId(null); setMinimized(false); load(); }}
+            title="Leave"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
         </div>
       )}
 
@@ -292,7 +318,7 @@ export default function MobileLiveClassesPage() {
         liveClass={endingClass}
         isTeacher={isTeacher}
         isAdmin={isAdmin}
-        onClassEnded={() => { setActiveId(null); load(); }}
+        onClassEnded={() => { setActiveId(null); setMinimized(false); load(); }}
       />
     </MobilePage>
   );

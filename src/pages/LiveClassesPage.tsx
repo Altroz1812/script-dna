@@ -92,6 +92,7 @@ export default function LiveClassesPage() {
   const [isTheaterMode, setIsTheaterMode] = useState(false);
   const [showCalendarDropdown, setShowCalendarDropdown] = useState(false);
   const [activeJoinedClassId, setActiveJoinedClassId] = useState<string | null>(null);
+  const [classroomMinimized, setClassroomMinimized] = useState(false);
   const [classes, setClasses] = useState<LiveClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [endingClass, setEndingClass] = useState<LiveClass | null>(null);
@@ -286,11 +287,13 @@ export default function LiveClassesPage() {
 
   const handleJoinClass = (classId: string) => {
     setActiveJoinedClassId(classId);
+    setClassroomMinimized(false);
     setIsRosterOpen(false);
   };
 
   const handleCloseClass = () => {
     setActiveJoinedClassId(null);
+    setClassroomMinimized(false);
     load();
   };
 
@@ -443,7 +446,9 @@ export default function LiveClassesPage() {
 
       {/* Active Live Class Video Component */}
       {currentLiveClass && (
-        <div className="fixed inset-0 z-[100] bg-black flex flex-col">
+        <div
+          className={`fixed inset-0 z-[100] bg-black flex flex-col ${classroomMinimized ? 'invisible pointer-events-none' : 'visible'}`}
+        >
           <div className="flex-1 min-h-0 relative">
             <VideoClassroom
               roomName={`edu-room-${currentLiveClass.id}`}
@@ -452,7 +457,7 @@ export default function LiveClassesPage() {
               classStatus={currentLiveClass.status}
               classId={currentLiveClass.id}
               onClose={handleCloseClass}
-              onMinimize={handleCloseClass}
+              onMinimize={() => setClassroomMinimized(true)}
               onClassStarted={load}
             />
             {canManage && (
@@ -466,6 +471,23 @@ export default function LiveClassesPage() {
               </Button>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Minimized pill */}
+      {currentLiveClass && classroomMinimized && (
+        <div className="fixed bottom-4 right-4 z-[110] flex items-center gap-2 bg-card/95 backdrop-blur-lg border border-border shadow-2xl rounded-full pl-4 pr-2 py-2">
+          <span className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
+          <Video className="h-4 w-4 text-foreground" />
+          <span className="text-sm font-medium text-foreground hidden sm:inline truncate max-w-[180px]">
+            {currentLiveClass.title || 'Class in progress'}
+          </span>
+          <Button size="icon" variant="ghost" className="h-7 w-7 rounded-full" onClick={() => setClassroomMinimized(false)} title="Expand">
+            <Maximize2 className="h-4 w-4" />
+          </Button>
+          <Button size="icon" variant="ghost" className="h-7 w-7 rounded-full hover:bg-destructive/20 hover:text-destructive" onClick={handleCloseClass} title="Leave">
+            <X className="h-4 w-4" />
+          </Button>
         </div>
       )}
 
