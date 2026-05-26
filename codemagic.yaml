@@ -1,68 +1,37 @@
-# codemagic.yaml for Ionic + Capacitor iOS App
 workflows:
-  ios-workflow:
-    name: iOS Build
-    instance_type: mac_mini_m2  # 1. MACHINE TYPE: Choose a Mac mini instance.
+  simulator-build:
+    name: iOS Simulator Build (No Signing Required)
+    instance_type: mac_mini_m2
     max_build_duration: 60
     environment:
-      node: 20  # 2. NODE VERSION: Match your local version.
+      node: 20
       xcode: latest
       cocoapods: default
-      vars:
-        # 3. XCODE PATHS: Default paths for a Capacitor project.
-        #    Only change if your setup is different.
-        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
-        XCODE_SCHEME: "App"
-        # 4. APP STORE CONNECT ID: Your app's Apple ID.
-        #    Find this on App Store Connect > App > General > App Information
-        APP_STORE_APP_ID: "YOUR_APP_ID_HERE"
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: "YOUR_BUNDLE_IDENTIFIER_HERE"  # 5. BUNDLE ID: e.g., com.yourcompany.yourapp
-      groups:
-        - app_store_credentials  # 6. ENV GROUP: You'll create this in the Codemagic UI.
-
     scripts:
-      - name: Install npm dependencies
+      - name: Install dependencies
         script: npm install
 
       - name: Build web project and sync with Capacitor
         script: |
-          npm run build  # Ensure this script exists in your package.json
+          npm run build
           npx cap sync ios
 
       - name: Install CocoaPods dependencies
         script: cd ios/App && pod install
 
-      - name: Set up code signing
-        script: xcode-project use-profiles
-
-      - name: Increment build number
+      - name: Build for Simulator (unsigned)
         script: |
-          cd $CM_BUILD_DIR/ios/App
-          LATEST_BUILD_NUMBER=$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APP_ID")
-          agvtool new-version -all $(($LATEST_BUILD_NUMBER + 1))
-
-      - name: Build IPA for distribution
-        script: |
-          xcode-project build-ipa \
-            --workspace "$XCODE_WORKSPACE" \
-            --scheme "$XCODE_SCHEME"
+          cd ios/App
+          xcodebuild build \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=18.0' \
+            -configuration Debug \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
 
     artifacts:
-      - build/ios/ipa/*.ipa
-      - /tmp/xcodebuild_logs/*.log
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
-      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
-
-    publishing:
-      email:
-        recipients:
-          - your-email@example.com  # 7. NOTIFICATION EMAIL: For build success/failure alerts.
-        notify:
-          success: true
-          failure: true
-      app_store_connect:
-        auth: integration
-        submit_to_testflight: true  # Sends to TestFlight
-        submit_to_app_store: false  # Set to 'true' to auto-submit for App Store review
+      - /tmp/xcodebuild_logs/*.log
