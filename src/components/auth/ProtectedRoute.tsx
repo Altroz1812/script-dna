@@ -10,10 +10,10 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   const { session, profile, loading } = useAuth();
-  const { activeOrgId, availableOrgs, orgsLoading } = useActiveOrg();
+  const { activeOrgId, availableOrgs, orgsLoading, orgsReady } = useActiveOrg();
   const location = useLocation();
 
-  if (loading || (session && !profile)) {
+  if (loading || (session && !profile) || (session && profile && !orgsReady)) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -35,6 +35,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   const orgRequiredRoles: AppRole[] = ['admin', 'support', 'teacher'];
   if (
     orgRequiredRoles.includes(profile!.role) &&
+    orgsReady &&
     !orgsLoading &&
     availableOrgs.length === 0 &&
     location.pathname !== '/unauthorized'

@@ -14,6 +14,7 @@ interface ActiveOrgState {
   activeOrgName: string | null;
   availableOrgs: AvailableOrg[];
   orgsLoading: boolean;
+  orgsReady: boolean;
   setActiveOrg: (id: string | null, name?: string | null) => void;
   clearActiveOrg: () => void;
 }
@@ -39,6 +40,10 @@ export function ActiveOrgProvider({ children }: { children: React.ReactNode }) {
   });
   const [availableOrgs, setAvailableOrgs] = useState<AvailableOrg[]>([]);
   const [orgsLoading, setOrgsLoading] = useState<boolean>(true);
+  // Tracks which user id the org list was last resolved for. Until this
+  // matches the current session user, ProtectedRoute should treat org state
+  // as "not yet known" (spinner), never as "user has zero orgs".
+  const [orgsLoadedForUserId, setOrgsLoadedForUserId] = useState<string | null>(null);
 
   const setActiveOrg = useCallback((id: string | null, name?: string | null) => {
     // Validate against membership list before persisting. The validation only
@@ -88,7 +93,14 @@ export function ActiveOrgProvider({ children }: { children: React.ReactNode }) {
     if (!session?.user || !profile) {
       setAvailableOrgs([]);
       setOrgsLoading(false);
+      setOrgsLoadedForUserId(null);
       return;
+    }
+    // Reset readiness whenever the user changes, BEFORE any await, so
+    // ProtectedRoute never sees a stale (loaded=true, orgs=[]) window from
+    // a previous session.
+    if (orgsLoadedForUserId !== session.user.id) {
+      setOrgsLoadedForUserId(null);
     }
     setOrgsLoading(true);
     (async () => {
@@ -146,7 +158,10 @@ export function ActiveOrgProvider({ children }: { children: React.ReactNode }) {
           }
         }
       } finally {
-        if (alive) setOrgsLoading(false);
+        if (alive) {
+          setOrgsLoading(false);
+          setOrgsLoadedForUserId(session.user.id);
+        }
       }
     })();
     return () => { alive = false; };
@@ -169,7 +184,15 @@ export function ActiveOrgProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <ActiveOrgContext.Provider value={{ activeOrgId, activeOrgName, availableOrgs, orgsLoading, setActiveOrg, clearActiveOrg }}>
+    <ActiveOrgContext.Provider value={{
+      activeOrgId,
+      activeOrgName,
+      availableOrgs,
+      orgsLoading,
+      orgsReady: !!session?.user && orgsLoadedForUserId === session.user.id,
+      setActiveOrg,
+      clearActiveOrg,
+    }}>
       {children}
     </ActiveOrgContext.Provider>
   );
