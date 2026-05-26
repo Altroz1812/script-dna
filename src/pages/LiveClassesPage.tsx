@@ -79,8 +79,11 @@ function classifyClass(cls: LiveClass, now: Date): ClassStatus {
 }
 
 export default function LiveClassesPage() {
-  const __isMobile = useIsMobileApp();
-  if (__isMobile) return <MobileLiveClassesPage />;
+  const isMobile = useIsMobileApp();
+  return isMobile ? <MobileLiveClassesPage /> : <DesktopLiveClassesPage />;
+}
+
+function DesktopLiveClassesPage() {
   const { isAdmin, role } = useRBAC();
   const { profile } = useAuth();
   
