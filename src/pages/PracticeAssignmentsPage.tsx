@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { adminQuery } from '@/services/api/adminService';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRBAC } from '@/hooks/useRBAC';
 import { useActiveOrg } from '@/contexts/ActiveOrgContext';
@@ -13,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, FileText, Calendar, Download, ExternalLink } from 'lucide-react';
+import { Plus, FileText, Calendar, Download, ExternalLink, Upload } from 'lucide-react';
 import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { format } from 'date-fns';
 
@@ -29,6 +30,31 @@ export default function PracticeAssignmentsPage() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title: '', description: '', batch_id: '', due_date: '', file_url: '' });
+  const [uploading, setUploading] = useState(false);
+
+  const normalizeUrl = (url: string) => {
+    const u = (url || '').trim();
+    if (!u) return '';
+    if (/^(https?:|mailto:|tel:|\/)/i.test(u)) return u;
+    return `https://${u}`;
+  };
+
+  const handleFileUpload = async (file: File) => {
+    setUploading(true);
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `practice-assignments/${profile!.id}/${Date.now()}.${ext}`;
+      const { error } = await supabase.storage.from('materials').upload(path, file);
+      if (error) throw error;
+      const { data } = supabase.storage.from('materials').getPublicUrl(path);
+      setForm(f => ({ ...f, file_url: data.publicUrl }));
+      toast.success('File uploaded');
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -64,7 +90,7 @@ export default function PracticeAssignmentsPage() {
         title: form.title,
         description: form.description || null,
         due_date: form.due_date || null,
-        file_url: form.file_url || null,
+        file_url: form.file_url ? normalizeUrl(form.file_url) : null,
       });
       toast.success('Assignment created');
       setOpen(false);
