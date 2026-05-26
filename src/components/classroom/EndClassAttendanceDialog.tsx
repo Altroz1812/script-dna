@@ -133,7 +133,7 @@ export function EndClassAttendanceDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[80vh] flex flex-col">
+      <DialogContent className="max-w-lg max-h-[80vh] flex flex-col z-[200]">
         <DialogHeader>
           <DialogTitle>End Class & Mark Attendance</DialogTitle>
           <p className="text-sm text-muted-foreground">{liveClass?.title}</p>
