@@ -196,6 +196,15 @@ export default function MobileLiveClassesPage() {
           >
             <Maximize2 className="h-3.5 w-3.5" />
           </button>
+          {canManage && (
+            <button
+              className="h-7 px-2.5 rounded-full text-[11px] font-semibold bg-destructive text-destructive-foreground flex items-center gap-1"
+              onClick={() => setEndingClass(activeClass)}
+              title="End"
+            >
+              <Square className="w-3 h-3" /> End
+            </button>
+          )}
           <button
             className="h-7 w-7 rounded-full flex items-center justify-center hover:bg-destructive/20 hover:text-destructive"
             onClick={() => { setActiveId(null); setMinimized(false); load(); }}
