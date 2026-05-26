@@ -9,15 +9,34 @@ workflows:
       cocoapods: default
     scripts:
       - name: Install dependencies
-        script: npm install
+        script: |
+          npm ci || npm install
+          npm list @capacitor/core @capacitor/ios || npm install @capacitor/core @capacitor/cli @capacitor/ios
 
-      - name: Build web project and sync with Capacitor
+      - name: Build web project
         script: |
           npm run build
+
+      - name: Initialize Capacitor (if needed)
+        script: |
+          if [ ! -d "ios" ]; then
+            npx cap init "Your App Name" "com.yourcompany.yourapp" --web-dir=dist
+          fi
+
+      - name: Sync Capacitor with iOS
+        script: |
+          # First ensure the iOS folder exists
+          if [ ! -d "ios" ]; then
+            npx cap add ios
+          fi
+          
+          # Sync the web build to iOS
           npx cap sync ios
 
       - name: Install CocoaPods dependencies
-        script: cd ios/App && pod install
+        script: |
+          cd ios/App
+          pod install --repo-update
 
       - name: Build for Simulator (unsigned)
         script: |
@@ -26,12 +45,14 @@ workflows:
             -workspace App.xcworkspace \
             -scheme App \
             -sdk iphonesimulator \
-            -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=18.0' \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
             -configuration Debug \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            ONLY_ACTIVE_ARCH=NO \
+            | xcpretty
 
     artifacts:
-      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/Products/**/*.app
       - /tmp/xcodebuild_logs/*.log
