@@ -488,6 +488,17 @@ function DesktopLiveClassesPage() {
           <Button size="icon" variant="ghost" className="h-7 w-7 rounded-full" onClick={() => setClassroomMinimized(false)} title="Expand">
             <Maximize2 className="h-4 w-4" />
           </Button>
+          {canManage && (
+            <Button
+              size="sm"
+              variant="destructive"
+              className="h-7 rounded-full text-xs px-3"
+              onClick={() => setEndingClass(currentLiveClass)}
+              title="End Session"
+            >
+              <Square className="h-3 w-3 mr-1" /> End
+            </Button>
+          )}
           <Button size="icon" variant="ghost" className="h-7 w-7 rounded-full hover:bg-destructive/20 hover:text-destructive" onClick={handleCloseClass} title="Leave">
             <X className="h-4 w-4" />
           </Button>
