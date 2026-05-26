@@ -138,7 +138,24 @@ export default function PracticeAssignmentsPage() {
                   </Select>
                 </div>
                 <div><Label>Due Date (optional)</Label><Input type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} /></div>
-                <div><Label>Reference File URL (optional)</Label><Input value={form.file_url} onChange={e => setForm(f => ({ ...f, file_url: e.target.value }))} placeholder="https://..." /></div>
+                <div>
+                  <Label>Upload File (PDF / image, optional)</Label>
+                  <Input
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); }}
+                    disabled={uploading}
+                  />
+                  {uploading && <p className="text-xs text-muted-foreground mt-1">Uploading…</p>}
+                </div>
+                <div>
+                  <Label>Or paste a Reference URL</Label>
+                  <Input
+                    value={form.file_url}
+                    onChange={e => setForm(f => ({ ...f, file_url: e.target.value }))}
+                    placeholder="https://example.com/sheet.pdf"
+                  />
+                </div>
                 <Button onClick={handleCreate} className="w-full" disabled={!form.title || !form.batch_id}>Create Assignment</Button>
               </div>
             </DialogContent>
