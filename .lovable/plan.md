@@ -1,39 +1,70 @@
-# Fix wrong live-class times (timezone bug)
 
-## Root cause
-The DB trigger `public.auto_create_live_class` constructs the `scheduled_at` value as:
+## What's actually wrong
 
-```sql
-(NEW.date || 'T' || NEW.start_time)::timestamptz
+Two independent bugs combine to throw users into **/unauthorized** right after login or on refresh:
+
+### Bug 1 — Race in `ProtectedRoute` for `admin / support / teacher`
+`src/components/auth/ProtectedRoute.tsx` redirects to `/unauthorized` whenever:
 ```
+role ∈ [admin, support, teacher] && !orgsLoading && availableOrgs.length === 0
+```
+But `ActiveOrgContext` updates state in this order on sign-in / refresh:
+1. Previous session ends → `availableOrgs=[]`, `orgsLoading=false`.
+2. New profile loads → ProtectedRoute re-renders **before** ActiveOrg's `useEffect` fires.
+3. In that single render: `orgsLoading=false` (stale), `availableOrgs=[]` → ProtectedRoute fires `<Navigate to="/unauthorized" />`.
+4. Once on `/unauthorized`, the gate keeps firing on every refresh because the route is also "protected" indirectly (Unauthorized page never recovers — there is no auto-redirect back when orgs eventually load).
 
-Casting a string straight to `timestamptz` makes Postgres apply the **session timezone**, which on Supabase is **UTC**. So a schedule entry `date=2026-05-26, start_time=19:36` ends up stored as `2026-05-26 19:36:00+00` (= **7:36 PM UTC**). When the browser then renders it with `format(parseISO(scheduled_at), 'h:mm a')` it converts UTC → local. For an IST user (UTC+5:30) that schedule shows **01:06 AM next day**, and conversely a teacher who scheduled `01:06 AM IST` sees `7:36 PM`. This matches the symptom (card showing 7:36 PM – 8:36 PM while the scheduled time was different).
+This affects **every admin / teacher / support login**, intermittently. It also affects refresh because the same render order repeats.
 
-Front-end formatting itself is fine — `parseISO` + `format` already render in the user's local TZ. The bug is purely in how the trigger writes the timestamp.
+### Bug 2 — Demo accounts with no org membership
+DB check on `@demo.com` accounts:
+```
+admin       2 orgs
+teacher     1 org
+student     1 org
+support     0 orgs  ← causes legitimate (not racy) Access Denied
+parent      0 orgs  (parent is not org-required, so OK)
+superadmin  0 orgs  (handled via Global view, OK)
+```
+`support@demo.com` genuinely has no org and no `profiles.organization_id`, so it correctly fails the gate — but the result is a dead-end "Access Denied" page with no recovery.
+
+---
 
 ## Fix
 
-### 1. New migration: correct the trigger and backfill existing rows
+### 1. `src/components/auth/ProtectedRoute.tsx`
+- Track when the org list has actually been resolved **for the current user** (not just `!orgsLoading`). Treat the state as "not ready" until `ActiveOrgContext` has run its load effect for `session.user.id`.
+- While org state is not ready → show the same spinner used for `(session && !profile)`. Do not redirect.
+- Only after org state is ready, apply the existing "no org → unauthorized" rule.
 
-- Replace `auto_create_live_class` so it builds a `timestamp` first (no TZ), then converts using `AT TIME ZONE 'Asia/Kolkata'` (the project's operational locale per `mem://style/localization`):
+### 2. `src/contexts/ActiveOrgContext.tsx`
+- Add an internal `orgsLoadedForUserId` (ref or state). Reset to `null` when session changes; set to `session.user.id` only after a successful fetch.
+- Expose it (or a derived `orgsReady` boolean) via the context so `ProtectedRoute` can gate on it.
+- Keep `orgsLoading` initialised to `true` whenever a new user id arrives, even before the effect's first `await` (eliminates the stale-`false` window).
 
-  ```sql
-  ((NEW.date || ' ' || NEW.start_time)::timestamp AT TIME ZONE 'Asia/Kolkata')
-  ```
+### 3. `src/pages/Unauthorized.tsx`
+- When `location.state.reason === 'no-organization'`, render a clearer message: "Your account isn't linked to an organization yet. Contact your administrator." and show a **Sign out** button instead of "Go to Dashboard" (current button just loops back through the gate).
+- Otherwise keep current copy.
 
-  Postgres semantics: `<timestamp> AT TIME ZONE 'Asia/Kolkata'` = "interpret this wall-clock time as IST, return the equivalent timestamptz". So `19:36` entered by a teacher is stored as `14:06 UTC` and renders back as `19:36 IST` on every IST device.
+### 4. Data fix migration — assign `support@demo.com` to an org
+New migration that inserts an `organization_members` row + sets `profiles.organization_id` for `support@demo.com` (using the same org as `admin@demo.com`, "Bright Future" per the demo login map, or `Sunrise Academy` if Bright Future doesn't exist — query by name with a fallback).
 
-- Backfill: recompute `scheduled_at` and `duration_minutes` on existing `live_classes` rows by joining their `schedule_id` to `schedules`, using the same `AT TIME ZONE 'Asia/Kolkata'` expression. Only touch rows where `schedule_id` is not null (auto-generated ones). Manually-created live classes whose `scheduled_at` is correct stay untouched.
+No schema change, no RLS change.
 
-### 2. No front-end changes required
-- `LiveClassesPage.tsx`, `MobileLiveClassesPage.tsx`, `BatchDetailPage.tsx`, `useTodayClasses.ts`, `ClassQuickJoinCards.tsx` already use `parseISO(scheduled_at)` + date-fns `format` (local TZ). Once the DB value is correct, all display surfaces become correct automatically.
-- `SchedulePage.tsx` only manipulates `start_time` / `end_time` strings (no TZ involved); leave it as is.
+---
 
 ## Files touched
-- New SQL migration under `supabase/migrations/` (trigger replacement + one backfill `UPDATE`).
-- No code files modified.
+- `src/components/auth/ProtectedRoute.tsx` — gate on `orgsReady`.
+- `src/contexts/ActiveOrgContext.tsx` — add `orgsReady` flag, fix stale-`orgsLoading` window.
+- `src/pages/Unauthorized.tsx` — better empty-org messaging + Sign out CTA.
+- `supabase/migrations/<new>.sql` — seed support@demo.com membership.
 
-## Verification
-After the migration runs:
-1. Pick one auto-created class from `live_classes` whose `schedule_id` is set; confirm `to_char(scheduled_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD HH24:MI')` equals `schedules.date || schedules.start_time`.
-2. Reload the Live Classes page (mobile + desktop) and confirm the card time matches the teacher's intended slot.
+## What we are NOT changing
+- RLS policies (verified `organization_members` policies allow self-read).
+- Login flow itself (`AuthContext`, `Login.tsx`) — they're correct.
+- Mobile vs web logic — the fix is in shared `ProtectedRoute`, so both surfaces benefit.
+
+## How we'll verify
+1. Hard refresh as `admin@demo.com` (2 orgs) and `teacher@demo.com` (1 org) — should never flash `/unauthorized`; admin lands on `/select-organization`, teacher auto-selects and lands on `/dashboard`.
+2. Login as `support@demo.com` after migration — lands on `/dashboard` (org auto-selected). Without migration would show the new friendly empty-state.
+3. Login as `student@demo.com` / `parent@demo.com` — unaffected.
