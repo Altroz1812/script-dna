@@ -201,7 +201,7 @@ export default function PracticeAssignmentsPage() {
                     <div className="flex items-center gap-1.5">
                       {a.file_url && (
                         <Button variant="ghost" size="sm" asChild>
-                          <a href={a.file_url} target="_blank" rel="noopener noreferrer">
+                          <a href={normalizeUrl(a.file_url)} target="_blank" rel="noopener noreferrer">
                             <Download className="h-3.5 w-3.5 mr-1" />{isStudent ? 'Download' : 'View'}
                           </a>
                         </Button>
