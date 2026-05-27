@@ -39,6 +39,28 @@ export default function PracticeAssignmentsPage() {
     return `https://${u}`;
   };
 
+  const getAssignmentFileHref = (url: string) => {
+    const u = (url || '').trim();
+    if (!u) return '';
+
+    if (/^practice-assignments\//i.test(u)) {
+      return supabase.storage.from('materials').getPublicUrl(u).data.publicUrl;
+    }
+
+    if (/^materials\/practice-assignments\//i.test(u)) {
+      return supabase.storage.from('materials').getPublicUrl(u.replace(/^materials\//i, '')).data.publicUrl;
+    }
+
+    const normalized = normalizeUrl(u);
+    try {
+      const parsed = new URL(normalized, window.location.origin);
+      const isAuraPenRoot = /(^|\.)aurapen\.com$/i.test(parsed.hostname) && parsed.pathname.replace(/\/$/, '') === '';
+      return isAuraPenRoot ? '' : parsed.href;
+    } catch {
+      return '';
+    }
+  };
+
   const handleFileUpload = async (file: File) => {
     setUploading(true);
     try {
@@ -199,13 +221,22 @@ export default function PracticeAssignmentsPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">
-                      {a.file_url && (
+                      {a.file_url && getAssignmentFileHref(a.file_url) ? (
                         <Button variant="ghost" size="sm" asChild>
-                          <a href={normalizeUrl(a.file_url)} target="_blank" rel="noopener noreferrer">
+                          <a href={getAssignmentFileHref(a.file_url)} target="_blank" rel="noopener noreferrer">
                             <Download className="h-3.5 w-3.5 mr-1" />{isStudent ? 'Download' : 'View'}
                           </a>
                         </Button>
-                      )}
+                      ) : a.file_url ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          type="button"
+                          onClick={() => toast.error('No uploaded document is linked to this assignment')}
+                        >
+                          <ExternalLink className="h-3.5 w-3.5 mr-1" />No document
+                        </Button>
+                      ) : null}
                       {isTeacher && (
                         <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(a.id)}>Delete</Button>
                       )}
