@@ -381,6 +381,74 @@ export default function BatchDetailPage() {
           </Button>
         </div>
       )}
+
+      {/* Assign Teacher Dialog */}
+      <Dialog open={teacherDialogOpen} onOpenChange={setTeacherDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{teacher ? 'Change Teacher' : 'Assign Teacher'}</DialogTitle>
+          </DialogHeader>
+          <Select value={selectedTeacher} onValueChange={setSelectedTeacher}>
+            <SelectTrigger><SelectValue placeholder="Select teacher" /></SelectTrigger>
+            <SelectContent>
+              {teacherOptions.map((t) => (
+                <SelectItem key={t.user_id} value={t.user_id}>
+                  {t.display_name || t.email || t.user_id}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <DialogFooter className="gap-2">
+            {teacher && (
+              <Button variant="ghost" onClick={() => { setSelectedTeacher(''); assignTeacherMut.mutate(); }}>
+                Unassign
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => setTeacherDialogOpen(false)}>Cancel</Button>
+            <Button disabled={!selectedTeacher || assignTeacherMut.isPending} onClick={() => assignTeacherMut.mutate()}>
+              {assignTeacherMut.isPending ? 'Saving…' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Student Dialog */}
+      <Dialog open={studentDialogOpen} onOpenChange={setStudentDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Student</DialogTitle>
+          </DialogHeader>
+          <Input placeholder="Search by name or email" value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} />
+          <div className="max-h-72 overflow-y-auto space-y-1">
+            {studentOptions
+              .filter((s) => !students.some((es) => es.student_id === s.user_id))
+              .filter((s) => {
+                const q = studentSearch.toLowerCase().trim();
+                if (!q) return true;
+                return (s.display_name || '').toLowerCase().includes(q) || (s.email || '').toLowerCase().includes(q);
+              })
+              .map((s) => (
+                <button
+                  key={s.user_id}
+                  onClick={() => { setSelectedStudent(s.user_id); }}
+                  className={`w-full text-left px-3 py-2 rounded-md border text-sm transition-colors ${selectedStudent === s.user_id ? 'border-primary bg-primary/10' : 'border-border/60 hover:bg-muted/40'}`}
+                >
+                  <div className="font-medium">{s.display_name || '—'}</div>
+                  <div className="text-[11px] text-muted-foreground">{s.email}</div>
+                </button>
+              ))}
+            {studentOptions.length === 0 && (
+              <p className="text-xs text-muted-foreground text-center py-4">Loading students…</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStudentDialogOpen(false)}>Close</Button>
+            <Button disabled={!selectedStudent || addStudentMut.isPending} onClick={() => addStudentMut.mutate()}>
+              {addStudentMut.isPending ? 'Adding…' : 'Add Student'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
