@@ -236,7 +236,14 @@ export default function BatchDetailPage() {
       {/* Teacher + Progress grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="md:col-span-1">
-          <CardHeader className="pb-2"><CardTitle className="text-sm">Teacher</CardTitle></CardHeader>
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm">Teacher</CardTitle>
+            {isAdmin && (
+              <Button size="sm" variant="outline" onClick={() => { setSelectedTeacher(batch.teacher_id || ''); setTeacherDialogOpen(true); }}>
+                <UserPlus className="h-3.5 w-3.5 mr-1" />{teacher ? 'Change' : 'Add'}
+              </Button>
+            )}
+          </CardHeader>
           <CardContent>
             {teacher ? (
               <div className="space-y-1">
@@ -295,7 +302,14 @@ export default function BatchDetailPage() {
       <Card>
         <CardHeader className="pb-2 flex flex-row items-center justify-between">
           <CardTitle className="text-sm flex items-center gap-2"><Users className="h-4 w-4" /> Students ({data.student_count})</CardTitle>
-          <Badge variant="outline" className="text-xs">Max {batch.max_students}</Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-xs">Max {batch.max_students}</Badge>
+            {isAdmin && (
+              <Button size="sm" variant="outline" onClick={() => setStudentDialogOpen(true)} disabled={data.student_count >= batch.max_students}>
+                <Plus className="h-3.5 w-3.5 mr-1" />Add
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {students.length === 0 ? (
@@ -312,6 +326,11 @@ export default function BatchDetailPage() {
                     <div className="text-[11px] text-muted-foreground truncate">{s.email}</div>
                   </div>
                   <div className="text-xs font-mono text-muted-foreground shrink-0">{Math.round(s.completion_pct ?? 0)}%</div>
+                  {isAdmin && (
+                    <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => removeStudentMut.mutate(s.student_id)}>
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    </Button>
+                  )}
                 </li>
               ))}
             </ul>
