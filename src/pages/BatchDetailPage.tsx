@@ -52,6 +52,50 @@ export default function BatchDetailPage() {
   const isMobile = useIsMobileApp();
 
   const isPrivileged = isAdmin;
+  const queryClient = useQueryClient();
+  const [teacherDialogOpen, setTeacherDialogOpen] = useState(false);
+  const [studentDialogOpen, setStudentDialogOpen] = useState(false);
+  const [selectedTeacher, setSelectedTeacher] = useState<string>('');
+  const [selectedStudent, setSelectedStudent] = useState<string>('');
+  const [studentSearch, setStudentSearch] = useState('');
+
+  const { data: teacherOptions = [] } = useQuery({
+    queryKey: ['batch_teachers_picker', batchId],
+    enabled: isAdmin && teacherDialogOpen,
+    queryFn: () => batchService.listTeachers(),
+  });
+
+  const { data: studentOptions = [] } = useQuery({
+    queryKey: ['batch_students_picker', batchId],
+    enabled: isAdmin && studentDialogOpen,
+    queryFn: () => batchService.listStudents(),
+  });
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['batch_detail', batchId] });
+
+  const assignTeacherMut = useMutation({
+    mutationFn: () => batchService.assignTeacher(batchId!, selectedTeacher || null),
+    onSuccess: () => {
+      toast.success('Teacher assigned');
+      setTeacherDialogOpen(false); setSelectedTeacher(''); invalidate();
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to assign teacher'),
+  });
+
+  const addStudentMut = useMutation({
+    mutationFn: () => batchService.addStudent(batchId!, selectedStudent),
+    onSuccess: () => {
+      toast.success('Student added');
+      setSelectedStudent(''); invalidate();
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to add student'),
+  });
+
+  const removeStudentMut = useMutation({
+    mutationFn: (studentId: string) => batchService.removeStudent(batchId!, studentId),
+    onSuccess: () => { toast.success('Student removed'); invalidate(); },
+    onError: (e: any) => toast.error(e?.message || 'Failed to remove student'),
+  });
 
   const { data, isLoading } = useQuery<Detail>({
     queryKey: ['batch_detail', batchId],
