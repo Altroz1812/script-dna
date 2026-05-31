@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO, isAfter } from 'date-fns';
 import { adminQuery } from '@/services/api/adminService';
+import { batchService } from '@/services/api/courseService';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRBAC } from '@/hooks/useRBAC';
@@ -10,9 +11,12 @@ import { useIsMobileApp } from '@/hooks/useIsMobileApp';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import {
   ArrowLeft, Copy, ExternalLink, Users, BookOpen, Clock, Calendar,
-  CheckCircle2, Radio, Hourglass, XCircle, User as UserIcon, Mail, GraduationCap,
+  CheckCircle2, Radio, Hourglass, XCircle, User as UserIcon, Mail, GraduationCap, Plus, UserPlus, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
