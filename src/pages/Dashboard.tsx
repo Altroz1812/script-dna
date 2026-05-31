@@ -291,15 +291,6 @@ export default function Dashboard() {
     enabled: !!profile && !isStudent && !isParent && !isTeacher && !isSupport,
   });
 
-  // Mobile shell — must come AFTER all hooks above to preserve hook order
-  // (early returns before hooks cause React error #300).
-  if (isMobileApp && profile) {
-    if (profile.role === 'student') return <StudentHome />;
-    if (profile.role === 'parent') return <ParentHome />;
-    if (profile.role === 'teacher') return <TeacherHome />;
-    return <AdminHome />;
-  }
-
   const cards = useMemo(() => {
     if (!stats) return [];
     const base = [
