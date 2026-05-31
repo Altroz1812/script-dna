@@ -1,15 +1,21 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Clock, Wifi, Building2, IndianRupee, ArrowRight } from 'lucide-react';
+import { BookOpen, Clock, Wifi, Building2, IndianRupee, ArrowRight, Plus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRBAC } from '@/hooks/useRBAC';
 import { useActiveOrg } from '@/contexts/ActiveOrgContext';
 import { supabase } from '@/integrations/supabase/client';
 import { adminQuery } from '@/services/api/adminService';
+import { courseService, type CreateCourseParams } from '@/services/api/courseService';
 import { MobilePage } from '@/components/mobile/ui/MobilePage';
 import { ShimmerCard } from '@/components/mobile/ui/Shimmer';
 import { EmptyState } from '@/components/mobile/ui/EmptyState';
 import { TouchPress } from '@/components/mobile/ui/TouchPress';
+import { FAB } from '@/components/mobile/ui/FAB';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { CourseForm } from '@/components/courses/CourseForm';
+import { toast } from 'sonner';
 
 export default function MobileCoursesPage() {
   const { profile } = useAuth();
@@ -17,6 +23,33 @@ export default function MobileCoursesPage() {
   const { activeOrgId } = useActiveOrg();
   const navigate = useNavigate();
   const isStudent = role === 'student';
+  const queryClient = useQueryClient();
+  const [createOpen, setCreateOpen] = useState(false);
+  const canCreate = role === 'admin' || role === 'superadmin';
+
+  const createMutation = useMutation({
+    mutationFn: (values: Partial<CreateCourseParams>) => courseService.createCourse({
+      name: values.name!.trim(),
+      description: values.description?.trim() || null,
+      created_by: profile!.id,
+      grade_level: values.grade_level?.trim() || undefined,
+      duration_days: values.duration_days ?? undefined,
+      total_hours: values.total_hours ?? undefined,
+      daily_hours: values.daily_hours ?? undefined,
+      language: values.language || undefined,
+      writing_style: values.writing_style || undefined,
+      includes_speed: values.includes_speed ?? false,
+      fee: values.fee ?? 0,
+      delivery_mode: values.delivery_mode || 'online',
+      center: values.center?.trim() || undefined,
+    }),
+    onSuccess: () => {
+      toast.success('Course created');
+      queryClient.invalidateQueries({ queryKey: ['mobile_courses'] });
+      setCreateOpen(false);
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to create course'),
+  });
 
   const { data: courses = [], isLoading, refetch } = useQuery<any[]>({
     queryKey: ['mobile_courses', role, activeOrgId, profile?.id],
@@ -96,6 +129,24 @@ export default function MobileCoursesPage() {
             </TouchPress>
           ))}
         </div>
+      )}
+
+      {canCreate && (
+        <>
+          <FAB icon={Plus} label="Add course" onClick={() => setCreateOpen(true)} />
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>New Course</DialogTitle>
+              </DialogHeader>
+              <CourseForm
+                onSubmit={(v) => createMutation.mutate(v)}
+                isPending={createMutation.isPending}
+                submitLabel="Create Course"
+              />
+            </DialogContent>
+          </Dialog>
+        </>
       )}
     </MobilePage>
   );
