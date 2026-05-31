@@ -114,13 +114,6 @@ export default function Dashboard() {
   const { activeOrgId, activeOrgName } = useActiveOrg(); // Add this
   const isMobileApp = useIsMobileApp();
 
-  if (isMobileApp && profile) {
-    if (profile.role === 'student') return <StudentHome />;
-    if (profile.role === 'parent') return <ParentHome />;
-    if (profile.role === 'teacher') return <TeacherHome />;
-    return <AdminHome />;
-  }
-
   const role = profile?.role;
   const isStudent = role === "student";
   const isParent = role === "parent";
@@ -297,6 +290,15 @@ export default function Dashboard() {
     retry: 2,
     enabled: !!profile && !isStudent && !isParent && !isTeacher && !isSupport,
   });
+
+  // Mobile shell — must come AFTER all hooks above to preserve hook order
+  // (early returns before hooks cause React error #300).
+  if (isMobileApp && profile) {
+    if (profile.role === 'student') return <StudentHome />;
+    if (profile.role === 'parent') return <ParentHome />;
+    if (profile.role === 'teacher') return <TeacherHome />;
+    return <AdminHome />;
+  }
 
   const cards = useMemo(() => {
     if (!stats) return [];
