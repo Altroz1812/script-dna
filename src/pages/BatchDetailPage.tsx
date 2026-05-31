@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO, isAfter } from 'date-fns';
 import { adminQuery } from '@/services/api/adminService';
+import { batchService } from '@/services/api/courseService';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRBAC } from '@/hooks/useRBAC';
@@ -10,9 +11,12 @@ import { useIsMobileApp } from '@/hooks/useIsMobileApp';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import {
   ArrowLeft, Copy, ExternalLink, Users, BookOpen, Clock, Calendar,
-  CheckCircle2, Radio, Hourglass, XCircle, User as UserIcon, Mail, GraduationCap,
+  CheckCircle2, Radio, Hourglass, XCircle, User as UserIcon, Mail, GraduationCap, Plus, UserPlus, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
@@ -48,6 +52,50 @@ export default function BatchDetailPage() {
   const isMobile = useIsMobileApp();
 
   const isPrivileged = isAdmin;
+  const queryClient = useQueryClient();
+  const [teacherDialogOpen, setTeacherDialogOpen] = useState(false);
+  const [studentDialogOpen, setStudentDialogOpen] = useState(false);
+  const [selectedTeacher, setSelectedTeacher] = useState<string>('');
+  const [selectedStudent, setSelectedStudent] = useState<string>('');
+  const [studentSearch, setStudentSearch] = useState('');
+
+  const { data: teacherOptions = [] } = useQuery({
+    queryKey: ['batch_teachers_picker', batchId],
+    enabled: isAdmin && teacherDialogOpen,
+    queryFn: () => batchService.listTeachers(),
+  });
+
+  const { data: studentOptions = [] } = useQuery({
+    queryKey: ['batch_students_picker', batchId],
+    enabled: isAdmin && studentDialogOpen,
+    queryFn: () => batchService.listStudents(),
+  });
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['batch_detail', batchId] });
+
+  const assignTeacherMut = useMutation({
+    mutationFn: () => batchService.assignTeacher(batchId!, selectedTeacher || null),
+    onSuccess: () => {
+      toast.success('Teacher assigned');
+      setTeacherDialogOpen(false); setSelectedTeacher(''); invalidate();
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to assign teacher'),
+  });
+
+  const addStudentMut = useMutation({
+    mutationFn: () => batchService.addStudent(batchId!, selectedStudent),
+    onSuccess: () => {
+      toast.success('Student added');
+      setSelectedStudent(''); invalidate();
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to add student'),
+  });
+
+  const removeStudentMut = useMutation({
+    mutationFn: (studentId: string) => batchService.removeStudent(batchId!, studentId),
+    onSuccess: () => { toast.success('Student removed'); invalidate(); },
+    onError: (e: any) => toast.error(e?.message || 'Failed to remove student'),
+  });
 
   const { data, isLoading } = useQuery<Detail>({
     queryKey: ['batch_detail', batchId],
@@ -188,7 +236,14 @@ export default function BatchDetailPage() {
       {/* Teacher + Progress grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="md:col-span-1">
-          <CardHeader className="pb-2"><CardTitle className="text-sm">Teacher</CardTitle></CardHeader>
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm">Teacher</CardTitle>
+            {isAdmin && (
+              <Button size="sm" variant="outline" onClick={() => { setSelectedTeacher(batch.teacher_id || ''); setTeacherDialogOpen(true); }}>
+                <UserPlus className="h-3.5 w-3.5 mr-1" />{teacher ? 'Change' : 'Add'}
+              </Button>
+            )}
+          </CardHeader>
           <CardContent>
             {teacher ? (
               <div className="space-y-1">
@@ -247,7 +302,14 @@ export default function BatchDetailPage() {
       <Card>
         <CardHeader className="pb-2 flex flex-row items-center justify-between">
           <CardTitle className="text-sm flex items-center gap-2"><Users className="h-4 w-4" /> Students ({data.student_count})</CardTitle>
-          <Badge variant="outline" className="text-xs">Max {batch.max_students}</Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-xs">Max {batch.max_students}</Badge>
+            {isAdmin && (
+              <Button size="sm" variant="outline" onClick={() => setStudentDialogOpen(true)} disabled={data.student_count >= batch.max_students}>
+                <Plus className="h-3.5 w-3.5 mr-1" />Add
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {students.length === 0 ? (
@@ -264,6 +326,11 @@ export default function BatchDetailPage() {
                     <div className="text-[11px] text-muted-foreground truncate">{s.email}</div>
                   </div>
                   <div className="text-xs font-mono text-muted-foreground shrink-0">{Math.round(s.completion_pct ?? 0)}%</div>
+                  {isAdmin && (
+                    <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => removeStudentMut.mutate(s.student_id)}>
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    </Button>
+                  )}
                 </li>
               ))}
             </ul>
@@ -314,6 +381,74 @@ export default function BatchDetailPage() {
           </Button>
         </div>
       )}
+
+      {/* Assign Teacher Dialog */}
+      <Dialog open={teacherDialogOpen} onOpenChange={setTeacherDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{teacher ? 'Change Teacher' : 'Assign Teacher'}</DialogTitle>
+          </DialogHeader>
+          <Select value={selectedTeacher} onValueChange={setSelectedTeacher}>
+            <SelectTrigger><SelectValue placeholder="Select teacher" /></SelectTrigger>
+            <SelectContent>
+              {teacherOptions.map((t) => (
+                <SelectItem key={t.user_id} value={t.user_id}>
+                  {t.display_name || t.email || t.user_id}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <DialogFooter className="gap-2">
+            {teacher && (
+              <Button variant="ghost" onClick={() => { setSelectedTeacher(''); assignTeacherMut.mutate(); }}>
+                Unassign
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => setTeacherDialogOpen(false)}>Cancel</Button>
+            <Button disabled={!selectedTeacher || assignTeacherMut.isPending} onClick={() => assignTeacherMut.mutate()}>
+              {assignTeacherMut.isPending ? 'Saving…' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Student Dialog */}
+      <Dialog open={studentDialogOpen} onOpenChange={setStudentDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Student</DialogTitle>
+          </DialogHeader>
+          <Input placeholder="Search by name or email" value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} />
+          <div className="max-h-72 overflow-y-auto space-y-1">
+            {studentOptions
+              .filter((s) => !students.some((es) => es.student_id === s.user_id))
+              .filter((s) => {
+                const q = studentSearch.toLowerCase().trim();
+                if (!q) return true;
+                return (s.display_name || '').toLowerCase().includes(q) || (s.email || '').toLowerCase().includes(q);
+              })
+              .map((s) => (
+                <button
+                  key={s.user_id}
+                  onClick={() => { setSelectedStudent(s.user_id); }}
+                  className={`w-full text-left px-3 py-2 rounded-md border text-sm transition-colors ${selectedStudent === s.user_id ? 'border-primary bg-primary/10' : 'border-border/60 hover:bg-muted/40'}`}
+                >
+                  <div className="font-medium">{s.display_name || '—'}</div>
+                  <div className="text-[11px] text-muted-foreground">{s.email}</div>
+                </button>
+              ))}
+            {studentOptions.length === 0 && (
+              <p className="text-xs text-muted-foreground text-center py-4">Loading students…</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStudentDialogOpen(false)}>Close</Button>
+            <Button disabled={!selectedStudent || addStudentMut.isPending} onClick={() => addStudentMut.mutate()}>
+              {addStudentMut.isPending ? 'Adding…' : 'Add Student'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
