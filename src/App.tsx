@@ -18,6 +18,8 @@ import { Navigate } from "react-router-dom";
 import Signup from "@/pages/Signup";
 import NotFound from "@/pages/NotFound";
 import Unauthorized from "@/pages/Unauthorized";
+import { useState } from "react";
+import { MobileIntroVideo, shouldShowIntro } from "@/components/MobileIntroVideo";
 // Lazy: everything else (route-level code splitting)
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Index = lazy(() => import("@/pages/Index"));
@@ -67,7 +69,10 @@ const RouteFallback = () => (
 
 const RootRoute = () => {
   const isMobile = useIsMobileApp();
-  if (isMobile) return <Navigate to="/login" replace />;
+  const [introDone, setIntroDone] = useState(() => !isMobile || !shouldShowIntro());
+  if (isMobile && !introDone) {
+    return <MobileIntroVideo onDone={() => setIntroDone(true)} />;
+  }
   return <LandingPage />;
 };
 const queryClient = new QueryClient({
