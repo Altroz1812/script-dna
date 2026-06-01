@@ -37,7 +37,7 @@ export function MobileIntroVideo({ onDone }: { onDone: () => void }) {
         preload="auto"
         onEnded={finish}
         onError={finish}
-        className="w-full h-full object-cover"
+        className="max-w-full max-h-full w-auto h-auto object-contain"
       />
       <button
         onClick={finish}
