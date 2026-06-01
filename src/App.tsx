@@ -2,8 +2,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { lazy, Suspense, useState } from "react";
+import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { CartProvider } from "@/contexts/CartContext";
 import { ActiveOrgProvider } from "@/contexts/ActiveOrgContext";
@@ -68,12 +68,20 @@ const RouteFallback = () => (
 
 const RootRoute = () => {
   const isMobile = useIsMobileApp();
-  const [introDone, setIntroDone] = useState(() => !isMobile || !shouldShowIntro());
-  if (isMobile && introDone) {
-    return <Navigate to="/login" replace />;
+  const navigate = useNavigate();
+  const [showIntro, setShowIntro] = useState(() => isMobile && shouldShowIntro());
+
+  useEffect(() => {
+    if (isMobile && !showIntro) {
+      navigate('/login', { replace: true });
+    }
+  }, [isMobile, showIntro, navigate]);
+
+  if (isMobile && showIntro) {
+    return <MobileIntroVideo onDone={() => setShowIntro(false)} />;
   }
-  if (isMobile && !introDone) {
-    return <MobileIntroVideo onDone={() => setIntroDone(true)} />;
+  if (isMobile) {
+    return null;
   }
   return <LandingPage />;
 };
