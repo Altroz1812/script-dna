@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { CartProvider } from "@/contexts/CartContext";
 import { ActiveOrgProvider } from "@/contexts/ActiveOrgContext";
@@ -18,6 +18,7 @@ import { Navigate } from "react-router-dom";
 import Signup from "@/pages/Signup";
 import NotFound from "@/pages/NotFound";
 import Unauthorized from "@/pages/Unauthorized";
+import { MobileIntroVideo, shouldShowIntro } from "@/components/MobileIntroVideo";
 // Lazy: everything else (route-level code splitting)
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Index = lazy(() => import("@/pages/Index"));
@@ -67,7 +68,10 @@ const RouteFallback = () => (
 
 const RootRoute = () => {
   const isMobile = useIsMobileApp();
-  if (isMobile) return <Navigate to="/login" replace />;
+  const [introDone, setIntroDone] = useState(() => !isMobile || !shouldShowIntro());
+  if (isMobile && !introDone) {
+    return <MobileIntroVideo onDone={() => setIntroDone(true)} />;
+  }
   return <LandingPage />;
 };
 const queryClient = new QueryClient({
