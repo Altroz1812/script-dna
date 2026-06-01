@@ -69,6 +69,9 @@ const RouteFallback = () => (
 const RootRoute = () => {
   const isMobile = useIsMobileApp();
   const [introDone, setIntroDone] = useState(() => !isMobile || !shouldShowIntro());
+  if (isMobile && introDone) {
+    return <Navigate to="/login" replace />;
+  }
   if (isMobile && !introDone) {
     return <MobileIntroVideo onDone={() => setIntroDone(true)} />;
   }
