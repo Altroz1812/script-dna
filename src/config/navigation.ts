@@ -76,8 +76,11 @@ export const navigationConfig: NavGroup[] = [
   },
   {
     label: 'Management',
-    items: [
-      { title: 'Users', url: '/users', icon: Users, roles: ['superadmin', 'admin'] },
+        items: [
+      { title: 'Organizations', url: '/organizations', icon: Shield, roles: ['superadmin'] },
+        items: [
+      { title: 'Users', url: '/users', icon: Users, roles: ['superadmin', 'admin'] },  
+      { title: 'Roles & Permissions', url: '/roles', icon: Shield, roles: ['superadmin'] },   
       { title: 'Students', url: '/students', icon: GraduationCap, roles: ['superadmin', 'admin', 'support', 'teacher'] },
       { title: 'Payments', url: '/payments', icon: CreditCard, roles: ['superadmin', 'admin', 'support', 'parent'] },
       { title: 'Payroll', url: '/payroll', icon: DollarSign, roles: ['superadmin'] },
