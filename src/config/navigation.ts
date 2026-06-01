@@ -101,9 +101,7 @@ export const navigationConfig: NavGroup[] = [
   },
   {
     label: 'System',
-    // items: [
-    //   { title: 'Organizations', url: '/organizations', icon: Shield, roles: ['superadmin'] },
-    //   { title: 'Roles & Permissions', url: '/roles', icon: Shield, roles: ['superadmin'] },
+
       { title: 'System Monitoring', url: '/monitoring', icon: Monitor, roles: ['superadmin'] },
       { title: 'Settings', url: '/settings', icon: Settings, roles: ['superadmin'] },
     ],
