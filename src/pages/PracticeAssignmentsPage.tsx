@@ -185,6 +185,24 @@ export default function PracticeAssignmentsPage() {
                     <SelectContent>{batches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
+                {form.batch_id && modules.length > 0 && (
+                  <div>
+                    <Label>Module (optional)</Label>
+                    <Select value={form.module_id} onValueChange={v => setForm(f => ({ ...f, module_id: v, lesson_id: '' }))}>
+                      <SelectTrigger><SelectValue placeholder="Select module from curriculum" /></SelectTrigger>
+                      <SelectContent>{modules.map(m => <SelectItem key={m.id} value={m.id}>{m.title}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {form.module_id && lessonOptions.length > 0 && (
+                  <div>
+                    <Label>Lesson (auto-fills title & file)</Label>
+                    <Select value={form.lesson_id} onValueChange={handleLessonPick}>
+                      <SelectTrigger><SelectValue placeholder="Select lesson" /></SelectTrigger>
+                      <SelectContent>{lessonOptions.map((l: any) => <SelectItem key={l.id} value={l.id}>{l.title}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div><Label>Due Date (optional)</Label><Input type="date" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} /></div>
                 <div>
                   <Label>Upload File (PDF / image, optional)</Label>
