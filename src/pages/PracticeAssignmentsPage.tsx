@@ -252,6 +252,11 @@ export default function PracticeAssignmentsPage() {
                     <div>
                       <span className="font-medium">{a.title}</span>
                       {a.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{a.description}</p>}
+                      {(a.module || a.lesson) && (
+                        <p className="text-xs text-primary mt-0.5">
+                          {a.module?.title}{a.module && a.lesson ? ' › ' : ''}{a.lesson?.title}
+                        </p>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell><Badge variant="secondary">{a.batches?.name || '—'}</Badge></TableCell>
