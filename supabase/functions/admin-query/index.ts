@@ -1930,7 +1930,7 @@ Deno.serve(async (req) => {
       case 'list_practice_assignments': {
         let q: any = supabase
           .from('practice_assignments')
-          .select('*, batches(name)')
+          .select('*, batches(name, course_id), lessons:lesson_id(id, title, file_url, lesson_type, content), course_modules:module_id(id, title)')
           .order('created_at', { ascending: false })
         if (targetOrgId) q = q.eq('organization_id', targetOrgId)
         if (params?.batch_id) q = q.eq('batch_id', params.batch_id)
