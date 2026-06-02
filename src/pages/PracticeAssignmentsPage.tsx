@@ -27,9 +27,10 @@ export default function PracticeAssignmentsPage() {
 
   const [assignments, setAssignments] = useState<any[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
+  const [modules, setModules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ title: '', description: '', batch_id: '', due_date: '', file_url: '' });
+  const [form, setForm] = useState({ title: '', description: '', batch_id: '', module_id: '', lesson_id: '', due_date: '', file_url: '' });
   const [uploading, setUploading] = useState(false);
 
   const normalizeUrl = (url: string) => {
@@ -100,6 +101,29 @@ export default function PracticeAssignmentsPage() {
 
   useEffect(() => { load(); }, [activeOrgId]);
 
+  // Load modules+lessons for the selected batch's course
+  useEffect(() => {
+    const batch = batches.find(b => b.id === form.batch_id);
+    const courseId = batch?.course_id || batch?.courses?.id;
+    if (!courseId) { setModules([]); return; }
+    adminQuery('list_course_modules', { course_id: courseId })
+      .then(d => setModules(d || []))
+      .catch(() => setModules([]));
+  }, [form.batch_id, batches]);
+
+  const selectedModule = modules.find(m => m.id === form.module_id);
+  const lessonOptions = selectedModule?.lessons || [];
+
+  const handleLessonPick = (lessonId: string) => {
+    const lesson = lessonOptions.find((l: any) => l.id === lessonId);
+    setForm(f => ({
+      ...f,
+      lesson_id: lessonId,
+      title: f.title || lesson?.title || '',
+      file_url: lesson?.file_url || f.file_url,
+    }));
+  };
+
   const handleCreate = async () => {
     if (!form.title || !form.batch_id) {
       toast.error('Title and batch are required');
@@ -109,6 +133,8 @@ export default function PracticeAssignmentsPage() {
       await adminQuery('create_practice_assignment', {
         teacher_id: profile?.id,
         batch_id: form.batch_id,
+        module_id: form.module_id || null,
+        lesson_id: form.lesson_id || null,
         title: form.title,
         description: form.description || null,
         due_date: form.due_date || null,
@@ -116,7 +142,7 @@ export default function PracticeAssignmentsPage() {
       });
       toast.success('Assignment created');
       setOpen(false);
-      setForm({ title: '', description: '', batch_id: '', due_date: '', file_url: '' });
+      setForm({ title: '', description: '', batch_id: '', module_id: '', lesson_id: '', due_date: '', file_url: '' });
       load();
     } catch (e: any) {
       toast.error(e.message);
