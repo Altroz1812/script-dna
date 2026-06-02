@@ -11,12 +11,22 @@ import { ROLE_LABELS } from "@/types/roles";
 import { TouchPress } from "./ui/TouchPress";
 import { cn } from "@/lib/utils";
 
-export function MobileDrawer() {
+interface MobileDrawerProps {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}
+
+export function MobileDrawer({ open: openProp, onOpenChange }: MobileDrawerProps = {}) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const { profile, signOut } = useAuth();
   const { activeOrgName } = useActiveOrg();
-  const [open, setOpen] = useState(false);
+  const [openInternal, setOpenInternal] = useState(false);
+  const open = openProp ?? openInternal;
+  const setOpen = (v: boolean) => {
+    if (onOpenChange) onOpenChange(v);
+    else setOpenInternal(v);
+  };
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(() => {
     // Initialize with groups expanded if they contain the active route
     if (!profile) return {};
