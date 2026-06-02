@@ -12,6 +12,8 @@ import { toast } from 'sonner';
 import { Plus, Trash2, FileText } from 'lucide-react';
 import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { courseService } from '@/services/api/courseService';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function MaterialsPage() {
   const [materials, setMaterials] = useState<any[]>([]);
@@ -20,6 +22,8 @@ export default function MaterialsPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ course_id: '', title: '', description: '', file_url: '', material_type: 'document' });
   const [filterCourse, setFilterCourse] = useState('all');
+  const [uploading, setUploading] = useState(false);
+  const { profile } = useAuth();
 
   const load = async () => {
     setLoading(true);
@@ -29,6 +33,19 @@ export default function MaterialsPage() {
     } catch (e: any) { toast.error(e.message); } finally { setLoading(false); }
   };
   useEffect(() => { load(); }, [filterCourse]);
+
+  const handleFileUpload = async (file: File) => {
+    setUploading(true);
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `materials/${profile?.id ?? 'anon'}/${Date.now()}.${ext}`;
+      const { error } = await supabase.storage.from('materials').upload(path, file);
+      if (error) throw error;
+      const { data } = supabase.storage.from('materials').getPublicUrl(path);
+      setForm(f => ({ ...f, file_url: data.publicUrl }));
+      toast.success('File uploaded');
+    } catch (e: any) { toast.error(e.message); } finally { setUploading(false); }
+  };
 
   const handleCreate = async () => {
     if (!form.course_id || !form.title.trim()) { toast.error('Course and title required'); return; }
@@ -57,6 +74,11 @@ export default function MaterialsPage() {
                 <div><Label>Title</Label><Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} /></div>
                 <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></div>
                 <div><Label>File URL</Label><Input value={form.file_url} onChange={e => setForm(f => ({ ...f, file_url: e.target.value }))} placeholder="https://..." /></div>
+                <div>
+                  <Label>Or Upload File</Label>
+                  <Input type="file" disabled={uploading} onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); }} />
+                  {uploading && <p className="text-xs text-muted-foreground mt-1">Uploading...</p>}
+                </div>
                 <div><Label>Type</Label><Select value={form.material_type} onValueChange={v => setForm(f => ({ ...f, material_type: v }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="document">Document</SelectItem><SelectItem value="video">Video</SelectItem><SelectItem value="link">Link</SelectItem></SelectContent></Select></div>
                 <Button onClick={handleCreate} className="w-full">Add</Button>
               </div>
