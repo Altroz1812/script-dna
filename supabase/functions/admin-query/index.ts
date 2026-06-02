@@ -1930,13 +1930,26 @@ Deno.serve(async (req) => {
       case 'list_practice_assignments': {
         let q: any = supabase
           .from('practice_assignments')
-          .select('*, batches(name, course_id), lessons:lesson_id(id, title, file_url, lesson_type, content), course_modules:module_id(id, title)')
+          .select('*, batches(name, course_id)')
           .order('created_at', { ascending: false })
         if (targetOrgId) q = q.eq('organization_id', targetOrgId)
         if (params?.batch_id) q = q.eq('batch_id', params.batch_id)
         const { data, error } = await q
         if (error) throw error
-        result = data ?? []
+        const rows = data ?? []
+        const lessonIds = [...new Set(rows.map((r: any) => r.lesson_id).filter(Boolean))]
+        const moduleIds = [...new Set(rows.map((r: any) => r.module_id).filter(Boolean))]
+        const [lessonsRes, modulesRes] = await Promise.all([
+          lessonIds.length ? supabase.from('lessons').select('id,title,file_url,lesson_type,content').in('id', lessonIds) : Promise.resolve({ data: [] } as any),
+          moduleIds.length ? supabase.from('course_modules').select('id,title').in('id', moduleIds) : Promise.resolve({ data: [] } as any),
+        ])
+        const lessonsMap = new Map((lessonsRes.data ?? []).map((l: any) => [l.id, l]))
+        const modulesMap = new Map((modulesRes.data ?? []).map((m: any) => [m.id, m]))
+        result = rows.map((r: any) => ({
+          ...r,
+          lesson: r.lesson_id ? lessonsMap.get(r.lesson_id) ?? null : null,
+          module: r.module_id ? modulesMap.get(r.module_id) ?? null : null,
+        }))
         break
       }
       case 'create_practice_assignment': {
