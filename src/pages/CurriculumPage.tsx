@@ -11,6 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, BookOpen, ChevronDown, ChevronRight, GripVertical } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Lesson {
   id: string;
@@ -53,6 +55,9 @@ export default function CurriculumPage() {
   const [lContent, setLContent] = useState('');
   const [lType, setLType] = useState('text');
   const [lDuration, setLDuration] = useState('');
+  const [lFileUrl, setLFileUrl] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const { profile } = useAuth();
 
   useEffect(() => {
     adminQuery('list_courses').then(setCourses).catch(e => toast.error(e.message)).finally(() => setLoading(false));
@@ -99,7 +104,7 @@ export default function CurriculumPage() {
   };
 
   // Lesson CRUD
-  const resetLessonForm = () => { setLTitle(''); setLContent(''); setLType('text'); setLDuration(''); setEditLesson(null); setLessonModuleId(''); };
+  const resetLessonForm = () => { setLTitle(''); setLContent(''); setLType('text'); setLDuration(''); setLFileUrl(''); setEditLesson(null); setLessonModuleId(''); };
 
   const openAddLesson = (moduleId: string) => {
     resetLessonForm(); setLessonModuleId(moduleId); setLessonOpen(true);
@@ -107,7 +112,20 @@ export default function CurriculumPage() {
 
   const openEditLesson = (l: Lesson) => {
     setEditLesson(l); setLessonModuleId(l.module_id); setLTitle(l.title); setLContent(l.content || '');
-    setLType(l.lesson_type); setLDuration(String(l.duration_minutes || '')); setLessonOpen(true);
+    setLType(l.lesson_type); setLDuration(String(l.duration_minutes || '')); setLFileUrl(l.file_url || ''); setLessonOpen(true);
+  };
+
+  const handleLessonFileUpload = async (file: File) => {
+    setUploading(true);
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `lessons/${profile?.id ?? 'anon'}/${Date.now()}.${ext}`;
+      const { error } = await supabase.storage.from('materials').upload(path, file);
+      if (error) throw error;
+      const { data } = supabase.storage.from('materials').getPublicUrl(path);
+      setLFileUrl(data.publicUrl);
+      toast.success('File uploaded');
+    } catch (e: any) { toast.error(e.message); } finally { setUploading(false); }
   };
 
   const handleSaveLesson = async () => {
@@ -115,10 +133,10 @@ export default function CurriculumPage() {
     const mod = modules.find(m => m.id === lessonModuleId);
     try {
       if (editLesson) {
-        await adminQuery('update_lesson', { id: editLesson.id, title: lTitle.trim(), content: lContent.trim() || null, lesson_type: lType, duration_minutes: Number(lDuration) || 0 });
+        await adminQuery('update_lesson', { id: editLesson.id, title: lTitle.trim(), content: lContent.trim() || null, lesson_type: lType, duration_minutes: Number(lDuration) || 0, file_url: lFileUrl.trim() || null });
         toast.success('Lesson updated');
       } else {
-        await adminQuery('create_lesson', { module_id: lessonModuleId, title: lTitle.trim(), content: lContent.trim() || null, lesson_type: lType, duration_minutes: Number(lDuration) || 0, sort_order: mod?.lessons?.length ?? 0 });
+        await adminQuery('create_lesson', { module_id: lessonModuleId, title: lTitle.trim(), content: lContent.trim() || null, lesson_type: lType, duration_minutes: Number(lDuration) || 0, sort_order: mod?.lessons?.length ?? 0, file_url: lFileUrl.trim() || null });
         toast.success('Lesson created');
       }
       setLessonOpen(false); resetLessonForm(); loadModules();
@@ -209,6 +227,7 @@ export default function CurriculumPage() {
                                   <span className="text-sm font-medium">{l.title}</span>
                                   <Badge variant="outline" className="text-xs">{l.lesson_type}</Badge>
                                   {l.duration_minutes > 0 && <span className="text-xs text-muted-foreground">{l.duration_minutes} min</span>}
+                                  {l.file_url && <a href={l.file_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline">File</a>}
                                 </div>
                                 <div className="flex gap-1">
                                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditLesson(l)}><Pencil className="h-3 w-3" /></Button>
@@ -250,6 +269,12 @@ export default function CurriculumPage() {
                 </Select>
               </div>
               <div><Label>Duration (min)</Label><Input type="number" value={lDuration} onChange={e => setLDuration(e.target.value)} /></div>
+            </div>
+            <div><Label>File URL</Label><Input value={lFileUrl} onChange={e => setLFileUrl(e.target.value)} placeholder="https://..." /></div>
+            <div>
+              <Label>Or Upload File</Label>
+              <Input type="file" disabled={uploading} onChange={e => { const f = e.target.files?.[0]; if (f) handleLessonFileUpload(f); }} />
+              {uploading && <p className="text-xs text-muted-foreground mt-1">Uploading...</p>}
             </div>
             <Button onClick={handleSaveLesson} className="w-full">{editLesson ? 'Update' : 'Create'}</Button>
           </div>
