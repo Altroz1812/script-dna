@@ -8,13 +8,27 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, FileText, Calendar, Download, ExternalLink, Upload, AlertCircle } from "lucide-react";
+import {
+  Plus,
+  FileText,
+  Calendar,
+  Download,
+  ExternalLink,
+  Upload,
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  XCircle,
+  Eye,
+  MessageSquare,
+  Star,
+} from "lucide-react";
 import { TableSkeleton } from "@/components/ui/loading-skeletons";
 import { format } from "date-fns";
 
@@ -22,6 +36,35 @@ import { format } from "date-fns";
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_FILE_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/jpg"];
 const ALLOWED_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png"];
+
+interface Assignment {
+  id: string;
+  title: string;
+  description: string;
+  due_date: string;
+  file_url: string;
+  batch_id: string;
+  module_id: string;
+  lesson_id: string;
+  created_at: string;
+  batches?: { name: string };
+  modules?: { title: string };
+  lessons?: { title: string };
+  submissions?: Submission[];
+}
+
+interface Submission {
+  id: string;
+  assignment_id: string;
+  student_id: string;
+  submission_url: string;
+  submitted_at: string;
+  grade: number;
+  feedback: string;
+  reviewed_at: string;
+  reviewer_id: string;
+  status: "pending" | "submitted" | "reviewed" | "late";
+}
 
 export default function PracticeAssignmentsPage() {
   const { profile } = useAuth();
@@ -31,7 +74,7 @@ export default function PracticeAssignmentsPage() {
   const canCreate = isTeacher || isAdmin;
   const { activeOrgId } = useActiveOrg();
 
-  const [assignments, setAssignments] = useState<any[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -48,11 +91,23 @@ export default function PracticeAssignmentsPage() {
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  // Submission dialog states
+  const [submissionDialogOpen, setSubmissionDialogOpen] = useState(false);
+  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
+  const [submissionFile, setSubmissionFile] = useState<File | null>(null);
+  const [submissionNotes, setSubmissionNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  // Review dialog states (for teachers)
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
+  const [reviewGrade, setReviewGrade] = useState<number>(0);
+  const [reviewFeedback, setReviewFeedback] = useState("");
+
   const normalizeUrl = (url: string): string => {
     const u = (url || "").trim();
     if (!u) return "";
 
-    // Block javascript: and other dangerous protocols
     const dangerousProtocols = /^(javascript:|data:|vbscript:|file:)/i;
     if (dangerousProtocols.test(u)) {
       console.warn("Blocked dangerous URL protocol");
@@ -83,7 +138,6 @@ export default function PracticeAssignmentsPage() {
     if (!u) return "";
 
     try {
-      // Handle storage paths
       if (/^practice-assignments\//i.test(u)) {
         const { data } = supabase.storage.from("materials").getPublicUrl(u);
         return data.publicUrl;
@@ -95,7 +149,6 @@ export default function PracticeAssignmentsPage() {
         return data.publicUrl;
       }
 
-      // Handle external URLs
       const normalized = normalizeUrl(u);
       if (!normalized) return "";
 
@@ -104,7 +157,6 @@ export default function PracticeAssignmentsPage() {
 
       if (isAuraPenRoot) return "";
 
-      // Only allow http/https protocols
       if (parsed.protocol === "http:" || parsed.protocol === "https:") {
         return parsed.href;
       }
@@ -115,14 +167,12 @@ export default function PracticeAssignmentsPage() {
     }
   };
 
-  const handleFileUpload = async (file: File) => {
-    // Check if user is authenticated
+  const handleFileUpload = async (file: File, folder: string = "practice-assignments") => {
     if (!profile?.id) {
       toast.error("User not authenticated. Please log in again.");
       return;
     }
 
-    // Validate file
     const validation = validateFile(file);
     if (!validation.valid) {
       toast.error(validation.error);
@@ -134,7 +184,7 @@ export default function PracticeAssignmentsPage() {
       const ext = file.name.split(".").pop();
       const timestamp = Date.now();
       const safeFileName = `${timestamp}.${ext}`;
-      const path = `practice-assignments/${profile.id}/${safeFileName}`;
+      const path = `${folder}/${profile.id}/${safeFileName}`;
 
       const { error: uploadError } = await supabase.storage.from("materials").upload(path, file, {
         cacheControl: "3600",
@@ -144,18 +194,33 @@ export default function PracticeAssignmentsPage() {
       if (uploadError) throw uploadError;
 
       const { data } = supabase.storage.from("materials").getPublicUrl(path);
-      setForm((f) => ({ ...f, file_url: data.publicUrl }));
-      toast.success("File uploaded successfully");
+      return data.publicUrl;
     } catch (e: any) {
       console.error("File upload error:", e);
       toast.error(e.message || "Failed to upload file");
+      return null;
     } finally {
       setUploading(false);
     }
   };
 
+  const handleCreateAssignmentFileUpload = async (file: File) => {
+    const url = await handleFileUpload(file, "practice-assignments");
+    if (url) {
+      setForm((f) => ({ ...f, file_url: url }));
+      toast.success("File uploaded successfully");
+    }
+  };
+
+  const handleSubmissionUpload = async (file: File) => {
+    const url = await handleFileUpload(file, "submissions");
+    if (url) {
+      return url;
+    }
+    return null;
+  };
+
   const load = async () => {
-    // Don't load if no active organization
     if (!activeOrgId) {
       setLoading(false);
       return;
@@ -163,10 +228,16 @@ export default function PracticeAssignmentsPage() {
 
     setLoading(true);
     try {
-      // Load assignments with better error handling
       let assignmentsData = [];
       try {
-        assignmentsData = await adminQuery("list_practice_assignments");
+        // Load assignments with submissions based on role
+        if (isStudent) {
+          assignmentsData = await adminQuery("list_student_practice_assignments", {
+            student_id: profile?.id,
+          });
+        } else {
+          assignmentsData = await adminQuery("list_practice_assignments");
+        }
       } catch (err) {
         console.error("Failed to load assignments:", err);
         toast.error("Unable to load assignments. Please refresh the page.");
@@ -175,7 +246,6 @@ export default function PracticeAssignmentsPage() {
 
       setAssignments(Array.isArray(assignmentsData) ? assignmentsData : []);
 
-      // Load batches for anyone who can create assignments (teachers + admins)
       if (canCreate) {
         try {
           const batchesData = await adminQuery("list_batches");
@@ -198,7 +268,7 @@ export default function PracticeAssignmentsPage() {
     if (activeOrgId && profile) {
       load();
     }
-  }, [activeOrgId, profile, canCreate]);
+  }, [activeOrgId, profile, canCreate, isStudent]);
 
   // Load modules + lessons for the selected batch's course
   useEffect(() => {
@@ -234,7 +304,6 @@ export default function PracticeAssignmentsPage() {
   };
 
   const handleCreate = async () => {
-    // Validate required fields
     if (!form.title || !form.title.trim()) {
       toast.error("Title is required");
       return;
@@ -245,7 +314,6 @@ export default function PracticeAssignmentsPage() {
       return;
     }
 
-    // Validate due date if provided
     if (form.due_date) {
       const dueDate = new Date(form.due_date);
       const today = new Date();
@@ -272,7 +340,7 @@ export default function PracticeAssignmentsPage() {
       toast.success("Assignment created successfully");
       setOpen(false);
       setForm({ title: "", description: "", batch_id: "", due_date: "", file_url: "", module_id: "", lesson_id: "" });
-      await load(); // Wait for reload to complete
+      await load();
     } catch (e: any) {
       console.error("Create error:", e);
       toast.error(e.message || "Failed to create assignment");
@@ -288,7 +356,7 @@ export default function PracticeAssignmentsPage() {
     try {
       await adminQuery("delete_practice_assignment", { id });
       toast.success("Assignment deleted successfully");
-      await load(); // Wait for reload to complete
+      await load();
     } catch (e: any) {
       console.error("Delete error:", e);
       toast.error(e.message || "Failed to delete assignment");
@@ -297,10 +365,109 @@ export default function PracticeAssignmentsPage() {
     }
   };
 
+  const handleSubmitAssignment = async () => {
+    if (!selectedAssignment || !submissionFile) {
+      toast.error("Please select a file to submit");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const submissionUrl = await handleSubmissionUpload(submissionFile);
+      if (!submissionUrl) {
+        toast.error("Failed to upload submission");
+        return;
+      }
+
+      await adminQuery("submit_practice_assignment", {
+        assignment_id: selectedAssignment.id,
+        student_id: profile?.id,
+        submission_url: submissionUrl,
+        submission_notes: submissionNotes,
+      });
+
+      toast.success("Assignment submitted successfully!");
+      setSubmissionDialogOpen(false);
+      setSubmissionFile(null);
+      setSubmissionNotes("");
+      setSelectedAssignment(null);
+      await load();
+    } catch (e: any) {
+      console.error("Submission error:", e);
+      toast.error(e.message || "Failed to submit assignment");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleReviewSubmission = async () => {
+    if (!selectedSubmission) return;
+
+    try {
+      await adminQuery("review_practice_assignment", {
+        submission_id: selectedSubmission.id,
+        grade: reviewGrade,
+        feedback: reviewFeedback,
+        reviewer_id: profile?.id,
+      });
+
+      toast.success("Submission reviewed successfully!");
+      setReviewDialogOpen(false);
+      setSelectedSubmission(null);
+      setReviewGrade(0);
+      setReviewFeedback("");
+      await load();
+    } catch (e: any) {
+      console.error("Review error:", e);
+      toast.error(e.message || "Failed to review submission");
+    }
+  };
+
+  const getSubmissionStatusBadge = (submission?: Submission) => {
+    if (!submission) {
+      return (
+        <Badge variant="outline" className="bg-gray-100">
+          <Clock className="h-3 w-3 mr-1" />
+          Not Submitted
+        </Badge>
+      );
+    }
+
+    switch (submission.status) {
+      case "submitted":
+        return (
+          <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
+            <Clock className="h-3 w-3 mr-1" />
+            Pending Review
+          </Badge>
+        );
+      case "reviewed":
+        return (
+          <Badge variant="default" className="bg-green-100 text-green-800">
+            <CheckCircle className="h-3 w-3 mr-1" />
+            Reviewed
+          </Badge>
+        );
+      case "late":
+        return (
+          <Badge variant="destructive">
+            <AlertCircle className="h-3 w-3 mr-1" />
+            Late
+          </Badge>
+        );
+      default:
+        return <Badge variant="outline">{submission.status}</Badge>;
+    }
+  };
+
+  const isAssignmentOverdue = (dueDate: string) => {
+    if (!dueDate) return false;
+    return new Date(dueDate) < new Date();
+  };
+
   const handleDialogClose = (open: boolean) => {
     if (!open && !uploading) {
       setOpen(false);
-      // Reset form when dialog closes
       setForm({ title: "", description: "", batch_id: "", due_date: "", file_url: "", module_id: "", lesson_id: "" });
     } else if (open === false && uploading) {
       toast.info("Please wait for file upload to complete");
@@ -309,13 +476,26 @@ export default function PracticeAssignmentsPage() {
     setOpen(open);
   };
 
+  // Student View Columns
+  const studentColumns = [
+    "Assignment Details",
+    "Module/Lesson",
+    "Due Date",
+    "Your Submission",
+    "Grade & Feedback",
+    "Actions",
+  ];
+
+  // Teacher View Columns
+  const teacherColumns = ["Title", "Batch", "Module/Lesson", "Due Date", "Submissions", "Actions"];
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Practice Assignments</h1>
           <p className="text-muted-foreground text-sm">
-            {isStudent ? "Practice sheets assigned to you" : "Assign and manage practice sheets"}
+            {isStudent ? "Complete and submit your practice assignments" : "Create and manage practice assignments"}
           </p>
         </div>
         {canCreate && (
@@ -326,7 +506,7 @@ export default function PracticeAssignmentsPage() {
                 New Assignment
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-h-[90vh] overflow-y-auto max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Create Practice Assignment</DialogTitle>
               </DialogHeader>
@@ -343,15 +523,18 @@ export default function PracticeAssignmentsPage() {
                 </div>
 
                 <div>
-                  <Label htmlFor="description">Description</Label>
+                  <Label htmlFor="description">Description / Instructions *</Label>
                   <Textarea
                     id="description"
                     value={form.description}
                     onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                    placeholder="Instructions for students..."
-                    rows={3}
+                    placeholder="Provide detailed instructions for students..."
+                    rows={4}
                     maxLength={1000}
                   />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Include submission requirements, format guidelines, and any special instructions
+                  </p>
                 </div>
 
                 <div>
@@ -444,14 +627,14 @@ export default function PracticeAssignmentsPage() {
                 </div>
 
                 <div>
-                  <Label>Upload File (PDF or image, optional, max 10MB)</Label>
+                  <Label>Upload Assignment File (PDF or image, optional, max 10MB)</Label>
                   <Input
                     type="file"
                     accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
                     onChange={(e) => {
                       const f = e.target.files?.[0];
-                      if (f) handleFileUpload(f);
-                      e.target.value = ""; // Allow re-uploading same file
+                      if (f) handleCreateAssignmentFileUpload(f);
+                      e.target.value = "";
                     }}
                     disabled={uploading}
                   />
@@ -488,7 +671,7 @@ export default function PracticeAssignmentsPage() {
       </div>
 
       {loading ? (
-        <TableSkeleton columns={isStudent ? 4 : 4} rows={5} />
+        <TableSkeleton columns={isStudent ? 6 : 6} rows={5} />
       ) : (
         <Card>
           <CardContent className="p-0">
@@ -496,90 +679,261 @@ export default function PracticeAssignmentsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Batch</TableHead>
-                    <TableHead>Due Date</TableHead>
-                    <TableHead>{isStudent ? "Download" : "Actions"}</TableHead>
+                    {(isStudent ? studentColumns : teacherColumns).map((col) => (
+                      <TableHead key={col}>{col}</TableHead>
+                    ))}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {assignments.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                         <FileText className="mx-auto h-8 w-8 mb-2 opacity-50" />
                         No assignments yet
                       </TableCell>
                     </TableRow>
                   ) : (
-                    assignments.map((a) => {
-                      const fileHref = a.file_url ? getAssignmentFileHref(a.file_url) : "";
-                      const hasValidFile = a.file_url && fileHref;
+                    assignments.map((assignment) => {
+                      const fileHref = assignment.file_url ? getAssignmentFileHref(assignment.file_url) : "";
+                      const hasValidFile = assignment.file_url && fileHref;
+                      const submission = assignment.submissions?.[0];
+                      const isOverdue = isAssignmentOverdue(assignment.due_date);
+                      const canSubmit =
+                        isStudent && !submission && (!isOverdue || new Date() < new Date(assignment.due_date));
 
-                      return (
-                        <TableRow key={a.id}>
-                          <TableCell>
-                            <div>
-                              <span className="font-medium">{a.title}</span>
-                              {a.description && (
-                                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{a.description}</p>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary">{a.batches?.name || "—"}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            {a.due_date ? (
-                              <span className="flex items-center gap-1 text-sm whitespace-nowrap">
-                                <Calendar className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                                {format(new Date(a.due_date), "MMM d, yyyy")}
-                              </span>
-                            ) : (
-                              "—"
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {hasValidFile ? (
-                                <Button variant="ghost" size="sm" asChild>
+                      if (isStudent) {
+                        return (
+                          <TableRow key={assignment.id} className={isOverdue && !submission ? "bg-red-50/50" : ""}>
+                            <TableCell className="min-w-[250px]">
+                              <div>
+                                <div className="font-semibold text-foreground">{assignment.title}</div>
+                                {assignment.description && (
+                                  <div className="mt-2 p-2 bg-muted/30 rounded-md">
+                                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                                      {assignment.description}
+                                    </p>
+                                  </div>
+                                )}
+                                {hasValidFile && (
                                   <a
                                     href={fileHref}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex items-center"
+                                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-2"
                                   >
-                                    <Download className="h-3.5 w-3.5 mr-1" />
-                                    {isStudent ? "Download" : "View"}
+                                    <ExternalLink className="h-3 w-3" />
+                                    View Assignment Materials
                                   </a>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="space-y-1">
+                                {assignment.modules?.title && (
+                                  <div className="text-sm">
+                                    <span className="font-medium">Module:</span> {assignment.modules.title}
+                                  </div>
+                                )}
+                                {assignment.lessons?.title && (
+                                  <div className="text-sm">
+                                    <span className="font-medium">Lesson:</span> {assignment.lessons.title}
+                                  </div>
+                                )}
+                                {!assignment.modules?.title && !assignment.lessons?.title && (
+                                  <span className="text-sm text-muted-foreground">—</span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="space-y-1">
+                                {assignment.due_date ? (
+                                  <>
+                                    <div className="flex items-center gap-1 text-sm">
+                                      <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                                      {format(new Date(assignment.due_date), "MMM d, yyyy h:mm a")}
+                                    </div>
+                                    {isOverdue && !submission && (
+                                      <Badge variant="destructive" className="text-xs">
+                                        Overdue
+                                      </Badge>
+                                    )}
+                                  </>
+                                ) : (
+                                  <span className="text-sm text-muted-foreground">No due date</span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {getSubmissionStatusBadge(submission)}
+                              {submission?.submitted_at && (
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  Submitted: {format(new Date(submission.submitted_at), "MMM d, yyyy")}
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {submission?.status === "reviewed" ? (
+                                <div className="space-y-2">
+                                  {submission.grade !== undefined && (
+                                    <div className="flex items-center gap-1">
+                                      <Star className="h-4 w-4 text-yellow-500" />
+                                      <span className="font-semibold">Grade: {submission.grade}/100</span>
+                                    </div>
+                                  )}
+                                  {submission.feedback && (
+                                    <div className="p-2 bg-muted/30 rounded-md">
+                                      <div className="flex items-center gap-1 text-sm font-medium mb-1">
+                                        <MessageSquare className="h-3 w-3" />
+                                        Teacher Feedback:
+                                      </div>
+                                      <p className="text-sm text-muted-foreground">{submission.feedback}</p>
+                                    </div>
+                                  )}
+                                  {submission.submission_url && (
+                                    <a
+                                      href={getAssignmentFileHref(submission.submission_url)}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                                    >
+                                      <ExternalLink className="h-3 w-3" />
+                                      View Your Submission
+                                    </a>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-sm text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {!submission ? (
+                                <Button
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedAssignment(assignment);
+                                    setSubmissionDialogOpen(true);
+                                  }}
+                                  disabled={isOverdue}
+                                >
+                                  <Upload className="h-3.5 w-3.5 mr-1" />
+                                  Submit
                                 </Button>
-                              ) : a.file_url ? (
+                              ) : (
+                                submission.status === "submitted" && (
+                                  <div className="text-sm text-yellow-600">Awaiting review</div>
+                                )
+                              )}
+                              {submission?.submission_url && submission.status === "reviewed" && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    window.open(getAssignmentFileHref(submission.submission_url), "_blank");
+                                  }}
+                                >
+                                  <Download className="h-3.5 w-3.5 mr-1" />
+                                  Download Submission
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      } else {
+                        // Teacher View
+                        const submissionCount = assignment.submissions?.length || 0;
+                        const pendingCount =
+                          assignment.submissions?.filter((s) => s.status === "submitted").length || 0;
+
+                        return (
+                          <TableRow key={assignment.id}>
+                            <TableCell>
+                              <div>
+                                <span className="font-medium">{assignment.title}</span>
+                                {assignment.description && (
+                                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                                    {assignment.description}
+                                  </p>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="secondary">{assignment.batches?.name || "—"}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="space-y-1">
+                                {assignment.modules?.title && <div className="text-xs">{assignment.modules.title}</div>}
+                                {assignment.lessons?.title && (
+                                  <div className="text-xs text-muted-foreground">{assignment.lessons.title}</div>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {assignment.due_date ? (
+                                <span className="flex items-center gap-1 text-sm whitespace-nowrap">
+                                  <Calendar className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                                  {format(new Date(assignment.due_date), "MMM d, yyyy")}
+                                </span>
+                              ) : (
+                                "—"
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="space-y-1">
+                                <div className="text-sm">
+                                  <span className="font-medium">Total: {submissionCount}</span>
+                                  {pendingCount > 0 && (
+                                    <Badge variant="secondary" className="ml-2">
+                                      {pendingCount} pending
+                                    </Badge>
+                                  )}
+                                </div>
+                                {assignment.submissions?.slice(0, 2).map((sub) => (
+                                  <div key={sub.id} className="text-xs text-muted-foreground">
+                                    {sub.student_id}: {sub.status}
+                                  </div>
+                                ))}
+                                {submissionCount > 2 && (
+                                  <div className="text-xs text-primary cursor-pointer hover:underline">
+                                    +{submissionCount - 2} more
+                                  </div>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {hasValidFile && (
+                                  <Button variant="ghost" size="sm" asChild>
+                                    <a href={fileHref} target="_blank" rel="noopener noreferrer">
+                                      <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                                      View
+                                    </a>
+                                  </Button>
+                                )}
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  type="button"
-                                  onClick={() => toast.error("No valid document is linked to this assignment")}
-                                  className="text-muted-foreground"
+                                  onClick={() => {
+                                    // Open submissions list dialog
+                                    toast.info(`View submissions for ${assignment.title}`);
+                                  }}
                                 >
-                                  <AlertCircle className="h-3.5 w-3.5 mr-1" />
-                                  Invalid link
+                                  <Eye className="h-3.5 w-3.5 mr-1" />
+                                  Submissions
                                 </Button>
-                              ) : null}
-
-                              {isTeacher && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
                                   className="text-destructive hover:text-destructive"
-                                  onClick={() => handleDelete(a.id)}
-                                  disabled={deletingId === a.id}
+                                  onClick={() => handleDelete(assignment.id)}
+                                  disabled={deletingId === assignment.id}
                                 >
-                                  {deletingId === a.id ? "..." : "Delete"}
+                                  {deletingId === assignment.id ? "..." : "Delete"}
                                 </Button>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      }
                     })
                   )}
                 </TableBody>
@@ -588,6 +942,97 @@ export default function PracticeAssignmentsPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Submission Dialog for Students */}
+      <Dialog open={submissionDialogOpen} onOpenChange={setSubmissionDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Submit Assignment: {selectedAssignment?.title}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {selectedAssignment?.description && (
+              <div className="p-3 bg-muted/30 rounded-md">
+                <p className="text-sm font-medium mb-1">Instructions:</p>
+                <p className="text-sm text-muted-foreground">{selectedAssignment.description}</p>
+              </div>
+            )}
+
+            <div>
+              <Label>Upload Your Work *</Label>
+              <Input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) setSubmissionFile(file);
+                }}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Max file size: 10MB. Supported formats: PDF, JPG, PNG
+              </p>
+            </div>
+
+            <div>
+              <Label>Submission Notes (Optional)</Label>
+              <Textarea
+                value={submissionNotes}
+                onChange={(e) => setSubmissionNotes(e.target.value)}
+                placeholder="Any additional comments for the teacher..."
+                rows={3}
+              />
+            </div>
+
+            <Button onClick={handleSubmitAssignment} disabled={!submissionFile || submitting} className="w-full">
+              {submitting ? (
+                <>
+                  <Upload className="mr-2 h-4 w-4 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                <>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Submit Assignment
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Review Dialog for Teachers */}
+      <Dialog open={reviewDialogOpen} onOpenChange={setReviewDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Review Submission</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Grade (0-100)</Label>
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                value={reviewGrade}
+                onChange={(e) => setReviewGrade(parseInt(e.target.value) || 0)}
+              />
+            </div>
+
+            <div>
+              <Label>Feedback</Label>
+              <Textarea
+                value={reviewFeedback}
+                onChange={(e) => setReviewFeedback(e.target.value)}
+                placeholder="Provide feedback to the student..."
+                rows={4}
+              />
+            </div>
+
+            <Button onClick={handleReviewSubmission} className="w-full">
+              Submit Review
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
