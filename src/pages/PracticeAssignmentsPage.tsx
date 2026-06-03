@@ -34,7 +34,16 @@ export default function PracticeAssignmentsPage() {
   const [batches, setBatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ title: "", description: "", batch_id: "", due_date: "", file_url: "" });
+  const [form, setForm] = useState({
+    title: "",
+    description: "",
+    batch_id: "",
+    due_date: "",
+    file_url: "",
+    module_id: "",
+    lesson_id: "",
+  });
+  const [modules, setModules] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -190,6 +199,39 @@ export default function PracticeAssignmentsPage() {
     }
   }, [activeOrgId, profile, isTeacher]); // Added proper dependencies
 
+  // Load modules + lessons for the selected batch's course
+  useEffect(() => {
+    const loadModules = async () => {
+      const batch = batches.find((b) => b.id === form.batch_id);
+      const courseId = batch?.course_id;
+      if (!courseId) {
+        setModules([]);
+        return;
+      }
+      try {
+        const data = await adminQuery("list_course_modules", { course_id: courseId });
+        setModules(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.error("Failed to load modules", e);
+        setModules([]);
+      }
+    };
+    loadModules();
+  }, [form.batch_id, batches]);
+
+  const selectedModule = modules.find((m) => m.id === form.module_id);
+  const lessonsForModule: any[] = selectedModule?.lessons ?? [];
+
+  const handleLessonPick = (lessonId: string) => {
+    const lesson = lessonsForModule.find((l) => l.id === lessonId);
+    setForm((f) => ({
+      ...f,
+      lesson_id: lessonId,
+      title: f.title || lesson?.title || "",
+      file_url: f.file_url || lesson?.file_url || "",
+    }));
+  };
+
   const handleCreate = async () => {
     // Validate required fields
     if (!form.title || !form.title.trim()) {
@@ -222,11 +264,13 @@ export default function PracticeAssignmentsPage() {
         description: form.description?.trim() || null,
         due_date: form.due_date || null,
         file_url: form.file_url ? normalizeUrl(form.file_url) : null,
+        module_id: form.module_id || null,
+        lesson_id: form.lesson_id || null,
       });
 
       toast.success("Assignment created successfully");
       setOpen(false);
-      setForm({ title: "", description: "", batch_id: "", due_date: "", file_url: "" });
+      setForm({ title: "", description: "", batch_id: "", due_date: "", file_url: "", module_id: "", lesson_id: "" });
       await load(); // Wait for reload to complete
     } catch (e: any) {
       console.error("Create error:", e);
@@ -256,7 +300,7 @@ export default function PracticeAssignmentsPage() {
     if (!open && !uploading) {
       setOpen(false);
       // Reset form when dialog closes
-      setForm({ title: "", description: "", batch_id: "", due_date: "", file_url: "" });
+      setForm({ title: "", description: "", batch_id: "", due_date: "", file_url: "", module_id: "", lesson_id: "" });
     } else if (open === false && uploading) {
       toast.info("Please wait for file upload to complete");
       return;
@@ -327,6 +371,62 @@ export default function PracticeAssignmentsPage() {
                           </SelectItem>
                         ))
                       )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="module">Module (optional)</Label>
+                  <Select
+                    value={form.module_id}
+                    onValueChange={(v) => setForm((f) => ({ ...f, module_id: v, lesson_id: "" }))}
+                    disabled={!form.batch_id || modules.length === 0}
+                  >
+                    <SelectTrigger id="module">
+                      <SelectValue
+                        placeholder={
+                          !form.batch_id
+                            ? "Select a batch first"
+                            : modules.length === 0
+                              ? "No modules in this course"
+                              : "Select module"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {modules.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>
+                          {m.title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="lesson">Lesson (optional — autofills title & file)</Label>
+                  <Select
+                    value={form.lesson_id}
+                    onValueChange={handleLessonPick}
+                    disabled={!form.module_id || lessonsForModule.length === 0}
+                  >
+                    <SelectTrigger id="lesson">
+                      <SelectValue
+                        placeholder={
+                          !form.module_id
+                            ? "Select a module first"
+                            : lessonsForModule.length === 0
+                              ? "No lessons in this module"
+                              : "Select lesson"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {lessonsForModule.map((l) => (
+                        <SelectItem key={l.id} value={l.id}>
+                          {l.title}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
