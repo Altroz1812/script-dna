@@ -25,9 +25,10 @@ const ALLOWED_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png"];
 
 export default function PracticeAssignmentsPage() {
   const { profile } = useAuth();
-  const { role } = useRBAC();
+  const { role, isAdmin } = useRBAC();
   const isTeacher = role === "teacher";
   const isStudent = role === "student";
+  const canCreate = isTeacher || isAdmin;
   const { activeOrgId } = useActiveOrg();
 
   const [assignments, setAssignments] = useState<any[]>([]);
@@ -174,8 +175,8 @@ export default function PracticeAssignmentsPage() {
 
       setAssignments(Array.isArray(assignmentsData) ? assignmentsData : []);
 
-      // Load batches only for teachers
-      if (isTeacher) {
+      // Load batches for anyone who can create assignments (teachers + admins)
+      if (canCreate) {
         try {
           const batchesData = await adminQuery("list_batches");
           setBatches(Array.isArray(batchesData) ? batchesData : []);
@@ -197,7 +198,7 @@ export default function PracticeAssignmentsPage() {
     if (activeOrgId && profile) {
       load();
     }
-  }, [activeOrgId, profile, isTeacher]); // Added proper dependencies
+  }, [activeOrgId, profile, canCreate]);
 
   // Load modules + lessons for the selected batch's course
   useEffect(() => {
@@ -317,7 +318,7 @@ export default function PracticeAssignmentsPage() {
             {isStudent ? "Practice sheets assigned to you" : "Assign and manage practice sheets"}
           </p>
         </div>
-        {isTeacher && (
+        {canCreate && (
           <Dialog open={open} onOpenChange={handleDialogClose}>
             <DialogTrigger asChild>
               <Button disabled={uploading}>
