@@ -79,11 +79,19 @@ Deno.serve(async (req) => {
     } catch (_e) { /* anonymous fallback */ }
 
     let callerIsSuperadmin = false
+    let callerRoles: string[] = []
+    let callerIsAdmin = false
+    let callerIsSupport = false
+    let callerIsTeacher = false
     let callerOrgMemberships: string[] = []
     if (callerUserId) {
       const { data: roleRows } = await supabase
         .from('user_roles').select('role').eq('user_id', callerUserId)
-      callerIsSuperadmin = (roleRows ?? []).some((r: any) => r.role === 'superadmin')
+      callerRoles = (roleRows ?? []).map((r: any) => r.role)
+      callerIsSuperadmin = callerRoles.includes('superadmin')
+      callerIsAdmin = callerRoles.includes('admin')
+      callerIsSupport = callerRoles.includes('support')
+      callerIsTeacher = callerRoles.includes('teacher')
       if (!callerIsSuperadmin) {
         const { data: memb } = await supabase
           .from('organization_members').select('organization_id').eq('user_id', callerUserId)
