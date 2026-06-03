@@ -850,6 +850,10 @@ Deno.serve(async (req) => {
         let query = supabase.from('batches').select('*, courses(name, duration_days, daily_hours, total_hours, delivery_mode)')
         if (params?.course_id) query = query.eq('course_id', params.course_id)
         if (targetOrgId) query = query.eq('organization_id', targetOrgId)
+        // Teachers (without admin/support/superadmin) only see batches they own.
+        if (callerIsTeacher && !callerIsSuperadmin && !callerIsAdmin && !callerIsSupport && callerUserId) {
+          query = query.eq('teacher_id', callerUserId)
+        }
         const { data } = await query.order('created_at', { ascending: false })
         const batches = data ?? []
         const batchIds = batches.map((b: any) => b.id)
