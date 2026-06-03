@@ -1952,6 +1952,10 @@ Deno.serve(async (req) => {
           .order('created_at', { ascending: false })
         if (targetOrgId) q = q.eq('organization_id', targetOrgId)
         if (params?.batch_id) q = q.eq('batch_id', params.batch_id)
+        // Teachers only see their own assignments
+        if (callerIsTeacher && !callerIsSuperadmin && !callerIsAdmin && !callerIsSupport && callerUserId) {
+          q = q.eq('teacher_id', callerUserId)
+        }
         const { data, error } = await q
         if (error) throw error
         const rows = data ?? []
