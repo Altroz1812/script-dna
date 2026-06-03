@@ -79,11 +79,19 @@ Deno.serve(async (req) => {
     } catch (_e) { /* anonymous fallback */ }
 
     let callerIsSuperadmin = false
+    let callerRoles: string[] = []
+    let callerIsAdmin = false
+    let callerIsSupport = false
+    let callerIsTeacher = false
     let callerOrgMemberships: string[] = []
     if (callerUserId) {
       const { data: roleRows } = await supabase
         .from('user_roles').select('role').eq('user_id', callerUserId)
-      callerIsSuperadmin = (roleRows ?? []).some((r: any) => r.role === 'superadmin')
+      callerRoles = (roleRows ?? []).map((r: any) => r.role)
+      callerIsSuperadmin = callerRoles.includes('superadmin')
+      callerIsAdmin = callerRoles.includes('admin')
+      callerIsSupport = callerRoles.includes('support')
+      callerIsTeacher = callerRoles.includes('teacher')
       if (!callerIsSuperadmin) {
         const { data: memb } = await supabase
           .from('organization_members').select('organization_id').eq('user_id', callerUserId)
@@ -842,6 +850,10 @@ Deno.serve(async (req) => {
         let query = supabase.from('batches').select('*, courses(name, duration_days, daily_hours, total_hours, delivery_mode)')
         if (params?.course_id) query = query.eq('course_id', params.course_id)
         if (targetOrgId) query = query.eq('organization_id', targetOrgId)
+        // Teachers (without admin/support/superadmin) only see batches they own.
+        if (callerIsTeacher && !callerIsSuperadmin && !callerIsAdmin && !callerIsSupport && callerUserId) {
+          query = query.eq('teacher_id', callerUserId)
+        }
         const { data } = await query.order('created_at', { ascending: false })
         const batches = data ?? []
         const batchIds = batches.map((b: any) => b.id)
@@ -949,6 +961,12 @@ Deno.serve(async (req) => {
         if (!batch) throw new Error('Batch not found')
         if (targetOrgId && batch.organization_id !== targetOrgId) {
           throw new Error('Batch is outside your organization')
+        }
+        // Teachers can only view their own batches via admin-query
+        if (callerIsTeacher && !callerIsSuperadmin && !callerIsAdmin && !callerIsSupport) {
+          if (batch.teacher_id !== callerUserId) {
+            throw new Error('You are not assigned to this batch')
+          }
         }
 
         // Teacher profile
@@ -1934,6 +1952,10 @@ Deno.serve(async (req) => {
           .order('created_at', { ascending: false })
         if (targetOrgId) q = q.eq('organization_id', targetOrgId)
         if (params?.batch_id) q = q.eq('batch_id', params.batch_id)
+        // Teachers only see their own assignments
+        if (callerIsTeacher && !callerIsSuperadmin && !callerIsAdmin && !callerIsSupport && callerUserId) {
+          q = q.eq('teacher_id', callerUserId)
+        }
         const { data, error } = await q
         if (error) throw error
         const rows = data ?? []
