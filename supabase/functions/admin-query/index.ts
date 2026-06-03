@@ -962,6 +962,12 @@ Deno.serve(async (req) => {
         if (targetOrgId && batch.organization_id !== targetOrgId) {
           throw new Error('Batch is outside your organization')
         }
+        // Teachers can only view their own batches via admin-query
+        if (callerIsTeacher && !callerIsSuperadmin && !callerIsAdmin && !callerIsSupport) {
+          if (batch.teacher_id !== callerUserId) {
+            throw new Error('You are not assigned to this batch')
+          }
+        }
 
         // Teacher profile
         let teacher: any = null
