@@ -581,7 +581,6 @@ function StudentCourseCard({
     </Card>
   );
 }
-
 function DiscountSummaryStep({
   items,
   studentDetails,
