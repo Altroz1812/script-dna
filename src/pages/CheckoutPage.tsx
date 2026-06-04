@@ -499,21 +499,23 @@ function StudentCourseCard({
   onChange: (s: StudentDetail[]) => void;
   onRemove: () => void;
 }) {
+  // Move useEffect INSIDE the component function
+  useEffect(() => {
+    if (students.length === 0) onChange([{ name: "", grade: "" }]);
+  }, [students.length, onChange]); // Added proper dependencies
+
   const addStudent = () => {
     if (students.length < 5) onChange([...students, { name: "", grade: "" }]);
   };
+
   const removeStudent = (idx: number) => {
     onChange(students.filter((_, i) => i !== idx));
   };
+
   const updateStudent = (idx: number, field: "name" | "grade", value: string) => {
     const updated = students.map((s, i) => (i === idx ? { ...s, [field]: value } : s));
     onChange(updated);
   };
-
-  // Auto-add one student if empty
-  useEffect(() => {
-    if (students.length === 0) onChange([{ name: "", grade: "" }]);
-  }, []);
 
   return (
     <Card>
