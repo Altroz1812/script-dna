@@ -147,14 +147,19 @@ serve(async (req) => {
       );
     }
 
-    // Derive role server-side (do NOT trust client)
-    const { data: roleRow } = await supabase
+    // Derive role server-side (do NOT trust client).
+    // A user may have multiple rows in user_roles; pick the highest-priority role.
+    const { data: roleRows } = await supabase
       .from("user_roles")
       .select("role")
-      .eq("user_id", user.id)
-      .maybeSingle();
+      .eq("user_id", user.id);
 
-    const appRole: string = (roleRow?.role as string) ?? "student";
+    const roles: string[] = Array.isArray(roleRows)
+      ? roleRows.map((r: any) => r.role).filter(Boolean)
+      : [];
+    const priority = ["superadmin", "admin", "support", "teacher", "student", "parent"];
+    const appRole: string =
+      priority.find((r) => roles.includes(r)) ?? "student";
     const moderatorRoles = ["superadmin", "admin", "support", "teacher"];
     const roleBucket: RoleBucket = moderatorRoles.includes(appRole)
       ? "moderator"

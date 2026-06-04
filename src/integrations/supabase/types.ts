@@ -1032,8 +1032,6 @@ export type Database = {
           due_date: string | null
           file_url: string | null
           id: string
-          lesson_id: string | null
-          module_id: string | null
           organization_id: string | null
           teacher_id: string
           title: string
@@ -1047,8 +1045,6 @@ export type Database = {
           due_date?: string | null
           file_url?: string | null
           id?: string
-          lesson_id?: string | null
-          module_id?: string | null
           organization_id?: string | null
           teacher_id: string
           title: string
@@ -1062,8 +1058,6 @@ export type Database = {
           due_date?: string | null
           file_url?: string | null
           id?: string
-          lesson_id?: string | null
-          module_id?: string | null
           organization_id?: string | null
           teacher_id?: string
           title?: string
