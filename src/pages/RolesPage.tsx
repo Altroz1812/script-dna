@@ -186,10 +186,14 @@ export default function RolesPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="sm" onClick={() => openAssign(u)}>
-                        <Building2 className="h-4 w-4 mr-1" />
-                        Assign
-                      </Button>
+                      {u.role === 'student' || u.role === 'parent' ? (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      ) : (
+                        <Button variant="ghost" size="sm" onClick={() => openAssign(u)}>
+                          <Building2 className="h-4 w-4 mr-1" />
+                          Assign
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
