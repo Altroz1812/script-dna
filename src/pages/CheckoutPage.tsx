@@ -28,10 +28,6 @@ import { lovable } from "@/integrations/lovable/index";
 import { toast } from "sonner";
 
 const STEPS = ["Sign In", "Student Details", "Review & Discounts", "Payment"];
-// Add this new state near other useState declarations
-const [paymentMethod, setPaymentMethod] = useState<"now" | "later" | null>(null);
-const [referenceNumber, setReferenceNumber] = useState("");
-const [showQR, setShowQR] = useState(false);
 
 // Discount logic
 function calculateDiscounts(items: { id: string; fee: number }[], studentDetails: Record<string, StudentDetail[]>) {
@@ -69,10 +65,9 @@ export default function CheckoutPage() {
   const [promoting, setPromoting] = useState(false);
   const promoteAttempted = useRef(false);
 
-  // ADD THESE LINES HERE - inside the component
+  // Payment state - MOVED INSIDE COMPONENT
   const [paymentMethod, setPaymentMethod] = useState<"now" | "later" | null>(null);
   const [referenceNumber, setReferenceNumber] = useState("");
-  const [showQR, setShowQR] = useState(false);
 
   // Mark this checkout session as a fresh sign-up flow when user clicks
   // "Continue with Google" so we know it's safe to auto-promote to parent.
@@ -189,6 +184,11 @@ export default function CheckoutPage() {
   const handlePayment = async () => {
     if (!paymentMethod) {
       toast.error("Please select a payment method");
+      return;
+    }
+
+    if (paymentMethod === "now" && !referenceNumber.trim()) {
+      toast.error("Please enter the payment reference number");
       return;
     }
 
@@ -324,7 +324,16 @@ export default function CheckoutPage() {
               />
             )}
             {step === 3 && (
-              <PaymentStep key="payment" finalAmount={finalAmount} submitting={submitting} onPay={handlePayment} />
+              <PaymentStep
+                key="payment"
+                finalAmount={finalAmount}
+                submitting={submitting}
+                onPay={handlePayment}
+                paymentMethod={paymentMethod}
+                setPaymentMethod={setPaymentMethod}
+                referenceNumber={referenceNumber}
+                setReferenceNumber={setReferenceNumber}
+              />
             )}
           </AnimatePresence>
         )}
@@ -682,10 +691,18 @@ function PaymentStep({
   finalAmount,
   submitting,
   onPay,
+  paymentMethod,
+  setPaymentMethod,
+  referenceNumber,
+  setReferenceNumber,
 }: {
   finalAmount: number;
   submitting: boolean;
   onPay: () => void;
+  paymentMethod: "now" | "later" | null;
+  setPaymentMethod: (method: "now" | "later" | null) => void;
+  referenceNumber: string;
+  setReferenceNumber: (value: string) => void;
 }) {
   return (
     <motion.div
@@ -735,7 +752,14 @@ function PaymentStep({
               <CardTitle className="text-center">Scan to Pay</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col items-center space-y-4">
-              <img src="/qrcode.png" alt="Payment QR Code" className="w-64 h-64 border rounded-xl shadow-sm" />
+              <img
+                src="/qrcode.png"
+                alt="Payment QR Code"
+                className="w-64 h-64 border rounded-xl shadow-sm"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = "https://placehold.co/256x256?text=QR+Code";
+                }}
+              />
               <p className="text-sm text-muted-foreground text-center">
                 Scan this QR code using any UPI app (Google Pay, PhonePe, Paytm, etc.)
               </p>
@@ -780,25 +804,10 @@ function PaymentStep({
           {submitting
             ? "Submitting..."
             : paymentMethod === "now"
-              ? `Confirm Payment (Ref: ${referenceNumber})`
+              ? `Confirm Payment${referenceNumber ? ` (Ref: ${referenceNumber})` : ""}`
               : "Submit Order - Pay Later"}
         </Button>
       )}
     </motion.div>
   );
-}
-/* ─── Helpers ──────────────────────────────────── */
-
-function loadCashfreeSDK(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if ((window as any).Cashfree) {
-      resolve();
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = "https://sdk.cashfree.com/js/v3/cashfree.js";
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Failed to load Cashfree SDK"));
-    document.head.appendChild(script);
-  });
 }
