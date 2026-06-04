@@ -1171,7 +1171,10 @@ Deno.serve(async (req) => {
 
       // ===== CREATE USER (admin) =====
       case 'create_user': {
-        const { email, password, display_name, role, organization_id } = params
+        const { email, password, display_name, role } = params
+        // Auto-map to caller's active org when not explicitly provided.
+        // SuperAdmins acting globally (no targetOrgId) skip auto-mapping.
+        const organization_id = params.organization_id ?? targetOrgId ?? null
         const { data: authData, error: authError } = await supabase.auth.admin.createUser({
           email,
           password,
@@ -1181,7 +1184,7 @@ Deno.serve(async (req) => {
         if (authError) throw authError
         const newUserId = authData.user.id
         // Profile is created by trigger, update display_name
-        await supabase.from('profiles').update({ display_name, organization_id: organization_id || null }).eq('user_id', newUserId)
+        await supabase.from('profiles').update({ display_name, organization_id }).eq('user_id', newUserId)
         // Set role
         if (role && role !== 'student') {
           await supabase.from('user_roles').update({ role }).eq('user_id', newUserId)
