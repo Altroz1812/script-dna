@@ -69,6 +69,11 @@ export default function CheckoutPage() {
   const [promoting, setPromoting] = useState(false);
   const promoteAttempted = useRef(false);
 
+  // ADD THESE LINES HERE - inside the component
+  const [paymentMethod, setPaymentMethod] = useState<"now" | "later" | null>(null);
+  const [referenceNumber, setReferenceNumber] = useState("");
+  const [showQR, setShowQR] = useState(false);
+
   // Mark this checkout session as a fresh sign-up flow when user clicks
   // "Continue with Google" so we know it's safe to auto-promote to parent.
   const markSignupIntent = () => {
