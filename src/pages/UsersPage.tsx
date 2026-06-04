@@ -3,19 +3,19 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { adminQuery } from "@/services/api/adminService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Pencil, Trash2, Search, Users, Plus, UserX, UserCheck, KeyRound, Link2 } from "lucide-react";
+import { Pencil, Trash2, Search, Users, Plus, UserX, UserCheck, KeyRound, Link2, MoreVertical } from "lucide-react";
 import { ROLE_LABELS, type AppRole } from "@/types/roles";
 import { TableSkeleton } from "@/components/ui/loading-skeletons";
 import { ParentChildLinkDialog } from "@/components/admin/ParentChildLinkDialog";
 import { PasswordStrengthMeter } from "@/components/auth/PasswordStrengthMeter";
 import { checkPasswordStrength } from "@/lib/security";
+import { readActiveOrgFromStorage } from "@/contexts/ActiveOrgContext";
 
 interface UserRow {
   user_id: string;
@@ -33,22 +33,25 @@ export default function UsersPage() {
     queryFn: () => adminQuery("list_users") as Promise<UserRow[]>,
     staleTime: 2 * 60 * 1000,
   });
+
   const load = () => queryClient.invalidateQueries({ queryKey: ["admin_users"] });
+
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [editUser, setEditUser] = useState<UserRow | null>(null);
   const [editName, setEditName] = useState("");
+
   const [linkParent, setLinkParent] = useState<UserRow | null>(null);
 
-  // Create user state
+  // Create user
   const [createOpen, setCreateOpen] = useState(false);
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newName, setNewName] = useState("");
-  const [newRole, setNewRole] = useState<string>("student");
+  const [newRole, setNewRole] = useState("student");
   const [creating, setCreating] = useState(false);
 
-  // Admin reset password state
+  // Reset password
   const [resetUser, setResetUser] = useState<UserRow | null>(null);
   const [resetPassword, setResetPassword] = useState("");
   const [resetConfirm, setResetConfirm] = useState("");
@@ -108,28 +111,23 @@ export default function UsersPage() {
   };
 
   const handleResetPassword = async () => {
-    if (!resetUser) return;
-    if (!resetPassword) {
-      toast.error("Please enter a new password");
-      return;
-    }
+    if (!resetUser || !resetPassword || resetPassword !== resetConfirm) return;
     if (resetPassword.length < 8) {
       toast.error("Password must be at least 8 characters");
       return;
     }
-    if (resetPassword !== resetConfirm) {
-      toast.error("Passwords do not match");
+    if (checkPasswordStrength(resetPassword).score < 2) {
+      toast.error("Password is too weak");
       return;
     }
-    const strength = checkPasswordStrength(resetPassword);
-    if (strength.score < 2) {
-      toast.error("Password is too weak. Please use a stronger password.");
-      return;
-    }
+
     setResetting(true);
     try {
-      await adminQuery("admin_reset_password", { user_id: resetUser.user_id, new_password: resetPassword });
-      toast.success(`Password reset successfully for ${resetUser.display_name || resetUser.email}`);
+      await adminQuery("admin_reset_password", {
+        user_id: resetUser.user_id,
+        new_password: resetPassword,
+      });
+      toast.success(`Password reset for ${resetUser.display_name || resetUser.email}`);
       setResetUser(null);
       setResetPassword("");
       setResetConfirm("");
@@ -142,22 +140,31 @@ export default function UsersPage() {
 
   const handleCreateUser = async () => {
     if (!newEmail.trim() || !newPassword.trim()) {
-      toast.error("Email and password required");
+      toast.error("Email and password are required");
       return;
     }
     if (newPassword.length < 6) {
       toast.error("Password must be at least 6 characters");
       return;
     }
+
     setCreating(true);
     try {
-      await adminQuery("create_user", {
+      const activeOrgId = readActiveOrgFromStorage();
+      const params: any = {
         email: newEmail.trim(),
         password: newPassword,
         display_name: newName.trim() || newEmail.split("@")[0],
         role: newRole,
-      });
-      toast.success("User created");
+      };
+
+      if (activeOrgId && typeof activeOrgId === "string") {
+        params.organization_id = activeOrgId;
+      }
+
+      await adminQuery("create_user", params);
+
+      toast.success("User created successfully");
       setCreateOpen(false);
       setNewEmail("");
       setNewPassword("");
@@ -172,41 +179,40 @@ export default function UsersPage() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 space-y-5 pb-20">
+      {/* Header + Create Button */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Users</h1>
-          <p className="text-muted-foreground text-sm">Manage all user accounts</p>
+          <h1 className="text-2xl font-bold">Users</h1>
+          <p className="text-muted-foreground text-sm">Manage user accounts</p>
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
             <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Create User
+              <Plus className="mr-2 h-5 w-5" />
+              New User
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Create New User</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
+              {readActiveOrgFromStorage() ? (
+                <p className="text-xs text-green-600 bg-green-50 p-2 rounded">
+                  User will be assigned to current organization
+                </p>
+              ) : (
+                <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">No active organization selected</p>
+              )}
+
               <div>
                 <Label>Email</Label>
-                <Input
-                  type="email"
-                  value={newEmail}
-                  onChange={(e) => setNewEmail(e.target.value)}
-                  placeholder="user@example.com"
-                />
+                <Input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
               </div>
               <div>
                 <Label>Password</Label>
-                <Input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Min 6 characters"
-                />
+                <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
               </div>
               <div>
                 <Label>Display Name</Label>
@@ -227,6 +233,7 @@ export default function UsersPage() {
                   </SelectContent>
                 </Select>
               </div>
+
               <Button onClick={handleCreateUser} className="w-full" disabled={creating}>
                 {creating ? "Creating..." : "Create User"}
               </Button>
@@ -235,19 +242,21 @@ export default function UsersPage() {
         </Dialog>
       </div>
 
-      <div className="flex gap-3">
-        <div className="relative flex-1">
+      {/* Search + Filter */}
+      <div className="flex flex-col gap-3">
+        <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by name or email..."
+            placeholder="Search users..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
           />
         </div>
+
         <Select value={roleFilter} onValueChange={setRoleFilter}>
-          <SelectTrigger className="w-40">
-            <SelectValue />
+          <SelectTrigger>
+            <SelectValue placeholder="All Roles" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Roles</SelectItem>
@@ -260,115 +269,113 @@ export default function UsersPage() {
         </Select>
       </div>
 
+      {/* Users List - Cards */}
       {loading ? (
-        <TableSkeleton columns={5} rows={6} />
+        <TableSkeleton columns={3} rows={6} />
       ) : (
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-32">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                      <Users className="mx-auto h-8 w-8 mb-2 opacity-50" />
-                      No users found
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filtered.map((u) => (
-                    <TableRow key={u.user_id} className={u.is_active === false ? "opacity-50" : ""}>
-                      <TableCell className="font-medium">{u.display_name || "—"}</TableCell>
-                      <TableCell>{u.email || "—"}</TableCell>
-                      <TableCell>
-                        <Select value={u.role} onValueChange={(v) => handleRoleChange(u.user_id, v)}>
-                          <SelectTrigger className="w-32 h-8">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {Object.entries(ROLE_LABELS).map(([k, v]) => (
-                              <SelectItem key={k} value={k}>
-                                {v}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={u.is_active !== false ? "default" : "destructive"}>
-                          {u.is_active !== false ? "Active" : "Inactive"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Edit"
-                            onClick={() => {
-                              setEditUser(u);
-                              setEditName(u.display_name || "");
-                            }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title={u.is_active !== false ? "Deactivate" : "Reactivate"}
-                            onClick={() => handleToggleActive(u)}
-                          >
-                            {u.is_active !== false ? (
-                              <UserX className="h-4 w-4 text-amber-500" />
-                            ) : (
-                              <UserCheck className="h-4 w-4 text-emerald-500" />
-                            )}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Reset Password"
-                            onClick={() => {
-                              setResetUser(u);
-                              setResetPassword("");
-                              setResetConfirm("");
-                            }}
-                          >
-                            <KeyRound className="h-4 w-4" />
-                          </Button>
-                          {u.role === "parent" && (
-                            <Button variant="ghost" size="icon" title="Link Children" onClick={() => setLinkParent(u)}>
-                              <Link2 className="h-4 w-4 text-primary" />
-                            </Button>
-                          )}
-                          <Button variant="ghost" size="icon" title="Delete" onClick={() => handleDelete(u.user_id)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          {filtered.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                <Users className="h-12 w-12 text-muted-foreground mb-3" />
+                <p className="text-muted-foreground">No users found</p>
+              </CardContent>
+            </Card>
+          ) : (
+            filtered.map((user) => (
+              <Card key={user.user_id} className={user.is_active === false ? "opacity-75" : ""}>
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="text-lg">{user.display_name || "—"}</CardTitle>
+                      <p className="text-sm text-muted-foreground mt-0.5">{user.email}</p>
+                    </div>
+                    <Badge variant={user.is_active !== false ? "default" : "destructive"}>
+                      {user.is_active !== false ? "Active" : "Inactive"}
+                    </Badge>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Role</p>
+                      <Select value={user.role} onValueChange={(v) => handleRoleChange(user.user_id, v)}>
+                        <SelectTrigger className="w-40 h-9 mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(ROLE_LABELS).map(([k, v]) => (
+                            <SelectItem key={k} value={k}>
+                              {v}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-2 border-t">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => {
+                        setEditUser(user);
+                        setEditName(user.display_name || "");
+                      }}
+                    >
+                      <Pencil className="mr-2 h-4 w-4" /> Edit
+                    </Button>
+
+                    <Button variant="outline" size="sm" className="flex-1" onClick={() => handleToggleActive(user)}>
+                      {user.is_active !== false ? (
+                        <>
+                          <UserX className="mr-2 h-4 w-4" /> Deactivate
+                        </>
+                      ) : (
+                        <>
+                          <UserCheck className="mr-2 h-4 w-4" /> Activate
+                        </>
+                      )}
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setResetUser(user);
+                        setResetPassword("");
+                        setResetConfirm("");
+                      }}
+                    >
+                      <KeyRound className="h-4 w-4" />
+                    </Button>
+
+                    {user.role === "parent" && (
+                      <Button variant="outline" size="sm" onClick={() => setLinkParent(user)}>
+                        <Link2 className="h-4 w-4" />
+                      </Button>
+                    )}
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-destructive"
+                      onClick={() => handleDelete(user.user_id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
       )}
 
-      <Dialog
-        open={!!editUser}
-        onOpenChange={(v) => {
-          if (!v) setEditUser(null);
-        }}
-      >
+      {/* Edit Dialog */}
+      <Dialog open={!!editUser} onOpenChange={() => setEditUser(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit User</DialogTitle>
@@ -379,56 +386,41 @@ export default function UsersPage() {
               <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
             </div>
             <Button onClick={handleUpdate} className="w-full">
-              Save
+              Save Changes
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Admin Reset Password Dialog */}
+      {/* Reset Password Dialog */}
       <Dialog
         open={!!resetUser}
-        onOpenChange={(v) => {
-          if (!v) {
-            setResetUser(null);
-            setResetPassword("");
-            setResetConfirm("");
-          }
+        onOpenChange={() => {
+          setResetUser(null);
+          setResetPassword("");
+          setResetConfirm("");
         }}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Reset Password for {resetUser?.display_name || resetUser?.email}</DialogTitle>
+            <DialogTitle>Reset Password</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
               <Label>New Password</Label>
-              <Input
-                type="password"
-                value={resetPassword}
-                onChange={(e) => setResetPassword(e.target.value)}
-                placeholder="Min 8 characters"
-              />
+              <Input type="password" value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} />
               <PasswordStrengthMeter password={resetPassword} />
             </div>
             <div>
               <Label>Confirm Password</Label>
-              <Input
-                type="password"
-                value={resetConfirm}
-                onChange={(e) => setResetConfirm(e.target.value)}
-                placeholder="Re-enter password"
-              />
-              {resetConfirm && resetPassword !== resetConfirm && (
-                <p className="text-xs text-destructive mt-1">Passwords do not match</p>
-              )}
+              <Input type="password" value={resetConfirm} onChange={(e) => setResetConfirm(e.target.value)} />
             </div>
             <Button
               onClick={handleResetPassword}
               className="w-full"
-              disabled={resetting || !resetPassword || !resetConfirm}
+              disabled={resetting || !resetPassword || resetPassword !== resetConfirm}
             >
-              {resetting ? "Resetting…" : "Reset Password"}
+              {resetting ? "Resetting..." : "Reset Password"}
             </Button>
           </div>
         </DialogContent>
@@ -436,9 +428,7 @@ export default function UsersPage() {
 
       <ParentChildLinkDialog
         open={!!linkParent}
-        onOpenChange={(v) => {
-          if (!v) setLinkParent(null);
-        }}
+        onOpenChange={() => setLinkParent(null)}
         parentUserId={linkParent?.user_id}
         parentName={linkParent?.display_name || linkParent?.email || undefined}
       />
