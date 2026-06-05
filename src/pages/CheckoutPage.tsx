@@ -206,7 +206,13 @@ export default function CheckoutPage() {
     try {
       const payload = {
         action: "create_order",
-        items: items.map((i) => ({ id: i.id, name: i.name, fee: i.fee })),
+        items: items.map((i) => ({
+          id: i.id,
+          name: i.name,
+          fee: i.fee,
+          batch_id: i.batch_id,
+          batch_name: i.batch_name,
+        })),
         student_details: studentDetails,
         coupon_code: couponApplied ? couponCode.trim().toUpperCase() : null,
         payment_method: paymentMethod,

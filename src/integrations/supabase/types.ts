@@ -464,8 +464,10 @@ export type Database = {
           created_at: string
           email: string | null
           id: string
+          metadata: Json
           name: string
           notes: string | null
+          order_id: string | null
           organization_id: string | null
           phone: string | null
           source: string | null
@@ -476,8 +478,10 @@ export type Database = {
           created_at?: string
           email?: string | null
           id?: string
+          metadata?: Json
           name: string
           notes?: string | null
+          order_id?: string | null
           organization_id?: string | null
           phone?: string | null
           source?: string | null
@@ -488,8 +492,10 @@ export type Database = {
           created_at?: string
           email?: string | null
           id?: string
+          metadata?: Json
           name?: string
           notes?: string | null
+          order_id?: string | null
           organization_id?: string | null
           phone?: string | null
           source?: string | null

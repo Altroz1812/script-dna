@@ -128,6 +128,7 @@ Deno.serve(async (req) => {
       'get_stats',
       'list_users', 'create_user',
       'list_leads', 'create_lead', 'update_lead', 'delete_lead',
+      'approve_lead',
       'list_enrollments',
       'list_schedules', 'create_schedule', 'update_schedule', 'delete_schedule', 'bulk_create_schedules',
       'list_attendance', 'save_attendance',
@@ -408,6 +409,89 @@ Deno.serve(async (req) => {
         const { error } = await supabase.from('leads').delete().eq('id', params.id)
         if (error) throw error
         result = { success: true }
+        break
+      }
+
+      // ===== APPROVE LEAD: create student accounts + enroll into batches =====
+      case 'approve_lead': {
+        const { id } = params as { id: string }
+        if (!id) throw new Error('id required')
+        if (!callerIsSuperadmin && !callerIsAdmin) {
+          throw new Error('Only admins can approve leads')
+        }
+        const { data: lead, error: leadErr } = await supabase
+          .from('leads').select('*').eq('id', id).maybeSingle()
+        if (leadErr) throw leadErr
+        if (!lead) throw new Error('Lead not found')
+        if (!callerIsSuperadmin && lead.organization_id && !callerOrgMemberships.includes(lead.organization_id)) {
+          throw new Error('Forbidden: lead belongs to another organization')
+        }
+        const meta: any = lead.metadata ?? {}
+        const students: any[] = Array.isArray(meta.students) ? meta.students : []
+        if (students.length === 0) throw new Error('No student details on lead')
+        const orgId = lead.organization_id ?? targetOrgId ?? null
+        const created: any[] = []
+        const enrolled: any[] = []
+        const slugify = (s: string) => (s || 'student').toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.|\.$/g, '') || 'student'
+        const parentEmail: string | null = meta.parent_email ?? lead.email ?? null
+        const emailDomain = parentEmail && parentEmail.includes('@') ? parentEmail.split('@')[1] : 'aurapen.app'
+        const stamp = Date.now().toString(36)
+        for (let idx = 0; idx < students.length; idx++) {
+          const s = students[idx]
+          if (!s?.name) continue
+          const childEmail = `${slugify(s.name)}.${stamp}${idx}@${emailDomain}`
+          // Random initial password the admin can reset.
+          const tempPassword = crypto.randomUUID().replace(/-/g, '').slice(0, 12) + 'A1!'
+          const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+            email: childEmail,
+            password: tempPassword,
+            email_confirm: true,
+            user_metadata: { display_name: s.name },
+          })
+          if (authError) {
+            console.error('createUser failed', authError.message)
+            continue
+          }
+          const newUserId = authData.user.id
+          await supabase.from('profiles')
+            .update({ display_name: s.name, organization_id: orgId })
+            .eq('user_id', newUserId)
+          // Ensure role = student (trigger already inserts 'student', but be safe)
+          const { data: existingRole } = await supabase
+            .from('user_roles').select('id').eq('user_id', newUserId).maybeSingle()
+          if (!existingRole) {
+            await supabase.from('user_roles').insert({ user_id: newUserId, role: 'student' })
+          }
+          if (orgId) {
+            await supabase.from('organization_members')
+              .insert({ organization_id: orgId, user_id: newUserId })
+              .select().maybeSingle().then(() => {}, () => {})
+          }
+          // Link parent → child if we know the parent user id.
+          if (meta.parent_user_id) {
+            await supabase.from('parent_children').insert({
+              parent_id: meta.parent_user_id, child_id: newUserId,
+            }).then(() => {}, () => {})
+          }
+          // Enroll into batch
+          if (s.batch_id) {
+            const { error: enrollErr } = await supabase.from('batch_students').insert({
+              batch_id: s.batch_id, student_id: newUserId,
+            })
+            if (!enrollErr) enrolled.push({ student_id: newUserId, batch_id: s.batch_id })
+          }
+          created.push({
+            student_id: newUserId, name: s.name, email: childEmail,
+            temp_password: tempPassword, batch_id: s.batch_id ?? null,
+          })
+        }
+        await supabase.from('leads')
+          .update({
+            status: 'converted',
+            metadata: { ...meta, approved_at: new Date().toISOString(), created_students: created },
+          })
+          .eq('id', id)
+        result = { success: true, created_count: created.length, enrolled_count: enrolled.length, created }
         break
       }
 
