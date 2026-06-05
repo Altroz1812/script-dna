@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
       const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
       if (userError || !user) return jsonRes({ error: "Unauthorized" }, 401);
 
-      const { items, student_details, coupon_code } = body;
+      const { items, student_details, coupon_code, payment_method, reference_number } = body;
       if (!items || !Array.isArray(items) || items.length === 0) {
         return jsonRes({ error: "No items provided" }, 400);
       }
@@ -144,6 +144,72 @@ Deno.serve(async (req) => {
         .single();
 
       if (orderError) return jsonRes({ error: orderError.message }, 500);
+
+      // Create a lead so admins/support can review this enrollment in the
+      // Leads page, approve it, and provision student accounts.
+      try {
+        // Resolve organization_id from the first item's batch (best-effort).
+        let organization_id: string | null = null;
+        const firstBatchId = items.find((i: any) => i.batch_id)?.batch_id ?? null;
+        if (firstBatchId) {
+          const { data: b } = await supabaseAdmin
+            .from("batches")
+            .select("organization_id")
+            .eq("id", firstBatchId)
+            .maybeSingle();
+          organization_id = b?.organization_id ?? null;
+        }
+
+        // Flatten students with their course/batch context for easy review.
+        const studentsFlat: any[] = [];
+        for (const item of items) {
+          const list = (student_details?.[item.id] as any[]) || [];
+          for (const s of list) {
+            studentsFlat.push({
+              name: s.name,
+              grade: s.grade,
+              course_id: item.id,
+              course_name: item.name,
+              batch_id: item.batch_id ?? null,
+              batch_name: item.batch_name ?? null,
+              fee: item.fee ?? 0,
+            });
+          }
+        }
+
+        await supabaseAdmin.from("leads").insert({
+          name: profile?.display_name || profile?.email || "Checkout enrollment",
+          email: profile?.email || user.email || null,
+          phone: null,
+          source: "checkout",
+          status: "new",
+          organization_id,
+          order_id: order.id,
+          notes: `Checkout submission • ${items.length} course(s) • ${studentsFlat.length} student(s) • ₹${finalAmount}`,
+          metadata: {
+            parent_user_id: user.id,
+            parent_email: profile?.email || user.email || null,
+            parent_name: profile?.display_name || null,
+            items: items.map((i: any) => ({
+              course_id: i.id,
+              course_name: i.name,
+              batch_id: i.batch_id ?? null,
+              batch_name: i.batch_name ?? null,
+              fee: i.fee ?? 0,
+            })),
+            students: studentsFlat,
+            payment_method: payment_method ?? null,
+            reference_number: reference_number ?? null,
+            subtotal,
+            discount: totalDiscount,
+            final_amount: finalAmount,
+            coupon_code: coupon_code ?? null,
+          },
+        });
+      } catch (e) {
+        console.error("lead-create-failed", (e as Error).message);
+        // Don't fail the order on lead-write errors.
+      }
 
       // Check if Cashfree is configured
       const { data: config } = await supabaseAdmin
