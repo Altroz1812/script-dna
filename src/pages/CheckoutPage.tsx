@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -35,11 +35,9 @@ function calculateDiscounts(items: { id: string; fee: number }[], studentDetails
   const courseCount = items.length;
   const subtotal = items.reduce((s, i) => s + (i.fee || 0), 0);
 
-  // Multi-course discount on subtotal
   if (courseCount >= 3) courseDiscount = subtotal * 0.1;
   else if (courseCount === 2) courseDiscount = subtotal * 0.05;
 
-  // Per-course student discount
   let studentDiscount = 0;
   for (const item of items) {
     const students = studentDetails[item.id] || [];
@@ -49,9 +47,16 @@ function calculateDiscounts(items: { id: string; fee: number }[], studentDetails
   }
 
   const totalDiscount = courseDiscount + studentDiscount;
-  return { subtotal, courseDiscount, studentDiscount, totalDiscount, final: Math.max(0, subtotal - totalDiscount) };
+  return {
+    subtotal,
+    courseDiscount,
+    studentDiscount,
+    totalDiscount,
+    final: Math.max(0, subtotal - totalDiscount),
+  };
 }
-const CheckoutPage = () => {
+
+export default function CheckoutPage() {
   const { items, removeItem, clearCart, studentDetails, setStudentDetails, getStudentDetails } = useCart();
   const { session, profile, loading: authLoading, signOut, refreshProfile } = useAuth();
 
@@ -76,7 +81,6 @@ const CheckoutPage = () => {
   const [paymentMethod, setPaymentMethod] = useState<"now" | "later" | null>(null);
   const [referenceNumber, setReferenceNumber] = useState("");
 
-  // === IMPROVED: Clear intent flag more aggressively and safely ===
   const clearSignupIntent = useCallback(() => {
     try {
       sessionStorage.removeItem("checkout_signup_intent");
@@ -84,7 +88,7 @@ const CheckoutPage = () => {
     setHasSignupIntent(false);
   }, []);
 
-  // === IMPROVED Promotion Logic ===
+  // Promote to parent logic (improved)
   useEffect(() => {
     if (!session || !profile || promoteAttempted.current) return;
     if (profile.role === "parent") {
@@ -107,28 +111,21 @@ const CheckoutPage = () => {
 
     (async () => {
       try {
-        const { data, error } = await supabase.functions.invoke("promote-to-parent", {
-          body: {},
-        });
+        const { data, error } = await supabase.functions.invoke("promote-to-parent", { body: {} });
 
         if (error) throw error;
 
         if (data?.ok) {
           await refreshProfile();
-          toast.success("Account upgraded to parent");
+          toast.success("Account set up as parent");
         } else if (data?.reason === "role_not_eligible" || data?.reason === "already_parent") {
-          toast.info("Account is already set up. Continuing as parent.");
+          toast.info("Continuing with existing account");
         } else {
-          toast.error(data?.message || "Failed to upgrade account");
+          toast.error(data?.message || "Failed to set up parent account");
         }
       } catch (e: any) {
-        console.error("Promote error:", e);
-        // Don't block checkout for existing users
-        if (e.message?.includes("already") || e.message?.includes("role")) {
-          toast.info("Welcome back! Continuing checkout.");
-        } else {
-          toast.error("Could not upgrade account. You can still continue if you're a parent.");
-        }
+        console.error("Promotion error:", e);
+        toast.info("Continuing checkout...");
       } finally {
         clearSignupIntent();
         setPromoting(false);
@@ -136,11 +133,11 @@ const CheckoutPage = () => {
     })();
   }, [session, profile, refreshProfile, clearSignupIntent]);
 
-  // Auto advance after successful login
+  // Auto-advance after login
   useEffect(() => {
     if (session && profile?.role === "parent" && step === 0) {
       setStep(1);
-      clearSignupIntent(); // extra safety
+      clearSignupIntent();
     }
   }, [session, profile, step, clearSignupIntent]);
 
@@ -149,10 +146,9 @@ const CheckoutPage = () => {
     if (!session && step > 0) setStep(0);
   }, [session, step]);
 
-  // === IMPROVED Google Sign In ===
   const handleGoogleSignIn = async () => {
     try {
-      // Always mark intent when initiating signup flow
+      // Mark intent before starting OAuth
       try {
         sessionStorage.setItem("checkout_signup_intent", "1");
       } catch {}
@@ -161,8 +157,7 @@ const CheckoutPage = () => {
       const { error } = await lovable.auth.signInWithOAuth("google", {
         redirect_uri: window.location.origin + "/checkout",
         options: {
-          // Important: Helps Supabase treat existing accounts as sign-in
-          queryParams: { prompt: "select_account" },
+          queryParams: { prompt: "select_account" }, // Helps show account chooser
         },
       });
 
@@ -174,6 +169,11 @@ const CheckoutPage = () => {
       toast.error("Failed to start Google sign in");
       clearSignupIntent();
     }
+  };
+
+  const handleSignOut = async () => {
+    clearSignupIntent();
+    await signOut();
   };
 
   const allStudentDetailsFilled = items.every((item) => {
@@ -233,14 +233,12 @@ const CheckoutPage = () => {
       toast.error("Please select a payment method");
       return;
     }
-
     if (paymentMethod === "now" && !referenceNumber.trim()) {
       toast.error("Please enter the payment reference number");
       return;
     }
 
     setSubmitting(true);
-
     try {
       const payload = {
         action: "create_order",
@@ -279,10 +277,7 @@ const CheckoutPage = () => {
       setSubmitting(false);
     }
   };
-  const handleSignOut = async () => {
-    clearSignupIntent();
-    await signOut();
-  };
+
   if (success) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-6">
@@ -347,12 +342,7 @@ const CheckoutPage = () => {
         ) : items.length === 0 && !success ? (
           <EmptyCart />
         ) : session && profile && profile.role !== "parent" && !promoting && !hasSignupIntent ? (
-          <RoleBlocked
-            role={profile.role}
-            onSignOut={async () => {
-              await signOut();
-            }}
-          />
+          <RoleBlocked role={profile.role} onSignOut={handleSignOut} />
         ) : (
           <AnimatePresence mode="wait">
             {step === 0 && <AuthGateStep key="auth" onGoogleSignIn={handleGoogleSignIn} />}
@@ -404,20 +394,21 @@ const CheckoutPage = () => {
             >
               <ArrowLeft className="h-4 w-4 mr-2" /> Back
             </Button>
-            {step < 3 ? (
+
+            {step < 3 && (
               <Button
                 onClick={() => setStep((s) => s + 1)}
                 disabled={(step === 0 && !session) || (step === 1 && !allStudentDetailsFilled)}
               >
                 Next <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
-            ) : null}
+            )}
           </div>
         )}
       </main>
     </div>
   );
-};
+}
 
 /* ─── Sub-components ──────────────────────────────────── */
 
@@ -445,14 +436,13 @@ function RoleBlocked({ role, onSignOut }: { role: string; onSignOut: () => void 
       <h2 className="text-2xl font-bold text-foreground mb-2">Parent account required</h2>
       <p className="text-muted-foreground mb-6">
         This account is registered as <span className="font-semibold capitalize">{role}</span>. Checkout and enrollment
-        payments are only available for parent accounts. Please sign out and continue with a parent account, or contact
-        support.
+        payments are only available for parent accounts.
       </p>
       <div className="flex gap-3 justify-center">
         <Button variant="outline" asChild>
           <Link to="/">Back to Home</Link>
         </Button>
-        <Button onClick={() => onSignOut()}>Sign out</Button>
+        <Button onClick={onSignOut}>Sign out</Button>
       </div>
     </motion.div>
   );
