@@ -33,19 +33,24 @@ export function useAuth() {
 async function fetchProfile(userId: string): Promise<UserProfile | null> {
   const [profileRes, roleRes] = await Promise.all([
     supabase.from('profiles').select('*').eq('user_id', userId).single(),
-    supabase.from('user_roles').select('role').eq('user_id', userId).single(),
+    supabase.from('user_roles').select('role').eq('user_id', userId),
   ]);
 
   if (profileRes.error || !profileRes.data) return null;
 
   const p = profileRes.data;
+  // A user may have 0 (mid-signup) or multiple role rows. Pick the
+  // highest-priority role so checkout / promote flows don't get stuck.
+  const priority: AppRole[] = ['superadmin', 'admin', 'support', 'teacher', 'parent', 'student'];
+  const roles = (roleRes.data ?? []).map((r: any) => r.role as AppRole);
+  const resolvedRole = priority.find((r) => roles.includes(r)) ?? 'student';
   return {
     id: p.user_id,
     email: p.email ?? '',
     displayName: p.display_name ?? p.email ?? '',
     avatarUrl: p.avatar_url ?? undefined,
     organizationId: p.organization_id ?? undefined,
-    role: (roleRes.data?.role as AppRole) ?? 'student',
+    role: resolvedRole,
   };
 }
 

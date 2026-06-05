@@ -64,6 +64,11 @@ export default function CheckoutPage() {
   const [orderId, setOrderId] = useState("");
   const [promoting, setPromoting] = useState(false);
   const promoteAttempted = useRef(false);
+  // Track whether this checkout flow initiated a signup so we can suppress
+  // the RoleBlocked flash while promote-to-parent is in flight.
+  const [hasSignupIntent, setHasSignupIntent] = useState<boolean>(() => {
+    try { return sessionStorage.getItem('checkout_signup_intent') === '1'; } catch { return false; }
+  });
 
   // Payment state - MOVED INSIDE COMPONENT
   const [paymentMethod, setPaymentMethod] = useState<"now" | "later" | null>(null);
@@ -75,6 +80,7 @@ export default function CheckoutPage() {
     try {
       sessionStorage.setItem("checkout_signup_intent", "1");
     } catch {}
+    setHasSignupIntent(true);
   };
 
   // After auth lands, if a fresh non-parent user signed up via checkout,
@@ -91,21 +97,24 @@ export default function CheckoutPage() {
     })();
     if (!intent) return;
     promoteAttempted.current = true;
+    setPromoting(true);
     (async () => {
-      setPromoting(true);
       try {
         const { data, error } = await supabase.functions.invoke("promote-to-parent", { body: {} });
         if (error) throw error;
         if (data?.ok) {
           await refreshProfile();
           toast.success("Account set up as parent");
+        } else if (data?.reason === 'role_not_eligible') {
+          toast.error("This account can't be used for checkout. Please sign out and use a parent account.");
         }
       } catch (e: any) {
-        // silent; gating UI will show the block
+        toast.error("Could not set up parent account: " + (e?.message ?? 'unknown error'));
       } finally {
         try {
           sessionStorage.removeItem("checkout_signup_intent");
         } catch {}
+        setHasSignupIntent(false);
         setPromoting(false);
       }
     })();
@@ -290,7 +299,7 @@ export default function CheckoutPage() {
           </div>
         ) : items.length === 0 && !success ? (
           <EmptyCart />
-        ) : session && profile && profile.role !== "parent" && !promoting ? (
+        ) : session && profile && profile.role !== "parent" && !promoting && !hasSignupIntent ? (
           <RoleBlocked
             role={profile.role}
             onSignOut={async () => {
