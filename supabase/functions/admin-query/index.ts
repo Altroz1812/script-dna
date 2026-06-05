@@ -128,6 +128,7 @@ Deno.serve(async (req) => {
       'get_stats',
       'list_users', 'create_user',
       'list_leads', 'create_lead', 'update_lead', 'delete_lead',
+      'approve_lead',
       'list_enrollments',
       'list_schedules', 'create_schedule', 'update_schedule', 'delete_schedule', 'bulk_create_schedules',
       'list_attendance', 'save_attendance',
