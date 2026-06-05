@@ -279,7 +279,10 @@ const CheckoutPage = () => {
       setSubmitting(false);
     }
   };
-
+  const handleSignOut = async () => {
+    clearSignupIntent();
+    await signOut();
+  };
   if (success) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-6">
