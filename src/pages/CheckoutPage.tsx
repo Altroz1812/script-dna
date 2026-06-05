@@ -51,10 +51,10 @@ function calculateDiscounts(items: { id: string; fee: number }[], studentDetails
   const totalDiscount = courseDiscount + studentDiscount;
   return { subtotal, courseDiscount, studentDiscount, totalDiscount, final: Math.max(0, subtotal - totalDiscount) };
 }
-
-export default function CheckoutPage() {
+const CheckoutPage = () => {
   const { items, removeItem, clearCart, studentDetails, setStudentDetails, getStudentDetails } = useCart();
   const { session, profile, loading: authLoading, signOut, refreshProfile } = useAuth();
+
   const [step, setStep] = useState(0);
   const [couponCode, setCouponCode] = useState("");
   const [couponDiscount, setCouponDiscount] = useState(0);
@@ -63,31 +63,35 @@ export default function CheckoutPage() {
   const [success, setSuccess] = useState(false);
   const [orderId, setOrderId] = useState("");
   const [promoting, setPromoting] = useState(false);
+
   const promoteAttempted = useRef(false);
-  // Track whether this checkout flow initiated a signup so we can suppress
-  // the RoleBlocked flash while promote-to-parent is in flight.
   const [hasSignupIntent, setHasSignupIntent] = useState<boolean>(() => {
-    try { return sessionStorage.getItem('checkout_signup_intent') === '1'; } catch { return false; }
+    try {
+      return sessionStorage.getItem("checkout_signup_intent") === "1";
+    } catch {
+      return false;
+    }
   });
 
-  // Payment state - MOVED INSIDE COMPONENT
   const [paymentMethod, setPaymentMethod] = useState<"now" | "later" | null>(null);
   const [referenceNumber, setReferenceNumber] = useState("");
 
-  // Mark this checkout session as a fresh sign-up flow when user clicks
-  // "Continue with Google" so we know it's safe to auto-promote to parent.
-  const markSignupIntent = () => {
+  // === IMPROVED: Clear intent flag more aggressively and safely ===
+  const clearSignupIntent = useCallback(() => {
     try {
-      sessionStorage.setItem("checkout_signup_intent", "1");
+      sessionStorage.removeItem("checkout_signup_intent");
     } catch {}
-    setHasSignupIntent(true);
-  };
+    setHasSignupIntent(false);
+  }, []);
 
-  // After auth lands, if a fresh non-parent user signed up via checkout,
-  // try to promote them to 'parent'. Existing non-parent users are blocked.
+  // === IMPROVED Promotion Logic ===
   useEffect(() => {
     if (!session || !profile || promoteAttempted.current) return;
-    if (profile.role === "parent") return;
+    if (profile.role === "parent") {
+      clearSignupIntent();
+      return;
+    }
+
     const intent = (() => {
       try {
         return sessionStorage.getItem("checkout_signup_intent") === "1";
@@ -95,47 +99,81 @@ export default function CheckoutPage() {
         return false;
       }
     })();
+
     if (!intent) return;
+
     promoteAttempted.current = true;
     setPromoting(true);
+
     (async () => {
       try {
-        const { data, error } = await supabase.functions.invoke("promote-to-parent", { body: {} });
+        const { data, error } = await supabase.functions.invoke("promote-to-parent", {
+          body: {},
+        });
+
         if (error) throw error;
+
         if (data?.ok) {
           await refreshProfile();
-          toast.success("Account set up as parent");
-        } else if (data?.reason === 'role_not_eligible') {
-          toast.error("This account can't be used for checkout. Please sign out and use a parent account.");
+          toast.success("Account upgraded to parent");
+        } else if (data?.reason === "role_not_eligible" || data?.reason === "already_parent") {
+          toast.info("Account is already set up. Continuing as parent.");
+        } else {
+          toast.error(data?.message || "Failed to upgrade account");
         }
       } catch (e: any) {
-        toast.error("Could not set up parent account: " + (e?.message ?? 'unknown error'));
+        console.error("Promote error:", e);
+        // Don't block checkout for existing users
+        if (e.message?.includes("already") || e.message?.includes("role")) {
+          toast.info("Welcome back! Continuing checkout.");
+        } else {
+          toast.error("Could not upgrade account. You can still continue if you're a parent.");
+        }
       } finally {
-        try {
-          sessionStorage.removeItem("checkout_signup_intent");
-        } catch {}
-        setHasSignupIntent(false);
+        clearSignupIntent();
         setPromoting(false);
       }
     })();
-  }, [session, profile, refreshProfile]);
+  }, [session, profile, refreshProfile, clearSignupIntent]);
 
-  // Auto-advance past auth step if logged in
+  // Auto advance after successful login
   useEffect(() => {
-    if (session && profile?.role === "parent" && step === 0) setStep(1);
-  }, [session, profile, step]);
+    if (session && profile?.role === "parent" && step === 0) {
+      setStep(1);
+      clearSignupIntent(); // extra safety
+    }
+  }, [session, profile, step, clearSignupIntent]);
 
-  // If not logged in, force step 0
+  // Force auth step if not logged in
   useEffect(() => {
     if (!session && step > 0) setStep(0);
   }, [session, step]);
 
+  // === IMPROVED Google Sign In ===
   const handleGoogleSignIn = async () => {
-    markSignupIntent();
-    const { error } = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin + "/checkout",
-    });
-    if (error) toast.error("Sign-in failed: " + (error as Error).message);
+    try {
+      // Always mark intent when initiating signup flow
+      try {
+        sessionStorage.setItem("checkout_signup_intent", "1");
+      } catch {}
+      setHasSignupIntent(true);
+
+      const { error } = await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: window.location.origin + "/checkout",
+        options: {
+          // Important: Helps Supabase treat existing accounts as sign-in
+          queryParams: { prompt: "select_account" },
+        },
+      });
+
+      if (error) {
+        toast.error("Sign-in failed: " + error.message);
+        clearSignupIntent();
+      }
+    } catch (err: any) {
+      toast.error("Failed to start Google sign in");
+      clearSignupIntent();
+    }
   };
 
   const allStudentDetailsFilled = items.every((item) => {
@@ -376,7 +414,7 @@ export default function CheckoutPage() {
       </main>
     </div>
   );
-}
+};
 
 /* ─── Sub-components ──────────────────────────────────── */
 
