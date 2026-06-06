@@ -238,6 +238,7 @@ export default function CheckoutPage() {
   // ===== ADD THIS NEW useEffect =====
   // Handle OAuth redirect with hash fragment
   // Handle OAuth redirect with hash fragment
+  // Handle OAuth redirect with hash fragment
   useEffect(() => {
     const hash = window.location.hash;
 
@@ -256,9 +257,7 @@ export default function CheckoutPage() {
           })
           .then(({ data, error }) => {
             if (!error && data?.session) {
-              // Clean URL
               window.history.replaceState(null, "", window.location.pathname);
-              // Auto-advance
               setStep(1);
               clearSignupIntent();
               toast.success("Signed in successfully!");
@@ -267,6 +266,29 @@ export default function CheckoutPage() {
       }
     }
   }, []);
+
+  // ===== ADD THIS FUNCTION HERE =====
+  const handleGoogleSignIn = async () => {
+    try {
+      try {
+        sessionStorage.setItem("checkout_signup_intent", "1");
+      } catch {}
+      setHasSignupIntent(true);
+
+      const { error } = await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: window.location.origin + "/checkout",
+        extraParams: { prompt: "select_account" },
+      });
+
+      if (error) {
+        toast.error("Sign-in failed: " + error.message);
+        clearSignupIntent();
+      }
+    } catch (err: any) {
+      toast.error("Failed to start Google sign in");
+      clearSignupIntent();
+    }
+  };
 
   const handleSignOut = async () => {
     clearSignupIntent();
