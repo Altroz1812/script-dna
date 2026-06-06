@@ -241,6 +241,7 @@ export default function CheckoutPage() {
 
   const allStudentDetailsFilled = items.every((item) => {
     const details = extendedStudentDetails[item.id] || [];
+
     return details.length > 0 && details.every((d) => d.name.trim() && d.grade.trim() && d.schoolName.trim());
   });
 
