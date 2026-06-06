@@ -107,6 +107,14 @@ export default function CheckoutPage() {
     }
   });
 
+  // Define clearSignupIntent function
+  const clearSignupIntent = useCallback(() => {
+    try {
+      sessionStorage.removeItem("checkout_signup_intent");
+    } catch {}
+    setHasSignupIntent(false);
+  }, []);
+
   const [paymentMethod, setPaymentMethod] = useState<"now" | "later" | null>(null);
   const [referenceNumber, setReferenceNumber] = useState("");
 
@@ -126,8 +134,6 @@ export default function CheckoutPage() {
   });
 
   // Initialize extended student details from cart context
-
-  // Replace the current useEffect that initializes extendedStudentDetails
   useEffect(() => {
     setExtendedStudentDetails((prev) => {
       const newExtended: Record<string, ExtendedStudentDetail[]> = { ...prev };
@@ -136,7 +142,6 @@ export default function CheckoutPage() {
         const existing = getStudentDetails(item.id) || [];
 
         if (!newExtended[item.id] || newExtended[item.id].length === 0) {
-          // New course or no data yet
           newExtended[item.id] =
             existing.length > 0
               ? existing.map((d: any) => ({
@@ -148,7 +153,6 @@ export default function CheckoutPage() {
                 }))
               : [{ name: "", grade: "", email: "", phone: "", schoolName: "" }];
         } else {
-          // Preserve existing extended data (including email/phone/school), just sync name/grade
           newExtended[item.id] = newExtended[item.id].map((student, idx) => {
             const base = existing[idx] || { name: "", grade: "" };
             return {
@@ -169,7 +173,7 @@ export default function CheckoutPage() {
 
       return newExtended;
     });
-  }, [items]); // ← Only depend on items, not getStudentDetails
+  }, [items]);
 
   // Promote to parent logic
   useEffect(() => {
@@ -258,7 +262,6 @@ export default function CheckoutPage() {
 
   const allStudentDetailsFilled = items.every((item) => {
     const details = extendedStudentDetails[item.id] || [];
-
     return details.length > 0 && details.every((d) => d.name.trim() && d.grade.trim() && d.schoolName.trim());
   });
 
@@ -322,18 +325,19 @@ export default function CheckoutPage() {
     }
   };
 
-const handleUpdateStudentDetails = (courseId: string, students: ExtendedStudentDetail[]) => {
-  setExtendedStudentDetails((prev) => ({ ...prev, [courseId]: students }));
-  
-  // Only sync minimal data to cart context
-  setStudentDetails(
-    courseId,
-    students.map(({ name, grade }) => ({ 
-      name: name.trim(), 
-      grade: grade.trim() 
-    }))
-  );
-};
+  const handleUpdateStudentDetails = (courseId: string, students: ExtendedStudentDetail[]) => {
+    setExtendedStudentDetails((prev) => ({ ...prev, [courseId]: students }));
+
+    // Only sync minimal data to cart context
+    setStudentDetails(
+      courseId,
+      students.map(({ name, grade }) => ({
+        name: name.trim(),
+        grade: grade.trim(),
+      })),
+    );
+  };
+
   const handlePayment = async () => {
     if (!paymentMethod) {
       toast.error("Please select a payment method");
@@ -675,7 +679,7 @@ function StudentCourseCard({
     onChange(newStudents);
   };
 
-  // Initialize if no students - FIX: added students.length to dependency array
+  // Initialize if no students
   useEffect(() => {
     if (students.length === 0) {
       onChange([
@@ -688,7 +692,7 @@ function StudentCourseCard({
         },
       ]);
     }
-  }, [students.length, onChange]); // ← Fixed: added students.length dependency
+  }, [students.length, onChange]);
 
   return (
     <Card>
@@ -710,7 +714,7 @@ function StudentCourseCard({
       </CardHeader>
       <CardContent className="space-y-6">
         {students.map((s, idx) => (
-  <div key={`student-${idx}`} className="space-y-3 p-4 border rounded-lg">  <div key={idx} className="space-y-3 p-4 border rounded-lg">
+          <div key={`student-${idx}`} className="space-y-3 p-4 border rounded-lg">
             <div className="flex justify-between items-center mb-2">
               <Label className="text-sm font-semibold">Student {idx + 1}</Label>
               {students.length > 1 && (
