@@ -37,6 +37,7 @@ const STEPS = ["Sign In", "Student Details", "Address", "Review & Discounts", "P
 // Extended StudentDetail with email and school
 interface ExtendedStudentDetail extends StudentDetail {
   email: string;
+  phone: string;
   schoolName: string;
 }
 
@@ -131,6 +132,7 @@ export default function CheckoutPage() {
         newExtendedDetails[item.id] = existingDetails.map((detail) => ({
           ...detail,
           email: (detail as any).email || "",
+          phone: (detail as any).phone || "",
           schoolName: (detail as any).schoolName || "",
         }));
       } else {
@@ -632,11 +634,12 @@ function StudentCourseCard({
   onRemove: () => void;
 }) {
   useEffect(() => {
-    if (students.length === 0) onChange([{ name: "", grade: "", email: "", schoolName: "" }]);
+    if (students.length === 0) onChange([{ name: "", grade: "", email: "", phone: "", schoolName: "" }]);
   }, [students.length, onChange]);
 
+  // Also in addStudent function:
   const addStudent = () => {
-    if (students.length < 5) onChange([...students, { name: "", grade: "", email: "", schoolName: "" }]);
+    if (students.length < 5) onChange([...students, { name: "", grade: "", email: "", phone: "", schoolName: "" }]);
   };
 
   const removeStudent = (idx: number) => {
@@ -699,6 +702,16 @@ function StudentCourseCard({
                   value={s.grade}
                   onChange={(e) => updateStudent(idx, "grade", e.target.value)}
                 />
+              </div>
+              <div>
+                <Label className="text-xs">Student Phone (Optional)</Label>
+                <Input
+                  type="tel"
+                  placeholder="Student's phone number"
+                  value={s.phone}
+                  onChange={(e) => updateStudent(idx, "phone", e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground mt-1">For direct communication with student</p>
               </div>
               <div>
                 <Label className="text-xs">Student Email (Optional)</Label>
