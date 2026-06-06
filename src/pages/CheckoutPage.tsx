@@ -126,32 +126,50 @@ export default function CheckoutPage() {
   });
 
   // Initialize extended student details from cart context
-  // Initialize extended student details from cart context
-  useEffect(() => {
-    const newExtendedDetails: Record<string, ExtendedStudentDetail[]> = {};
-    items.forEach((item) => {
-      const existingDetails = getStudentDetails(item.id);
-      if (existingDetails.length > 0) {
-        newExtendedDetails[item.id] = existingDetails.map((detail) => ({
-          name: detail.name,
-          grade: detail.grade,
-          email: (detail as any).email || "",
-          phone: (detail as any).phone || "",
-          schoolName: (detail as any).schoolName || "",
-        }));
-      } else {
-        newExtendedDetails[item.id] = [{ name: "", grade: "", email: "", phone: "", schoolName: "" }];
-      }
-    });
-    setExtendedStudentDetails(newExtendedDetails);
-  }, [items, getStudentDetails]);
 
-  const clearSignupIntent = useCallback(() => {
-    try {
-      sessionStorage.removeItem("checkout_signup_intent");
-    } catch {}
-    setHasSignupIntent(false);
-  }, []);
+  // Replace the current useEffect that initializes extendedStudentDetails
+  useEffect(() => {
+    setExtendedStudentDetails((prev) => {
+      const newExtended: Record<string, ExtendedStudentDetail[]> = { ...prev };
+
+      items.forEach((item) => {
+        const existing = getStudentDetails(item.id) || [];
+
+        if (!newExtended[item.id] || newExtended[item.id].length === 0) {
+          // New course or no data yet
+          newExtended[item.id] =
+            existing.length > 0
+              ? existing.map((d: any) => ({
+                  name: d.name || "",
+                  grade: d.grade || "",
+                  email: d.email || "",
+                  phone: d.phone || "",
+                  schoolName: d.schoolName || "",
+                }))
+              : [{ name: "", grade: "", email: "", phone: "", schoolName: "" }];
+        } else {
+          // Preserve existing extended data (including email/phone/school), just sync name/grade
+          newExtended[item.id] = newExtended[item.id].map((student, idx) => {
+            const base = existing[idx] || { name: "", grade: "" };
+            return {
+              ...student,
+              name: base.name || student.name || "",
+              grade: base.grade || student.grade || "",
+            };
+          });
+        }
+      });
+
+      // Clean up courses that were removed
+      Object.keys(newExtended).forEach((courseId) => {
+        if (!items.some((item) => item.id === courseId)) {
+          delete newExtended[courseId];
+        }
+      });
+
+      return newExtended;
+    });
+  }, [items]); // ← Only depend on items, not getStudentDetails
 
   // Promote to parent logic
   useEffect(() => {
