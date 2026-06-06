@@ -302,8 +302,10 @@ export default function CheckoutPage() {
   };
 
   const handleUpdateStudentDetails = (courseId: string, students: ExtendedStudentDetail[]) => {
+    // Update local state
     setExtendedStudentDetails((prev) => ({ ...prev, [courseId]: students }));
-    // Also update the original cart context
+
+    // Update original cart context with only name and grade
     setStudentDetails(
       courseId,
       students.map(({ name, grade }) => ({ name, grade })),
@@ -635,8 +637,12 @@ function StudentCourseCard({
   onChange: (s: ExtendedStudentDetail[]) => void;
   onRemove: () => void;
 }) {
+  // Don't auto-add empty student on every render
+  const hasInitialized = useRef(false);
+
   useEffect(() => {
-    if (students.length === 0) {
+    if (!hasInitialized.current && students.length === 0) {
+      hasInitialized.current = true;
       onChange([{ name: "", grade: "", email: "", phone: "", schoolName: "" }]);
     }
   }, [students.length, onChange]);
@@ -652,8 +658,7 @@ function StudentCourseCard({
   };
 
   const updateStudent = (idx: number, field: keyof ExtendedStudentDetail, value: string) => {
-    const updated = [...students]; // Create new array
-    updated[idx] = { ...updated[idx], [field]: value }; // Create new object
+    const updated = students.map((student, i) => (i === idx ? { ...student, [field]: value } : student));
     onChange(updated);
   };
 
@@ -677,7 +682,7 @@ function StudentCourseCard({
       </CardHeader>
       <CardContent className="space-y-6">
         {students.map((s, idx) => (
-          <div key={idx} className="space-y-3 p-4 border rounded-lg">
+          <div key={`${item.id}-student-${idx}`} className="space-y-3 p-4 border rounded-lg">
             <div className="flex justify-between items-center mb-2">
               <Label className="text-sm font-semibold">Student {idx + 1}</Label>
               {students.length > 1 && (
@@ -696,22 +701,25 @@ function StudentCourseCard({
               <div>
                 <Label className="text-xs">Student Name *</Label>
                 <Input
+                  key={`${item.id}-${idx}-name`}
                   placeholder="Full name"
-                  value={s.name}
+                  value={s.name || ""}
                   onChange={(e) => updateStudent(idx, "name", e.target.value)}
                 />
               </div>
               <div>
                 <Label className="text-xs">Grade/Age *</Label>
                 <Input
+                  key={`${item.id}-${idx}-grade`}
                   placeholder="e.g. Grade 3"
-                  value={s.grade}
+                  value={s.grade || ""}
                   onChange={(e) => updateStudent(idx, "grade", e.target.value)}
                 />
               </div>
               <div>
                 <Label className="text-xs">Student Phone (Optional)</Label>
                 <Input
+                  key={`${item.id}-${idx}-phone`}
                   type="tel"
                   placeholder="Student's phone number"
                   value={s.phone || ""}
@@ -722,6 +730,7 @@ function StudentCourseCard({
               <div>
                 <Label className="text-xs">Student Email (Optional)</Label>
                 <Input
+                  key={`${item.id}-${idx}-email`}
                   type="email"
                   placeholder="student@example.com"
                   value={s.email || ""}
@@ -732,6 +741,7 @@ function StudentCourseCard({
               <div className="md:col-span-2">
                 <Label className="text-xs">School Name *</Label>
                 <Input
+                  key={`${item.id}-${idx}-school`}
                   placeholder="School name"
                   value={s.schoolName || ""}
                   onChange={(e) => updateStudent(idx, "schoolName", e.target.value)}
