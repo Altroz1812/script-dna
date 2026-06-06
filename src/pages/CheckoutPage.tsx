@@ -322,17 +322,18 @@ export default function CheckoutPage() {
     }
   };
 
-  const handleUpdateStudentDetails = (courseId: string, students: ExtendedStudentDetail[]) => {
-    // Update local state
-    setExtendedStudentDetails((prev) => ({ ...prev, [courseId]: students }));
-
-    // Update original cart context with only name and grade
-    setStudentDetails(
-      courseId,
-      students.map(({ name, grade }) => ({ name, grade })),
-    );
-  };
-
+const handleUpdateStudentDetails = (courseId: string, students: ExtendedStudentDetail[]) => {
+  setExtendedStudentDetails((prev) => ({ ...prev, [courseId]: students }));
+  
+  // Only sync minimal data to cart context
+  setStudentDetails(
+    courseId,
+    students.map(({ name, grade }) => ({ 
+      name: name.trim(), 
+      grade: grade.trim() 
+    }))
+  );
+};
   const handlePayment = async () => {
     if (!paymentMethod) {
       toast.error("Please select a payment method");
