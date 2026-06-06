@@ -649,7 +649,8 @@ function StudentCourseCard({
   };
 
   const updateStudent = (idx: number, field: keyof ExtendedStudentDetail, value: string) => {
-    const updated = students.map((s, i) => (i === idx ? { ...s, [field]: value } : s));
+    const updated = [...students]; // Create a new array copy
+    updated[idx] = { ...updated[idx], [field]: value }; // Create new object copy
     onChange(updated);
   };
 
