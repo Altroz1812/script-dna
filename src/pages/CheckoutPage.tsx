@@ -37,9 +37,11 @@ const STEPS = ["Sign In", "Student Details", "Address", "Review & Discounts", "P
 
 // Extended StudentDetail with email and school
 interface ExtendedStudentDetail extends StudentDetail {
-  email: string;
-  phone: string;
-  schoolName: string;
+  name: string;
+  grade: string;
+  email?: string;
+  phone?: string;
+  schoolName?: string;
 }
 
 // Discount logic
