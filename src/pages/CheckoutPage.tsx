@@ -33,7 +33,10 @@ import { lovable } from "@/integrations/lovable/index";
 import { toast } from "sonner";
 
 const STEPS = ["Sign In", "Student Details", "Address", "Review & Discounts", "Payment"];
-
+const [email, setEmail] = useState("");
+const [password, setPassword] = useState("");
+const [isSignUp, setIsSignUp] = useState(false);
+const [authError, setAuthError] = useState("");
 // Extended StudentDetail with email and school
 interface ExtendedStudentDetail extends StudentDetail {
   name: string;
