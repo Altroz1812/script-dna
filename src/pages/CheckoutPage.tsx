@@ -133,13 +133,13 @@ export default function CheckoutPage() {
       const existingDetails = getStudentDetails(item.id);
       if (existingDetails.length > 0) {
         newExtendedDetails[item.id] = existingDetails.map((detail) => ({
-          ...detail,
+          name: detail.name,
+          grade: detail.grade,
           email: (detail as any).email || "",
           phone: (detail as any).phone || "",
           schoolName: (detail as any).schoolName || "",
         }));
       } else {
-        // FIX: Added missing 'phone' field
         newExtendedDetails[item.id] = [{ name: "", grade: "", email: "", phone: "", schoolName: "" }];
       }
     });
@@ -656,7 +656,7 @@ function StudentCourseCard({
     onChange(newStudents);
   };
 
-  // Ensure at least one student exists
+  // Initialize if no students - FIX: added students.length to dependency array
   useEffect(() => {
     if (students.length === 0) {
       onChange([
@@ -669,7 +669,7 @@ function StudentCourseCard({
         },
       ]);
     }
-  }, []);
+  }, [students.length, onChange]); // ← Fixed: added students.length dependency
 
   return (
     <Card>
