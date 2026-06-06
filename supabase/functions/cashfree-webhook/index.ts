@@ -104,9 +104,6 @@ Deno.serve(async (req) => {
 
     // On success: create payment records and a lead
     if (newStatus === "paid") {
-      const studentDetails = order.student_details || {};
-      const items = Object.keys(studentDetails);
-
       // Create payment record
       await supabaseAdmin.from("payments").insert({
         student_id: order.user_id,
@@ -116,20 +113,29 @@ Deno.serve(async (req) => {
         status: "completed",
       });
 
-      // Get user profile for lead
-      const { data: profile } = await supabaseAdmin
-        .from("profiles")
-        .select("email, display_name")
-        .eq("user_id", order.user_id)
-        .single();
-
-      await supabaseAdmin.from("leads").insert({
-        name: profile?.display_name || "Customer",
-        email: profile?.email || null,
-        source: "cashfree_checkout",
-        notes: `Paid ₹${order.final_amount}. Order: ${cfOrderId}. Courses: ${items.length}`,
-        status: "converted",
-      });
+      // Materialise the checkout lead now that payment is confirmed.
+      // Organisation is intentionally left NULL — SuperAdmin assigns it on approval.
+      const payload: any = order.lead_payload ?? null;
+      if (payload) {
+        // Avoid duplicate lead inserts on retried webhooks.
+        const { data: existing } = await supabaseAdmin
+          .from("leads").select("id").eq("order_id", order.id).maybeSingle();
+        if (!existing) {
+          const studentsFlat: any[] = Array.isArray(payload.students) ? payload.students : [];
+          const itemsArr: any[] = Array.isArray(payload.items) ? payload.items : [];
+          await supabaseAdmin.from("leads").insert({
+            name: payload.parent_name || payload.parent_email || "Checkout enrollment",
+            email: payload.parent_email || null,
+            phone: null,
+            source: "checkout",
+            status: "new",
+            organization_id: null, // SuperAdmin assigns on approval
+            order_id: order.id,
+            notes: `Paid ₹${order.final_amount} • ${itemsArr.length} course(s) • ${studentsFlat.length} student(s) • Order ${cfOrderId}`,
+            metadata: { ...payload, paid_at: new Date().toISOString(), cashfree_order_id: cfOrderId },
+          });
+        }
+      }
     }
 
     return jsonRes({ success: true, status: newStatus });
