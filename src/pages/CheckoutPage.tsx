@@ -235,28 +235,62 @@ export default function CheckoutPage() {
     if (!session && step > 0) setStep(0);
   }, [session, step]);
 
-  const handleGoogleSignIn = async () => {
-    try {
-      try {
-        sessionStorage.setItem("checkout_signup_intent", "1");
-      } catch {}
-      setHasSignupIntent(true);
+  // ===== ADD THIS NEW useEffect =====
+  // Handle OAuth redirect with hash fragment
+  useEffect(() => {
+    const hash = window.location.hash;
 
-      const { error } = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin + "/checkout",
-        extraParams: { prompt: "select_account" },
-      });
+    if (hash && (hash.includes("access_token=") || hash.includes("error="))) {
+      console.log("Processing OAuth hash fragment...");
 
-      if (error) {
-        toast.error("Sign-in failed: " + error.message);
-        clearSignupIntent();
-      }
-    } catch (err: any) {
-      toast.error("Failed to start Google sign in");
-      clearSignupIntent();
+      (async () => {
+        try {
+          // Parse hash parameters
+          const params = new URLSearchParams(hash.substring(1));
+          const accessToken = params.get("access_token");
+          const refreshToken = params.get("refresh_token");
+          const error = params.get("error");
+          const errorDescription = params.get("error_description");
+
+          // Handle error
+          if (error) {
+            console.error("OAuth error:", error, errorDescription);
+            toast.error("Sign-in failed: " + (errorDescription || error));
+            window.history.replaceState(null, "", window.location.pathname);
+            return;
+          }
+
+          // Set session with tokens
+          if (accessToken && refreshToken) {
+            const { data, error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+
+            if (sessionError) {
+              console.error("Set session error:", sessionError);
+              toast.error("Failed to complete sign-in");
+              return;
+            }
+
+            if (data?.session) {
+              console.log("Session established from hash");
+
+              // Clean up URL
+              window.history.replaceState(null, "", window.location.pathname);
+
+              // Refresh profile
+              await refreshProfile();
+
+              toast.success("Signed in successfully!");
+            }
+          }
+        } catch (err) {
+          console.error("Hash processing error:", err);
+        }
+      })();
     }
-  };
-
+  }, []); // Run once on mount
   const handleSignOut = async () => {
     clearSignupIntent();
     await signOut();
