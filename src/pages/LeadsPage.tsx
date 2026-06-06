@@ -21,11 +21,18 @@ export default function LeadsPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', phone: '', source: '', notes: '' });
   const [detailLead, setDetailLead] = useState<any | null>(null);
+  const [assignOrgId, setAssignOrgId] = useState<string>('');
 
   const { data: leads = [], isLoading } = useQuery<any[]>({
     queryKey: ['leads'],
     queryFn: () => adminQuery('list_leads'),
     staleTime: 1000 * 60 * 5,
+  });
+
+  const { data: organizations = [] } = useQuery<any[]>({
+    queryKey: ['organizations'],
+    queryFn: () => adminQuery('list_organizations'),
+    staleTime: 1000 * 60 * 10,
   });
 
   const invalidate = () => {
@@ -63,10 +70,14 @@ export default function LeadsPage() {
   });
 
   const approveMutation = useMutation({
-    mutationFn: (id: string) => adminQuery('approve_lead', { id }),
+    mutationFn: ({ id, organization_id }: { id: string; organization_id?: string }) =>
+      adminQuery('approve_lead', { id, organization_id }),
     onSuccess: (data: any) => {
+      const errs = Array.isArray(data?.errors) ? data.errors : [];
       toast.success(`Created ${data?.created_count ?? 0} student(s), enrolled ${data?.enrolled_count ?? 0}`);
+      if (errs.length) toast.warning(`${errs.length} issue(s): ${errs.slice(0, 2).join('; ')}`);
       setDetailLead(null);
+      setAssignOrgId('');
       invalidate();
     },
     onError: (e: any) => toast.error(e.message),
@@ -142,13 +153,9 @@ export default function LeadsPage() {
                         )}
                         {isCheckout && l.status !== 'converted' && (
                           <Button
-                            variant="ghost" size="icon" title="Approve & create students"
-                            disabled={approveMutation.isPending}
-                            onClick={() => {
-                              if (confirm(`Create ${students.length} student account(s) and enroll into batches?`)) {
-                                approveMutation.mutate(l.id);
-                              }
-                            }}
+                            variant="ghost" size="icon"
+                            title={l.organization_id ? 'Approve & create students' : 'Open to assign organization first'}
+                            onClick={() => { setAssignOrgId(l.organization_id || ''); setDetailLead(l); }}
                           >
                             <CheckCircle2 className="h-4 w-4 text-primary" />
                           </Button>
@@ -166,7 +173,7 @@ export default function LeadsPage() {
         </CardContent></Card>
       )}
 
-      <Dialog open={!!detailLead} onOpenChange={(o) => !o && setDetailLead(null)}>
+      <Dialog open={!!detailLead} onOpenChange={(o) => { if (!o) { setDetailLead(null); setAssignOrgId(''); } }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>Checkout Lead Details</DialogTitle></DialogHeader>
           {detailLead && (() => {
@@ -181,6 +188,19 @@ export default function LeadsPage() {
                   <div><Label className="text-muted-foreground">Payment</Label><div className="capitalize">{meta.payment_method || '—'}</div></div>
                   <div><Label className="text-muted-foreground">Final Amount</Label><div>₹{meta.final_amount ?? '—'}</div></div>
                 </div>
+                {detailLead.status !== 'converted' && (
+                  <div>
+                    <Label className="text-muted-foreground">Organization {detailLead.organization_id ? '' : '(not assigned)'}</Label>
+                    <Select value={assignOrgId} onValueChange={setAssignOrgId}>
+                      <SelectTrigger><SelectValue placeholder="Select organization to assign" /></SelectTrigger>
+                      <SelectContent>
+                        {organizations.map((o: any) => (
+                          <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div>
                   <Label className="text-muted-foreground">Courses & Batches</Label>
                   <ul className="list-disc pl-5 mt-1">
@@ -211,10 +231,14 @@ export default function LeadsPage() {
                 {detailLead.status !== 'converted' && students.length > 0 && (
                   <Button
                     className="w-full"
-                    disabled={approveMutation.isPending}
-                    onClick={() => approveMutation.mutate(detailLead.id)}
+                    disabled={approveMutation.isPending || !assignOrgId}
+                    onClick={() => approveMutation.mutate({ id: detailLead.id, organization_id: assignOrgId })}
                   >
-                    {approveMutation.isPending ? 'Creating accounts…' : `Approve & Create ${students.length} Student Account(s)`}
+                    {approveMutation.isPending
+                      ? 'Creating accounts…'
+                      : !assignOrgId
+                        ? 'Assign organization to continue'
+                        : `Approve & Create ${students.length} Student Account(s)`}
                   </Button>
                 )}
               </div>

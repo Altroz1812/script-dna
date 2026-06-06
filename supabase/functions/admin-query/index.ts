@@ -414,7 +414,7 @@ Deno.serve(async (req) => {
 
       // ===== APPROVE LEAD: create student accounts + enroll into batches =====
       case 'approve_lead': {
-        const { id } = params as { id: string }
+        const { id, organization_id: assignOrgId } = params as { id: string; organization_id?: string }
         if (!id) throw new Error('id required')
         if (!callerIsSuperadmin && !callerIsAdmin) {
           throw new Error('Only admins can approve leads')
@@ -429,9 +429,20 @@ Deno.serve(async (req) => {
         const meta: any = lead.metadata ?? {}
         const students: any[] = Array.isArray(meta.students) ? meta.students : []
         if (students.length === 0) throw new Error('No student details on lead')
-        const orgId = lead.organization_id ?? targetOrgId ?? null
+        // Resolve organisation: explicit assignment (superadmin) > existing > active scope.
+        const orgId = assignOrgId ?? lead.organization_id ?? targetOrgId ?? null
+        if (!orgId) throw new Error('Assign an organization before approving this lead')
+        // Non-superadmins can only assign to their own orgs.
+        if (!callerIsSuperadmin && !callerOrgMemberships.includes(orgId)) {
+          throw new Error('Forbidden: cannot assign lead to that organization')
+        }
+        // Persist the org assignment on the lead immediately.
+        if (lead.organization_id !== orgId) {
+          await supabase.from('leads').update({ organization_id: orgId }).eq('id', id)
+        }
         const created: any[] = []
         const enrolled: any[] = []
+        const errors: string[] = []
         const slugify = (s: string) => (s || 'student').toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.|\.$/g, '') || 'student'
         const parentEmail: string | null = meta.parent_email ?? lead.email ?? null
         const emailDomain = parentEmail && parentEmail.includes('@') ? parentEmail.split('@')[1] : 'aurapen.app'
@@ -450,35 +461,47 @@ Deno.serve(async (req) => {
           })
           if (authError) {
             console.error('createUser failed', authError.message)
+            errors.push(`createUser(${s.name}): ${authError.message}`)
             continue
           }
           const newUserId = authData.user.id
           await supabase.from('profiles')
             .update({ display_name: s.name, organization_id: orgId })
             .eq('user_id', newUserId)
-          // Ensure role = student (trigger already inserts 'student', but be safe)
+          // Ensure role = student (trigger inserts 'student', but be defensive)
           const { data: existingRole } = await supabase
             .from('user_roles').select('id').eq('user_id', newUserId).maybeSingle()
           if (!existingRole) {
             await supabase.from('user_roles').insert({ user_id: newUserId, role: 'student' })
           }
-          if (orgId) {
-            await supabase.from('organization_members')
-              .insert({ organization_id: orgId, user_id: newUserId })
-              .select().maybeSingle().then(() => {}, () => {})
+          // Org membership
+          const { error: memErr } = await supabase.from('organization_members')
+            .insert({ organization_id: orgId, user_id: newUserId })
+          if (memErr && !/duplicate/i.test(memErr.message)) {
+            errors.push(`orgMember(${s.name}): ${memErr.message}`)
           }
-          // Link parent → child if we know the parent user id.
+          // Link parent → child (critical for parent dashboard/RLS).
           if (meta.parent_user_id) {
-            await supabase.from('parent_children').insert({
+            const { error: pcErr } = await supabase.from('parent_children').insert({
               parent_id: meta.parent_user_id, child_id: newUserId,
-            }).then(() => {}, () => {})
+            })
+            if (pcErr && !/duplicate/i.test(pcErr.message)) {
+              console.error('parent_children insert failed', pcErr.message)
+              errors.push(`parentLink(${s.name}): ${pcErr.message}`)
+            }
+          } else {
+            errors.push(`parentLink(${s.name}): missing parent_user_id on lead`)
           }
           // Enroll into batch
           if (s.batch_id) {
             const { error: enrollErr } = await supabase.from('batch_students').insert({
               batch_id: s.batch_id, student_id: newUserId,
             })
-            if (!enrollErr) enrolled.push({ student_id: newUserId, batch_id: s.batch_id })
+            if (enrollErr && !/duplicate/i.test(enrollErr.message)) {
+              errors.push(`enroll(${s.name}): ${enrollErr.message}`)
+            } else {
+              enrolled.push({ student_id: newUserId, batch_id: s.batch_id })
+            }
           }
           created.push({
             student_id: newUserId, name: s.name, email: childEmail,
@@ -488,10 +511,10 @@ Deno.serve(async (req) => {
         await supabase.from('leads')
           .update({
             status: 'converted',
-            metadata: { ...meta, approved_at: new Date().toISOString(), created_students: created },
+            metadata: { ...meta, approved_at: new Date().toISOString(), approved_org_id: orgId, created_students: created, approval_errors: errors },
           })
           .eq('id', id)
-        result = { success: true, created_count: created.length, enrolled_count: enrolled.length, created }
+        result = { success: true, created_count: created.length, enrolled_count: enrolled.length, created, errors }
         break
       }
 
