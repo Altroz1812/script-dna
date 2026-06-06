@@ -237,60 +237,37 @@ export default function CheckoutPage() {
 
   // ===== ADD THIS NEW useEffect =====
   // Handle OAuth redirect with hash fragment
+  // Handle OAuth redirect with hash fragment
   useEffect(() => {
     const hash = window.location.hash;
 
-    if (hash && (hash.includes("access_token=") || hash.includes("error="))) {
-      console.log("Processing OAuth hash fragment...");
+    if (hash && hash.includes("access_token=")) {
+      console.log("Processing OAuth hash...");
 
-      (async () => {
-        try {
-          // Parse hash parameters
-          const params = new URLSearchParams(hash.substring(1));
-          const accessToken = params.get("access_token");
-          const refreshToken = params.get("refresh_token");
-          const error = params.get("error");
-          const errorDescription = params.get("error_description");
+      const params = new URLSearchParams(hash.substring(1));
+      const accessToken = params.get("access_token");
+      const refreshToken = params.get("refresh_token");
 
-          // Handle error
-          if (error) {
-            console.error("OAuth error:", error, errorDescription);
-            toast.error("Sign-in failed: " + (errorDescription || error));
-            window.history.replaceState(null, "", window.location.pathname);
-            return;
-          }
-
-          // Set session with tokens
-          if (accessToken && refreshToken) {
-            const { data, error: sessionError } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
-
-            if (sessionError) {
-              console.error("Set session error:", sessionError);
-              toast.error("Failed to complete sign-in");
-              return;
-            }
-
-            if (data?.session) {
-              console.log("Session established from hash");
-
-              // Clean up URL
+      if (accessToken && refreshToken) {
+        supabase.auth
+          .setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          })
+          .then(({ data, error }) => {
+            if (!error && data?.session) {
+              // Clean URL
               window.history.replaceState(null, "", window.location.pathname);
-
-              // Refresh profile
-              await refreshProfile();
-
+              // Auto-advance
+              setStep(1);
+              clearSignupIntent();
               toast.success("Signed in successfully!");
             }
-          }
-        } catch (err) {
-          console.error("Hash processing error:", err);
-        }
-      })();
+          });
+      }
     }
-  }, []); // Run once on mount
+  }, []);
+
   const handleSignOut = async () => {
     clearSignupIntent();
     await signOut();
