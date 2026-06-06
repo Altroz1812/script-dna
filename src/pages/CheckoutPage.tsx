@@ -156,9 +156,7 @@ export default function CheckoutPage() {
 
       const { error } = await lovable.auth.signInWithOAuth("google", {
         redirect_uri: window.location.origin + "/checkout",
-        options: {
-          queryParams: { prompt: "select_account" }, // Helps show account chooser
-        },
+        extraParams: { prompt: "select_account" }, // Helps show account chooser
       });
 
       if (error) {
