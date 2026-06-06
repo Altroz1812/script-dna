@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getNavigationForRole } from "@/config/navigation";
 import aurapenLogo from "/favicon.png";
 import { ChevronRight } from "lucide-react";
+import { useActiveOrg } from "@/contexts/ActiveOrgContext";
 import { cn } from "@/lib/utils";
 import {
   Sidebar,
@@ -24,6 +25,9 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
+  const { activeOrgId } = useActiveOrg(); // ← Add this
+
+  const isGlobalView = activeOrgId === null;
 
   if (loading || !profile) return <Skeleton />;
 
@@ -31,10 +35,11 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <Header collapsed={collapsed} role={profile.role} />
       <SidebarContent className="px-2 py-1 overflow-y-auto" id="sidebar-scroll-container">
-        {getNavigationForRole(profile.role).map((group) => (
+        {getNavigationForRole(profile.role, isGlobalView).map((group) => (
           <CollapsibleGroup key={group.label} group={group} collapsed={collapsed} pathname={location.pathname} />
         ))}
       </SidebarContent>
+
       {!collapsed && <Footer />}
       <SidebarRail />
     </Sidebar>
