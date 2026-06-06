@@ -636,12 +636,15 @@ function StudentCourseCard({
   onRemove: () => void;
 }) {
   useEffect(() => {
-    if (students.length === 0) onChange([{ name: "", grade: "", email: "", phone: "", schoolName: "" }]);
+    if (students.length === 0) {
+      onChange([{ name: "", grade: "", email: "", phone: "", schoolName: "" }]);
+    }
   }, [students.length, onChange]);
 
-  // Also in addStudent function:
   const addStudent = () => {
-    if (students.length < 5) onChange([...students, { name: "", grade: "", email: "", phone: "", schoolName: "" }]);
+    if (students.length < 5) {
+      onChange([...students, { name: "", grade: "", email: "", phone: "", schoolName: "" }]);
+    }
   };
 
   const removeStudent = (idx: number) => {
@@ -649,8 +652,8 @@ function StudentCourseCard({
   };
 
   const updateStudent = (idx: number, field: keyof ExtendedStudentDetail, value: string) => {
-    const updated = [...students]; // Create a new array copy
-    updated[idx] = { ...updated[idx], [field]: value }; // Create new object copy
+    const updated = [...students]; // Create new array
+    updated[idx] = { ...updated[idx], [field]: value }; // Create new object
     onChange(updated);
   };
 
@@ -711,7 +714,7 @@ function StudentCourseCard({
                 <Input
                   type="tel"
                   placeholder="Student's phone number"
-                  value={s.phone}
+                  value={s.phone || ""}
                   onChange={(e) => updateStudent(idx, "phone", e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground mt-1">For direct communication with student</p>
@@ -721,16 +724,16 @@ function StudentCourseCard({
                 <Input
                   type="email"
                   placeholder="student@example.com"
-                  value={s.email}
+                  value={s.email || ""}
                   onChange={(e) => updateStudent(idx, "email", e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground mt-1">We'll send course updates to this email</p>
               </div>
-              <div>
+              <div className="md:col-span-2">
                 <Label className="text-xs">School Name *</Label>
                 <Input
                   placeholder="School name"
-                  value={s.schoolName}
+                  value={s.schoolName || ""}
                   onChange={(e) => updateStudent(idx, "schoolName", e.target.value)}
                 />
               </div>
