@@ -709,7 +709,7 @@ function StudentCourseCard({
       </CardHeader>
       <CardContent className="space-y-6">
         {students.map((s, idx) => (
-          <div key={idx} className="space-y-3 p-4 border rounded-lg">
+  <div key={`student-${idx}`} className="space-y-3 p-4 border rounded-lg">  <div key={idx} className="space-y-3 p-4 border rounded-lg">
             <div className="flex justify-between items-center mb-2">
               <Label className="text-sm font-semibold">Student {idx + 1}</Label>
               {students.length > 1 && (
