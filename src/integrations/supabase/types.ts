@@ -747,6 +747,7 @@ export type Database = {
           discount_amount: number
           final_amount: number
           id: string
+          lead_payload: Json | null
           organization_id: string | null
           payment_session_id: string | null
           status: string
@@ -762,6 +763,7 @@ export type Database = {
           discount_amount?: number
           final_amount: number
           id?: string
+          lead_payload?: Json | null
           organization_id?: string | null
           payment_session_id?: string | null
           status?: string
@@ -777,6 +779,7 @@ export type Database = {
           discount_amount?: number
           final_amount?: number
           id?: string
+          lead_payload?: Json | null
           organization_id?: string | null
           payment_session_id?: string | null
           status?: string
