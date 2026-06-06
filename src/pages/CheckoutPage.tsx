@@ -379,7 +379,42 @@ export default function CheckoutPage() {
       })),
     );
   };
+  // Add this function in your component or create a custom hook
+  const sendHeartbeat = useCallback(async () => {
+    if (!session?.access_token) return; // Don't send if not authenticated
 
+    try {
+      const { data, error } = await supabase.functions.invoke("heartbeat", {
+        body: { end: false },
+      });
+
+      if (error) {
+        console.warn("Heartbeat failed:", error);
+        // Don't throw - heartbeat failures shouldn't break the app
+      }
+    } catch (err) {
+      console.warn("Heartbeat error:", err);
+      // Silently fail - this is non-critical
+    }
+  }, [session]);
+
+  // Send heartbeat every 30 seconds when user is active
+  useEffect(() => {
+    if (!session) return;
+
+    // Send initial heartbeat
+    sendHeartbeat();
+
+    // Set up interval
+    const interval = setInterval(sendHeartbeat, 30000); // Every 30 seconds
+
+    // Clean up on unmount
+    return () => {
+      clearInterval(interval);
+      // Send end session heartbeat
+      sendHeartbeat();
+    };
+  }, [session, sendHeartbeat]);
   const handlePayment = async () => {
     if (!paymentMethod) {
       toast.error("Please select a payment method");
