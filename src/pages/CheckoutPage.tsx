@@ -124,6 +124,7 @@ export default function CheckoutPage() {
   });
 
   // Initialize extended student details from cart context
+  // Initialize extended student details from cart context
   useEffect(() => {
     const newExtendedDetails: Record<string, ExtendedStudentDetail[]> = {};
     items.forEach((item) => {
@@ -136,7 +137,8 @@ export default function CheckoutPage() {
           schoolName: (detail as any).schoolName || "",
         }));
       } else {
-        newExtendedDetails[item.id] = [{ name: "", grade: "", email: "", schoolName: "" }];
+        // FIX: Added missing 'phone' field
+        newExtendedDetails[item.id] = [{ name: "", grade: "", email: "", phone: "", schoolName: "" }];
       }
     });
     setExtendedStudentDetails(newExtendedDetails);
