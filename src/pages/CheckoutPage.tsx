@@ -17,6 +17,7 @@ import {
   School,
   Mail,
   User,
+  Phone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +26,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
 import { useCart, type StudentDetail } from "@/contexts/CartContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -34,8 +34,17 @@ import { toast } from "sonner";
 
 const STEPS = ["Sign In", "Student Details", "Address", "Review & Discounts", "Payment"];
 
+// Extended StudentDetail with email and school
+interface ExtendedStudentDetail extends StudentDetail {
+  email: string;
+  schoolName: string;
+}
+
 // Discount logic
-function calculateDiscounts(items: { id: string; fee: number }[], studentDetails: Record<string, StudentDetail[]>) {
+function calculateDiscounts(
+  items: { id: string; fee: number }[],
+  studentDetails: Record<string, ExtendedStudentDetail[]>,
+) {
   let courseDiscount = 0;
   const courseCount = items.length;
   const subtotal = items.reduce((s, i) => s + (i.fee || 0), 0);
@@ -63,9 +72,8 @@ function calculateDiscounts(items: { id: string; fee: number }[], studentDetails
 
 // Address type
 interface AddressDetails {
-  studentName: string;
-  studentEmail: string;
-  schoolName: string;
+  parentName: string;
+  parentPhone: string;
   addressLine1: string;
   addressLine2: string;
   city: string;
@@ -99,11 +107,13 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState<"now" | "later" | null>(null);
   const [referenceNumber, setReferenceNumber] = useState("");
 
+  // Convert studentDetails to extended type
+  const [extendedStudentDetails, setExtendedStudentDetails] = useState<Record<string, ExtendedStudentDetail[]>>({});
+
   // Address state
   const [addressDetails, setAddressDetails] = useState<AddressDetails>({
-    studentName: "",
-    studentEmail: "",
-    schoolName: "",
+    parentName: "",
+    parentPhone: "",
     addressLine1: "",
     addressLine2: "",
     city: "",
@@ -112,6 +122,24 @@ export default function CheckoutPage() {
     country: "India",
   });
 
+  // Initialize extended student details from cart context
+  useEffect(() => {
+    const newExtendedDetails: Record<string, ExtendedStudentDetail[]> = {};
+    items.forEach((item) => {
+      const existingDetails = getStudentDetails(item.id);
+      if (existingDetails.length > 0) {
+        newExtendedDetails[item.id] = existingDetails.map((detail) => ({
+          ...detail,
+          email: (detail as any).email || "",
+          schoolName: (detail as any).schoolName || "",
+        }));
+      } else {
+        newExtendedDetails[item.id] = [{ name: "", grade: "", email: "", schoolName: "" }];
+      }
+    });
+    setExtendedStudentDetails(newExtendedDetails);
+  }, [items, getStudentDetails]);
+
   const clearSignupIntent = useCallback(() => {
     try {
       sessionStorage.removeItem("checkout_signup_intent");
@@ -119,7 +147,7 @@ export default function CheckoutPage() {
     setHasSignupIntent(false);
   }, []);
 
-  // Promote to parent logic (improved)
+  // Promote to parent logic
   useEffect(() => {
     if (!session || !profile || promoteAttempted.current) return;
     if (profile.role === "parent") {
@@ -205,14 +233,15 @@ export default function CheckoutPage() {
   };
 
   const allStudentDetailsFilled = items.every((item) => {
-    const details = getStudentDetails(item.id);
-    return details.length > 0 && details.every((d) => d.name.trim() && d.grade.trim());
+    const details = extendedStudentDetails[item.id] || [];
+    return details.length > 0 && details.every((d) => d.name.trim() && d.grade.trim() && d.schoolName.trim());
   });
 
   // Validate address step
   const isAddressValid = () => {
     return (
-      addressDetails.schoolName.trim() !== "" &&
+      addressDetails.parentName.trim() !== "" &&
+      addressDetails.parentPhone.trim() !== "" &&
       addressDetails.addressLine1.trim() !== "" &&
       addressDetails.city.trim() !== "" &&
       addressDetails.state.trim() !== "" &&
@@ -221,7 +250,7 @@ export default function CheckoutPage() {
     );
   };
 
-  const disc = calculateDiscounts(items, studentDetails);
+  const disc = calculateDiscounts(items, extendedStudentDetails);
   const finalAmount = Math.max(0, disc.final - couponDiscount);
 
   const handleApplyCoupon = async () => {
@@ -268,6 +297,15 @@ export default function CheckoutPage() {
     }
   };
 
+  const handleUpdateStudentDetails = (courseId: string, students: ExtendedStudentDetail[]) => {
+    setExtendedStudentDetails((prev) => ({ ...prev, [courseId]: students }));
+    // Also update the original cart context
+    setStudentDetails(
+      courseId,
+      students.map(({ name, grade }) => ({ name, grade })),
+    );
+  };
+
   const handlePayment = async () => {
     if (!paymentMethod) {
       toast.error("Please select a payment method");
@@ -289,7 +327,7 @@ export default function CheckoutPage() {
           batch_id: i.batch_id,
           batch_name: i.batch_name,
         })),
-        student_details: studentDetails,
+        student_details: extendedStudentDetails,
         address_details: addressDetails,
         coupon_code: couponApplied ? couponCode.trim().toUpperCase() : null,
         payment_method: paymentMethod,
@@ -392,8 +430,8 @@ export default function CheckoutPage() {
                 key="students"
                 items={items}
                 removeItem={removeItem}
-                getStudentDetails={getStudentDetails}
-                setStudentDetails={setStudentDetails}
+                studentDetails={extendedStudentDetails}
+                setStudentDetails={handleUpdateStudentDetails}
               />
             )}
             {step === 2 && (
@@ -403,7 +441,7 @@ export default function CheckoutPage() {
               <DiscountSummaryStep
                 key="discount"
                 items={items}
-                studentDetails={studentDetails}
+                studentDetails={extendedStudentDetails}
                 disc={disc}
                 couponCode={couponCode}
                 setCouponCode={setCouponCode}
@@ -537,13 +575,13 @@ function AuthGateStep({ onGoogleSignIn }: { onGoogleSignIn: () => void }) {
 function StudentDetailsStep({
   items,
   removeItem,
-  getStudentDetails,
+  studentDetails,
   setStudentDetails,
 }: {
   items: { id: string; name: string; fee: number; grade_level: string | null }[];
   removeItem: (id: string) => void;
-  getStudentDetails: (id: string) => StudentDetail[];
-  setStudentDetails: (id: string, s: StudentDetail[]) => void;
+  studentDetails: Record<string, ExtendedStudentDetail[]>;
+  setStudentDetails: (id: string, s: ExtendedStudentDetail[]) => void;
 }) {
   return (
     <motion.div
@@ -573,7 +611,7 @@ function StudentDetailsStep({
         <StudentCourseCard
           key={item.id}
           item={item}
-          students={getStudentDetails(item.id)}
+          students={studentDetails[item.id] || []}
           onChange={(students) => setStudentDetails(item.id, students)}
           onRemove={() => removeItem(item.id)}
         />
@@ -589,23 +627,23 @@ function StudentCourseCard({
   onRemove,
 }: {
   item: { id: string; name: string; fee: number; grade_level: string | null };
-  students: StudentDetail[];
-  onChange: (s: StudentDetail[]) => void;
+  students: ExtendedStudentDetail[];
+  onChange: (s: ExtendedStudentDetail[]) => void;
   onRemove: () => void;
 }) {
   useEffect(() => {
-    if (students.length === 0) onChange([{ name: "", grade: "" }]);
+    if (students.length === 0) onChange([{ name: "", grade: "", email: "", schoolName: "" }]);
   }, [students.length, onChange]);
 
   const addStudent = () => {
-    if (students.length < 5) onChange([...students, { name: "", grade: "" }]);
+    if (students.length < 5) onChange([...students, { name: "", grade: "", email: "", schoolName: "" }]);
   };
 
   const removeStudent = (idx: number) => {
     onChange(students.filter((_, i) => i !== idx));
   };
 
-  const updateStudent = (idx: number, field: "name" | "grade", value: string) => {
+  const updateStudent = (idx: number, field: keyof ExtendedStudentDetail, value: string) => {
     const updated = students.map((s, i) => (i === idx ? { ...s, [field]: value } : s));
     onChange(updated);
   };
@@ -628,42 +666,68 @@ function StudentCourseCard({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-6">
         {students.map((s, idx) => (
-          <div key={idx} className="flex gap-3 items-end">
-            <div className="flex-1">
-              <Label className="text-xs">Student {idx + 1} Name *</Label>
-              <Input
-                placeholder="Full name"
-                value={s.name}
-                onChange={(e) => updateStudent(idx, "name", e.target.value)}
-              />
+          <div key={idx} className="space-y-3 p-4 border rounded-lg">
+            <div className="flex justify-between items-center mb-2">
+              <Label className="text-sm font-semibold">Student {idx + 1}</Label>
+              {students.length > 1 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeStudent(idx)}
+                  className="text-muted-foreground hover:text-destructive h-8 w-8 p-0"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
             </div>
-            <div className="w-32">
-              <Label className="text-xs">Grade/Age *</Label>
-              <Input
-                placeholder="e.g. Grade 3"
-                value={s.grade}
-                onChange={(e) => updateStudent(idx, "grade", e.target.value)}
-              />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Student Name *</Label>
+                <Input
+                  placeholder="Full name"
+                  value={s.name}
+                  onChange={(e) => updateStudent(idx, "name", e.target.value)}
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Grade/Age *</Label>
+                <Input
+                  placeholder="e.g. Grade 3"
+                  value={s.grade}
+                  onChange={(e) => updateStudent(idx, "grade", e.target.value)}
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Student Email (Optional)</Label>
+                <Input
+                  type="email"
+                  placeholder="student@example.com"
+                  value={s.email}
+                  onChange={(e) => updateStudent(idx, "email", e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground mt-1">We'll send course updates to this email</p>
+              </div>
+              <div>
+                <Label className="text-xs">School Name *</Label>
+                <Input
+                  placeholder="School name"
+                  value={s.schoolName}
+                  onChange={(e) => updateStudent(idx, "schoolName", e.target.value)}
+                />
+              </div>
             </div>
-            {students.length > 1 && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => removeStudent(idx)}
-                className="h-10 w-10 text-muted-foreground hover:text-destructive"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            )}
           </div>
         ))}
+
         {students.length < 5 && (
           <Button variant="outline" size="sm" onClick={addStudent} className="w-full">
             + Add Another Student
           </Button>
         )}
+
         {students.length >= 2 && (
           <p className="text-xs text-primary flex items-center gap-1">
             <Percent className="h-3 w-3" />
@@ -695,49 +759,39 @@ function AddressStep({
     >
       <div className="text-center mb-6">
         <MapPin className="mx-auto h-10 w-10 text-primary mb-2" />
-        <h2 className="text-2xl font-bold text-foreground">Address Details</h2>
-        <p className="text-muted-foreground">Please provide your contact and address information</p>
+        <h2 className="text-2xl font-bold text-foreground">Parent/Guardian Details</h2>
+        <p className="text-muted-foreground">Please provide parent/guardian contact information</p>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <User className="h-5 w-5" />
-            Contact Information
+            Parent/Guardian Information
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <Label htmlFor="studentName">Student Name (Optional)</Label>
+            <Label htmlFor="parentName">Parent/Guardian Full Name *</Label>
             <Input
-              id="studentName"
-              placeholder="Enter student's full name"
-              value={addressDetails.studentName}
-              onChange={(e) => updateField("studentName", e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground mt-1">Name of the primary student (if different from parent)</p>
-          </div>
-          <div>
-            <Label htmlFor="studentEmail">Student Email (Optional)</Label>
-            <Input
-              id="studentEmail"
-              type="email"
-              placeholder="student@example.com"
-              value={addressDetails.studentEmail}
-              onChange={(e) => updateField("studentEmail", e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground mt-1">We'll send course updates to this email</p>
-          </div>
-          <div>
-            <Label htmlFor="schoolName">School Name *</Label>
-            <Input
-              id="schoolName"
-              placeholder="Enter school name"
-              value={addressDetails.schoolName}
-              onChange={(e) => updateField("schoolName", e.target.value)}
+              id="parentName"
+              placeholder="Enter parent/guardian name"
+              value={addressDetails.parentName}
+              onChange={(e) => updateField("parentName", e.target.value)}
               required
             />
-            <p className="text-xs text-muted-foreground mt-1">Current school where the student is enrolled</p>
+          </div>
+          <div>
+            <Label htmlFor="parentPhone">Parent/Guardian Phone Number *</Label>
+            <Input
+              id="parentPhone"
+              type="tel"
+              placeholder="Enter phone number"
+              value={addressDetails.parentPhone}
+              onChange={(e) => updateField("parentPhone", e.target.value)}
+              required
+            />
+            <p className="text-xs text-muted-foreground mt-1">We'll use this for communication regarding enrollment</p>
           </div>
         </CardContent>
       </Card>
@@ -831,7 +885,7 @@ function DiscountSummaryStep({
   finalAmount,
 }: {
   items: { id: string; name: string; fee: number }[];
-  studentDetails: Record<string, StudentDetail[]>;
+  studentDetails: Record<string, ExtendedStudentDetail[]>;
   disc: ReturnType<typeof calculateDiscounts>;
   couponCode: string;
   setCouponCode: (v: string) => void;
@@ -866,6 +920,11 @@ function DiscountSummaryStep({
                     {students.length} student{students.length !== 1 ? "s" : ""}:{" "}
                     {students.map((s) => s.name).join(", ")}
                   </p>
+                  {students.some((s) => s.schoolName) && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Schools: {students.map((s) => s.schoolName).join(", ")}
+                    </p>
+                  )}
                 </div>
                 <span className="font-medium text-foreground">₹{item.fee?.toLocaleString()}</span>
               </div>
