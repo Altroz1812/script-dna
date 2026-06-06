@@ -657,10 +657,19 @@ function StudentCourseCard({
   };
 
   // Ensure at least one student exists
-  if (students.length === 0) {
-    onChange([{ name: "", grade: "", email: "", phone: "", schoolName: "" }]);
-    return null;
-  }
+  useEffect(() => {
+    if (students.length === 0) {
+      onChange([
+        {
+          name: "",
+          grade: "",
+          email: "",
+          phone: "",
+          schoolName: "",
+        },
+      ]);
+    }
+  }, []);
 
   return (
     <Card>
