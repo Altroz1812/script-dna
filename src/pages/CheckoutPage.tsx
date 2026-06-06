@@ -13,6 +13,10 @@ import {
   Tag,
   Percent,
   ShieldAlert,
+  MapPin,
+  School,
+  Mail,
+  User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,13 +25,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import { useCart, type StudentDetail } from "@/contexts/CartContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
 import { toast } from "sonner";
 
-const STEPS = ["Sign In", "Student Details", "Review & Discounts", "Payment"];
+const STEPS = ["Sign In", "Student Details", "Address", "Review & Discounts", "Payment"];
 
 // Discount logic
 function calculateDiscounts(items: { id: string; fee: number }[], studentDetails: Record<string, StudentDetail[]>) {
@@ -56,6 +61,19 @@ function calculateDiscounts(items: { id: string; fee: number }[], studentDetails
   };
 }
 
+// Address type
+interface AddressDetails {
+  studentName: string;
+  studentEmail: string;
+  schoolName: string;
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  state: string;
+  pincode: string;
+  country: string;
+}
+
 export default function CheckoutPage() {
   const { items, removeItem, clearCart, studentDetails, setStudentDetails, getStudentDetails } = useCart();
   const { session, profile, loading: authLoading, signOut, refreshProfile } = useAuth();
@@ -80,6 +98,19 @@ export default function CheckoutPage() {
 
   const [paymentMethod, setPaymentMethod] = useState<"now" | "later" | null>(null);
   const [referenceNumber, setReferenceNumber] = useState("");
+
+  // Address state
+  const [addressDetails, setAddressDetails] = useState<AddressDetails>({
+    studentName: "",
+    studentEmail: "",
+    schoolName: "",
+    addressLine1: "",
+    addressLine2: "",
+    city: "",
+    state: "",
+    pincode: "",
+    country: "India",
+  });
 
   const clearSignupIntent = useCallback(() => {
     try {
@@ -148,7 +179,6 @@ export default function CheckoutPage() {
 
   const handleGoogleSignIn = async () => {
     try {
-      // Mark intent before starting OAuth
       try {
         sessionStorage.setItem("checkout_signup_intent", "1");
       } catch {}
@@ -156,7 +186,7 @@ export default function CheckoutPage() {
 
       const { error } = await lovable.auth.signInWithOAuth("google", {
         redirect_uri: window.location.origin + "/checkout",
-        extraParams: { prompt: "select_account" }, // Helps show account chooser
+        extraParams: { prompt: "select_account" },
       });
 
       if (error) {
@@ -178,6 +208,18 @@ export default function CheckoutPage() {
     const details = getStudentDetails(item.id);
     return details.length > 0 && details.every((d) => d.name.trim() && d.grade.trim());
   });
+
+  // Validate address step
+  const isAddressValid = () => {
+    return (
+      addressDetails.schoolName.trim() !== "" &&
+      addressDetails.addressLine1.trim() !== "" &&
+      addressDetails.city.trim() !== "" &&
+      addressDetails.state.trim() !== "" &&
+      addressDetails.pincode.trim() !== "" &&
+      addressDetails.country.trim() !== ""
+    );
+  };
 
   const disc = calculateDiscounts(items, studentDetails);
   const finalAmount = Math.max(0, disc.final - couponDiscount);
@@ -248,6 +290,7 @@ export default function CheckoutPage() {
           batch_name: i.batch_name,
         })),
         student_details: studentDetails,
+        address_details: addressDetails,
         coupon_code: couponApplied ? couponCode.trim().toUpperCase() : null,
         payment_method: paymentMethod,
         reference_number: paymentMethod === "now" ? referenceNumber.trim() : null,
@@ -354,6 +397,9 @@ export default function CheckoutPage() {
               />
             )}
             {step === 2 && (
+              <AddressStep key="address" addressDetails={addressDetails} setAddressDetails={setAddressDetails} />
+            )}
+            {step === 3 && (
               <DiscountSummaryStep
                 key="discount"
                 items={items}
@@ -367,7 +413,7 @@ export default function CheckoutPage() {
                 finalAmount={finalAmount}
               />
             )}
-            {step === 3 && (
+            {step === 4 && (
               <PaymentStep
                 key="payment"
                 finalAmount={finalAmount}
@@ -393,10 +439,14 @@ export default function CheckoutPage() {
               <ArrowLeft className="h-4 w-4 mr-2" /> Back
             </Button>
 
-            {step < 3 && (
+            {step < 4 && (
               <Button
                 onClick={() => setStep((s) => s + 1)}
-                disabled={(step === 0 && !session) || (step === 1 && !allStudentDetailsFilled)}
+                disabled={
+                  (step === 0 && !session) ||
+                  (step === 1 && !allStudentDetailsFilled) ||
+                  (step === 2 && !isAddressValid())
+                }
               >
                 Next <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
@@ -543,10 +593,9 @@ function StudentCourseCard({
   onChange: (s: StudentDetail[]) => void;
   onRemove: () => void;
 }) {
-  // Move useEffect INSIDE the component function
   useEffect(() => {
     if (students.length === 0) onChange([{ name: "", grade: "" }]);
-  }, [students.length, onChange]); // Added proper dependencies
+  }, [students.length, onChange]);
 
   const addStudent = () => {
     if (students.length < 5) onChange([...students, { name: "", grade: "" }]);
@@ -625,6 +674,151 @@ function StudentCourseCard({
     </Card>
   );
 }
+
+function AddressStep({
+  addressDetails,
+  setAddressDetails,
+}: {
+  addressDetails: AddressDetails;
+  setAddressDetails: (details: AddressDetails) => void;
+}) {
+  const updateField = (field: keyof AddressDetails, value: string) => {
+    setAddressDetails({ ...addressDetails, [field]: value });
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 30 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -30 }}
+      className="space-y-6"
+    >
+      <div className="text-center mb-6">
+        <MapPin className="mx-auto h-10 w-10 text-primary mb-2" />
+        <h2 className="text-2xl font-bold text-foreground">Address Details</h2>
+        <p className="text-muted-foreground">Please provide your contact and address information</p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <User className="h-5 w-5" />
+            Contact Information
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label htmlFor="studentName">Student Name (Optional)</Label>
+            <Input
+              id="studentName"
+              placeholder="Enter student's full name"
+              value={addressDetails.studentName}
+              onChange={(e) => updateField("studentName", e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground mt-1">Name of the primary student (if different from parent)</p>
+          </div>
+          <div>
+            <Label htmlFor="studentEmail">Student Email (Optional)</Label>
+            <Input
+              id="studentEmail"
+              type="email"
+              placeholder="student@example.com"
+              value={addressDetails.studentEmail}
+              onChange={(e) => updateField("studentEmail", e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground mt-1">We'll send course updates to this email</p>
+          </div>
+          <div>
+            <Label htmlFor="schoolName">School Name *</Label>
+            <Input
+              id="schoolName"
+              placeholder="Enter school name"
+              value={addressDetails.schoolName}
+              onChange={(e) => updateField("schoolName", e.target.value)}
+              required
+            />
+            <p className="text-xs text-muted-foreground mt-1">Current school where the student is enrolled</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="h-5 w-5" />
+            Address Information
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label htmlFor="addressLine1">Address Line 1 *</Label>
+            <Input
+              id="addressLine1"
+              placeholder="House/Flat No., Building Name"
+              value={addressDetails.addressLine1}
+              onChange={(e) => updateField("addressLine1", e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="addressLine2">Address Line 2 (Optional)</Label>
+            <Input
+              id="addressLine2"
+              placeholder="Street, Area, Landmark"
+              value={addressDetails.addressLine2}
+              onChange={(e) => updateField("addressLine2", e.target.value)}
+            />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="city">City *</Label>
+              <Input
+                id="city"
+                placeholder="City"
+                value={addressDetails.city}
+                onChange={(e) => updateField("city", e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="state">State *</Label>
+              <Input
+                id="state"
+                placeholder="State"
+                value={addressDetails.state}
+                onChange={(e) => updateField("state", e.target.value)}
+                required
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="pincode">PIN Code *</Label>
+              <Input
+                id="pincode"
+                placeholder="PIN Code"
+                value={addressDetails.pincode}
+                onChange={(e) => updateField("pincode", e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="country">Country *</Label>
+              <Input
+                id="country"
+                placeholder="Country"
+                value={addressDetails.country}
+                onChange={(e) => updateField("country", e.target.value)}
+                required
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+}
+
 function DiscountSummaryStep({
   items,
   studentDetails,
