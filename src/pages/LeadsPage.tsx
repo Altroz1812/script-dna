@@ -23,6 +23,13 @@ export default function LeadsPage() {
   const [form, setForm] = useState({ name: "", email: "", phone: "", source: "", notes: "" });
   const [detailLead, setDetailLead] = useState<any | null>(null);
   const [assignOrgId, setAssignOrgId] = useState<string>("");
+  const [payForm, setPayForm] = useState<{
+    method: string;
+    reference: string;
+    status: "pending" | "completed";
+    date: string;
+    notes: string;
+  }>({ method: "cash", reference: "", status: "completed", date: new Date().toISOString().slice(0, 10), notes: "" });
 
   const { data: leads = [], isLoading } = useQuery<any[]>({
     queryKey: ["leads"],
@@ -78,11 +85,37 @@ export default function LeadsPage() {
   });
 
   const approveMutation = useMutation({
-    mutationFn: ({ id, organization_id }: { id: string; organization_id?: string }) =>
-      adminQuery("approve_lead", { id, organization_id }),
+    mutationFn: ({
+      id,
+      organization_id,
+      payment_method,
+      reference_number,
+      payment_status,
+      payment_date,
+      payment_notes,
+    }: {
+      id: string;
+      organization_id?: string;
+      payment_method?: string;
+      reference_number?: string;
+      payment_status?: "pending" | "completed";
+      payment_date?: string;
+      payment_notes?: string;
+    }) =>
+      adminQuery("approve_lead", {
+        id,
+        organization_id,
+        payment_method,
+        reference_number,
+        payment_status,
+        payment_date,
+        payment_notes,
+      }),
     onSuccess: (data: any) => {
       const errs = Array.isArray(data?.errors) ? data.errors : [];
-      toast.success(`Created ${data?.created_count ?? 0} student(s), enrolled ${data?.enrolled_count ?? 0}`);
+      toast.success(
+        `Created ${data?.created_count ?? 0} student(s), enrolled ${data?.enrolled_count ?? 0}, ${data?.payments_count ?? 0} payment(s)`,
+      );
       if (errs.length) toast.warning(`${errs.length} issue(s): ${errs.slice(0, 2).join("; ")}`);
       setDetailLead(null);
       setAssignOrgId("");
@@ -484,34 +517,114 @@ export default function LeadsPage() {
 
                   {/* Approval Section (outside tabs) */}
                   {!isConverted && students.length > 0 && (
-                    <div className="border-t pt-4 mt-4">
-                      <div className="flex items-end gap-3">
-                        <div className="flex-1">
-                          <Label>Assign Organization</Label>
-                          <Select value={assignOrgId} onValueChange={setAssignOrgId}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select organization..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {organizations.map((o: any) => (
-                                <SelectItem key={o.id} value={o.id}>
-                                  {o.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <Button
-                          className="min-w-[220px]"
-                          disabled={approveMutation.isPending || !assignOrgId}
-                          onClick={() => approveMutation.mutate({ id: detailLead.id, organization_id: assignOrgId })}
-                        >
-                          {approveMutation.isPending
-                            ? "Creating accounts…"
-                            : `Approve & Create ${students.length} Student Account(s)`}
-                        </Button>
+                    <div className="border-t pt-4 mt-4 space-y-4">
+                      <div>
+                        <Label>Assign Organization *</Label>
+                        <Select value={assignOrgId} onValueChange={setAssignOrgId}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select organization..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {organizations.map((o: any) => (
+                              <SelectItem key={o.id} value={o.id}>
+                                {o.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
+
+                      <div className="rounded-md border p-3 space-y-3 bg-muted/30">
+                        <div className="text-sm font-medium">Record Payment</div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-xs">Method</Label>
+                            <Select
+                              value={payForm.method}
+                              onValueChange={(v) => setPayForm((f) => ({ ...f, method: v }))}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="cash">Cash</SelectItem>
+                                <SelectItem value="upi">UPI</SelectItem>
+                                <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                                <SelectItem value="cheque">Cheque</SelectItem>
+                                <SelectItem value="card">Card (POS)</SelectItem>
+                                <SelectItem value="cashfree">Cashfree (Online)</SelectItem>
+                                <SelectItem value="other">Other</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-xs">Status</Label>
+                            <Select
+                              value={payForm.status}
+                              onValueChange={(v: "pending" | "completed") =>
+                                setPayForm((f) => ({ ...f, status: v }))
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="completed">Paid Now</SelectItem>
+                                <SelectItem value="pending">Pay Later</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-xs">Reference No.</Label>
+                            <Input
+                              value={payForm.reference}
+                              onChange={(e) => setPayForm((f) => ({ ...f, reference: e.target.value }))}
+                              placeholder="UTR / Txn / Cheque #"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Payment Date</Label>
+                            <Input
+                              type="date"
+                              value={payForm.date}
+                              onChange={(e) => setPayForm((f) => ({ ...f, date: e.target.value }))}
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <Label className="text-xs">Notes</Label>
+                            <Input
+                              value={payForm.notes}
+                              onChange={(e) => setPayForm((f) => ({ ...f, notes: e.target.value }))}
+                              placeholder="Optional remarks"
+                            />
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          One payment row per student will be created under the selected organization
+                          (₹{meta.final_amount?.toLocaleString() ?? 0} total across {students.length} student
+                          {students.length === 1 ? "" : "s"}).
+                        </p>
+                      </div>
+
+                      <Button
+                        className="w-full"
+                        disabled={approveMutation.isPending || !assignOrgId}
+                        onClick={() =>
+                          approveMutation.mutate({
+                            id: detailLead.id,
+                            organization_id: assignOrgId,
+                            payment_method: payForm.method,
+                            reference_number: payForm.reference || undefined,
+                            payment_status: payForm.status,
+                            payment_date: payForm.date,
+                            payment_notes: payForm.notes || undefined,
+                          })
+                        }
+                      >
+                        {approveMutation.isPending
+                          ? "Creating accounts & payments…"
+                          : `Approve, Create ${students.length} Account(s) & Record Payment`}
+                      </Button>
                     </div>
                   )}
                 </div>

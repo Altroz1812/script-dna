@@ -189,69 +189,6 @@ Deno.serve(async (req) => {
         console.error("lead-payload-stash-failed", (e as Error).message);
       }
 
-      // Manual flows: when the parent chose "Pay Now" (with a reference number
-      // proving an external transfer) or "Pay Later" (cash/offline at branch),
-      // we do NOT redirect to Cashfree. Materialise the Lead row immediately
-      // so SuperAdmin/Admin can validate, assign an organisation, and approve.
-      // Organisation is intentionally left NULL — assigned on approval.
-      if (payment_method === "now" || payment_method === "later") {
-        try {
-          const studentsFlat: any[] = [];
-          for (const item of items) {
-            const list = (student_details?.[item.id] as any[]) || [];
-            for (const s of list) {
-              studentsFlat.push({
-                name: s.name,
-                grade: s.grade,
-                course_id: item.id,
-                course_name: item.name,
-                batch_id: item.batch_id ?? null,
-                batch_name: item.batch_name ?? null,
-                fee: item.fee ?? 0,
-              });
-            }
-          }
-          const itemsArr = items.map((i: any) => ({
-            course_id: i.id, course_name: i.name,
-            batch_id: i.batch_id ?? null, batch_name: i.batch_name ?? null,
-            fee: i.fee ?? 0,
-          }));
-          const leadMeta = {
-            parent_user_id: user.id,
-            parent_email: profile?.email || user.email || null,
-            parent_name: profile?.display_name || null,
-            items: itemsArr,
-            students: studentsFlat,
-            payment_method,
-            reference_number: reference_number ?? null,
-            subtotal,
-            discount: totalDiscount,
-            final_amount: finalAmount,
-            coupon_code: coupon_code ?? null,
-            submitted_at: new Date().toISOString(),
-          };
-          await supabaseAdmin.from("leads").insert({
-            name: profile?.display_name || profile?.email || user.email || "Checkout enrollment",
-            email: profile?.email || user.email || null,
-            phone: null,
-            source: "checkout",
-            status: "new",
-            organization_id: null,
-            order_id: order.id,
-            notes: payment_method === "now"
-              ? `Pay Now (manual ref ${reference_number ?? "—"}) • ₹${finalAmount} • ${itemsArr.length} course(s) • ${studentsFlat.length} student(s)`
-              : `Pay Later (offline) • ₹${finalAmount} • ${itemsArr.length} course(s) • ${studentsFlat.length} student(s)`,
-            metadata: leadMeta,
-          });
-          await supabaseAdmin.from("orders")
-            .update({ status: payment_method === "now" ? "awaiting_verification" : "pay_later" })
-            .eq("id", order.id);
-        } catch (e) {
-          console.error("manual-lead-create-failed", (e as Error).message);
-        }
-        return jsonRes({ order_id: order.id, configured: false, manual: true, payment_method });
-      }
-
       // Check if Cashfree is configured
       const { data: config } = await supabaseAdmin
         .from("payment_config")
