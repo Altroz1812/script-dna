@@ -515,12 +515,104 @@ export default function LeadsPage() {
                         <Button
                           className="min-w-[220px]"
                           disabled={approveMutation.isPending || !assignOrgId}
-                          onClick={() => approveMutation.mutate({ id: detailLead.id, organization_id: assignOrgId })}
+                          onClick={() =>
+                            approveMutation.mutate({
+                              id: detailLead.id,
+                              organization_id: assignOrgId,
+                              payment: recordPayment
+                                ? {
+                                    amount: parseFloat(payForm.amount),
+                                    method: payForm.method,
+                                    reference_number: payForm.reference_number || undefined,
+                                    payment_date: payForm.payment_date,
+                                    status: payForm.status,
+                                  }
+                                : undefined,
+                            })
+                          }
                         >
                           {approveMutation.isPending
                             ? "Creating accounts…"
                             : `Approve & Create ${students.length} Student Account(s)`}
                         </Button>
+                      </div>
+
+                      <div className="mt-4 rounded-md border p-3 bg-muted/30">
+                        <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={recordPayment}
+                            onChange={(e) => {
+                              setRecordPayment(e.target.checked);
+                              if (e.target.checked && !payForm.amount && meta.final_amount) {
+                                setPayForm((f) => ({ ...f, amount: String(meta.final_amount) }));
+                              }
+                            }}
+                          />
+                          Record offline / pay-later payment for this lead
+                        </label>
+                        {recordPayment && (
+                          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-3">
+                            <div>
+                              <Label className="text-xs">Amount (₹) *</Label>
+                              <Input
+                                type="number"
+                                value={payForm.amount}
+                                onChange={(e) => setPayForm((f) => ({ ...f, amount: e.target.value }))}
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs">Method</Label>
+                              <Select
+                                value={payForm.method}
+                                onValueChange={(v) => setPayForm((f) => ({ ...f, method: v }))}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="cash">Cash</SelectItem>
+                                  <SelectItem value="upi">UPI</SelectItem>
+                                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                                  <SelectItem value="cheque">Cheque</SelectItem>
+                                  <SelectItem value="card">Card (POS)</SelectItem>
+                                  <SelectItem value="other">Other</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label className="text-xs">Reference #</Label>
+                              <Input
+                                value={payForm.reference_number}
+                                onChange={(e) => setPayForm((f) => ({ ...f, reference_number: e.target.value }))}
+                                placeholder="UTR / Txn ID"
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs">Date</Label>
+                              <Input
+                                type="date"
+                                value={payForm.payment_date}
+                                onChange={(e) => setPayForm((f) => ({ ...f, payment_date: e.target.value }))}
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs">Status</Label>
+                              <Select
+                                value={payForm.status}
+                                onValueChange={(v) => setPayForm((f) => ({ ...f, status: v }))}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="completed">Completed</SelectItem>
+                                  <SelectItem value="pending">Pending</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
