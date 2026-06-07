@@ -414,9 +414,21 @@ Deno.serve(async (req) => {
 
       // ===== APPROVE LEAD: create student accounts + enroll into batches =====
       case 'approve_lead': {
-        const { id, organization_id: assignOrgId } = params as { id: string; organization_id?: string }
+        const { id, organization_id: assignOrgId, payment } = params as {
+          id: string;
+          organization_id?: string;
+          payment?: {
+            amount?: number | string;
+            method?: string;
+            reference_number?: string;
+            payment_date?: string;
+            status?: string;
+            currency?: string;
+            description?: string;
+          };
+        }
         if (!id) throw new Error('id required')
-        if (!callerIsSuperadmin && !callerIsAdmin) {
+        if (!callerIsSuperadmin && !callerIsAdmin && !callerIsSupport) {
           throw new Error('Only admins can approve leads')
         }
         const { data: lead, error: leadErr } = await supabase
@@ -508,13 +520,48 @@ Deno.serve(async (req) => {
             temp_password: tempPassword, batch_id: s.batch_id ?? null,
           })
         }
+        // Optionally record an offline / pay-later payment tied to the org.
+        let payment_recorded: any = null
+        if (payment && payment.amount !== undefined && payment.amount !== null && String(payment.amount) !== '') {
+          const amt = typeof payment.amount === 'string' ? parseFloat(payment.amount) : payment.amount
+          if (!Number.isFinite(amt) || amt <= 0) {
+            errors.push(`payment: invalid amount`)
+          } else {
+            const payerStudentId = meta.parent_user_id || created[0]?.student_id || null
+            if (!payerStudentId) {
+              errors.push('payment: no payer reference (missing parent_user_id and no students created)')
+            } else {
+              const desc = payment.description
+                || `Lead ${id} • ${payment.method || 'offline'}${payment.reference_number ? ` • Ref ${payment.reference_number}` : ''}`
+              const { data: payRow, error: payErr } = await supabase.from('payments').insert({
+                student_id: payerStudentId,
+                organization_id: orgId,
+                amount: amt,
+                currency: payment.currency || 'INR',
+                description: desc,
+                status: payment.status || 'completed',
+                payment_date: payment.payment_date || new Date().toISOString().slice(0, 10),
+              }).select('id').maybeSingle()
+              if (payErr) errors.push(`payment: ${payErr.message}`)
+              else payment_recorded = payRow
+            }
+          }
+        }
         await supabase.from('leads')
           .update({
             status: 'converted',
-            metadata: { ...meta, approved_at: new Date().toISOString(), approved_org_id: orgId, created_students: created, approval_errors: errors },
+            metadata: {
+              ...meta,
+              approved_at: new Date().toISOString(),
+              approved_org_id: orgId,
+              created_students: created,
+              approval_errors: errors,
+              payment_recorded: payment_recorded ?? meta.payment_recorded ?? null,
+              offline_payment: payment ?? meta.offline_payment ?? null,
+            },
           })
           .eq('id', id)
-        result = { success: true, created_count: created.length, enrolled_count: enrolled.length, created, errors }
+        result = { success: true, created_count: created.length, enrolled_count: enrolled.length, created, errors, payment_recorded }
         break
       }
 
