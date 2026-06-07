@@ -507,6 +507,29 @@ Deno.serve(async (req) => {
             student_id: newUserId, name: s.name, email: childEmail,
             temp_password: tempPassword, batch_id: s.batch_id ?? null,
           })
+          // Record a payment row stamped to the assigned organisation so the
+          // org's finance dashboard reflects this enrolment. Pay-now (gateway
+          // or manual ref) → completed; pay-later (offline) → pending.
+          const fee = Number(s.fee ?? 0)
+          if (fee > 0) {
+            const pm = meta.payment_method ?? null
+            const ref = meta.reference_number ?? null
+            const isPaid = pm === 'now' || pm === 'online' || pm == null
+            const desc = pm === 'later'
+              ? `Offline / Pay Later • ${s.course_name ?? ''}`
+              : pm === 'now'
+                ? `Pay Now (ref ${ref ?? '—'}) • ${s.course_name ?? ''}`
+                : `Online payment • ${s.course_name ?? ''}`
+            const { error: payErr } = await supabase.from('payments').insert({
+              student_id: newUserId,
+              organization_id: orgId,
+              amount: fee,
+              currency: 'INR',
+              description: desc.trim(),
+              status: isPaid ? 'completed' : 'pending',
+            })
+            if (payErr) errors.push(`payment(${s.name}): ${payErr.message}`)
+          }
         }
         await supabase.from('leads')
           .update({
