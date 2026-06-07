@@ -414,21 +414,9 @@ Deno.serve(async (req) => {
 
       // ===== APPROVE LEAD: create student accounts + enroll into batches =====
       case 'approve_lead': {
-        const { id, organization_id: assignOrgId, payment } = params as {
-          id: string;
-          organization_id?: string;
-          payment?: {
-            amount?: number | string;
-            method?: string;
-            reference_number?: string;
-            payment_date?: string;
-            status?: string;
-            currency?: string;
-            description?: string;
-          };
-        }
+        const { id } = params as { id: string }
         if (!id) throw new Error('id required')
-        if (!callerIsSuperadmin && !callerIsAdmin && !callerIsSupport) {
+        if (!callerIsSuperadmin && !callerIsAdmin) {
           throw new Error('Only admins can approve leads')
         }
         const { data: lead, error: leadErr } = await supabase
@@ -441,20 +429,9 @@ Deno.serve(async (req) => {
         const meta: any = lead.metadata ?? {}
         const students: any[] = Array.isArray(meta.students) ? meta.students : []
         if (students.length === 0) throw new Error('No student details on lead')
-        // Resolve organisation: explicit assignment (superadmin) > existing > active scope.
-        const orgId = assignOrgId ?? lead.organization_id ?? targetOrgId ?? null
-        if (!orgId) throw new Error('Assign an organization before approving this lead')
-        // Non-superadmins can only assign to their own orgs.
-        if (!callerIsSuperadmin && !callerOrgMemberships.includes(orgId)) {
-          throw new Error('Forbidden: cannot assign lead to that organization')
-        }
-        // Persist the org assignment on the lead immediately.
-        if (lead.organization_id !== orgId) {
-          await supabase.from('leads').update({ organization_id: orgId }).eq('id', id)
-        }
+        const orgId = lead.organization_id ?? targetOrgId ?? null
         const created: any[] = []
         const enrolled: any[] = []
-        const errors: string[] = []
         const slugify = (s: string) => (s || 'student').toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.|\.$/g, '') || 'student'
         const parentEmail: string | null = meta.parent_email ?? lead.email ?? null
         const emailDomain = parentEmail && parentEmail.includes('@') ? parentEmail.split('@')[1] : 'aurapen.app'
@@ -473,95 +450,48 @@ Deno.serve(async (req) => {
           })
           if (authError) {
             console.error('createUser failed', authError.message)
-            errors.push(`createUser(${s.name}): ${authError.message}`)
             continue
           }
           const newUserId = authData.user.id
           await supabase.from('profiles')
             .update({ display_name: s.name, organization_id: orgId })
             .eq('user_id', newUserId)
-          // Ensure role = student (trigger inserts 'student', but be defensive)
+          // Ensure role = student (trigger already inserts 'student', but be safe)
           const { data: existingRole } = await supabase
             .from('user_roles').select('id').eq('user_id', newUserId).maybeSingle()
           if (!existingRole) {
             await supabase.from('user_roles').insert({ user_id: newUserId, role: 'student' })
           }
-          // Org membership
-          const { error: memErr } = await supabase.from('organization_members')
-            .insert({ organization_id: orgId, user_id: newUserId })
-          if (memErr && !/duplicate/i.test(memErr.message)) {
-            errors.push(`orgMember(${s.name}): ${memErr.message}`)
+          if (orgId) {
+            await supabase.from('organization_members')
+              .insert({ organization_id: orgId, user_id: newUserId })
+              .select().maybeSingle().then(() => {}, () => {})
           }
-          // Link parent → child (critical for parent dashboard/RLS).
+          // Link parent → child if we know the parent user id.
           if (meta.parent_user_id) {
-            const { error: pcErr } = await supabase.from('parent_children').insert({
+            await supabase.from('parent_children').insert({
               parent_id: meta.parent_user_id, child_id: newUserId,
-            })
-            if (pcErr && !/duplicate/i.test(pcErr.message)) {
-              console.error('parent_children insert failed', pcErr.message)
-              errors.push(`parentLink(${s.name}): ${pcErr.message}`)
-            }
-          } else {
-            errors.push(`parentLink(${s.name}): missing parent_user_id on lead`)
+            }).then(() => {}, () => {})
           }
           // Enroll into batch
           if (s.batch_id) {
             const { error: enrollErr } = await supabase.from('batch_students').insert({
               batch_id: s.batch_id, student_id: newUserId,
             })
-            if (enrollErr && !/duplicate/i.test(enrollErr.message)) {
-              errors.push(`enroll(${s.name}): ${enrollErr.message}`)
-            } else {
-              enrolled.push({ student_id: newUserId, batch_id: s.batch_id })
-            }
+            if (!enrollErr) enrolled.push({ student_id: newUserId, batch_id: s.batch_id })
           }
           created.push({
             student_id: newUserId, name: s.name, email: childEmail,
             temp_password: tempPassword, batch_id: s.batch_id ?? null,
           })
         }
-        // Optionally record an offline / pay-later payment tied to the org.
-        let payment_recorded: any = null
-        if (payment && payment.amount !== undefined && payment.amount !== null && String(payment.amount) !== '') {
-          const amt = typeof payment.amount === 'string' ? parseFloat(payment.amount) : payment.amount
-          if (!Number.isFinite(amt) || amt <= 0) {
-            errors.push(`payment: invalid amount`)
-          } else {
-            const payerStudentId = meta.parent_user_id || created[0]?.student_id || null
-            if (!payerStudentId) {
-              errors.push('payment: no payer reference (missing parent_user_id and no students created)')
-            } else {
-              const desc = payment.description
-                || `Lead ${id} • ${payment.method || 'offline'}${payment.reference_number ? ` • Ref ${payment.reference_number}` : ''}`
-              const { data: payRow, error: payErr } = await supabase.from('payments').insert({
-                student_id: payerStudentId,
-                organization_id: orgId,
-                amount: amt,
-                currency: payment.currency || 'INR',
-                description: desc,
-                status: payment.status || 'completed',
-                payment_date: payment.payment_date || new Date().toISOString().slice(0, 10),
-              }).select('id').maybeSingle()
-              if (payErr) errors.push(`payment: ${payErr.message}`)
-              else payment_recorded = payRow
-            }
-          }
-        }
         await supabase.from('leads')
           .update({
             status: 'converted',
-            metadata: {
-              ...meta,
-              approved_at: new Date().toISOString(),
-              approved_org_id: orgId,
-              created_students: created,
-              approval_errors: errors,
-              payment_recorded: payment_recorded ?? meta.payment_recorded ?? null,
-              offline_payment: payment ?? meta.offline_payment ?? null,
-            },
+            metadata: { ...meta, approved_at: new Date().toISOString(), created_students: created },
           })
           .eq('id', id)
-        result = { success: true, created_count: created.length, enrolled_count: enrolled.length, created, errors, payment_recorded }
+        result = { success: true, created_count: created.length, enrolled_count: enrolled.length, created }
         break
       }
 

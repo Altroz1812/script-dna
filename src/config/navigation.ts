@@ -31,7 +31,6 @@ export interface NavItem {
   url: string;
   icon: LucideIcon;
   roles: AppRole[];
-  globalOnly?: boolean;
 }
 
 export interface NavGroup {
@@ -113,9 +112,9 @@ export const navigationConfig: NavGroup[] = [
   {
     label: "Management",
     items: [
-      { title: "Organizations", url: "/organizations", icon: Shield, roles: ["superadmin"], globalOnly: true },
+      { title: "Organizations", url: "/organizations", icon: Shield, roles: ["superadmin"] },
       { title: "Users", url: "/users", icon: Users, roles: ["superadmin", "admin"] },
-      { title: "Roles & Permissions", url: "/roles", icon: Shield, roles: ["superadmin"], globalOnly: true },
+      { title: "Roles & Permissions", url: "/roles", icon: Shield, roles: ["superadmin"] },
       {
         title: "Students",
         url: "/students",
@@ -125,7 +124,7 @@ export const navigationConfig: NavGroup[] = [
       { title: "Payments", url: "/payments", icon: CreditCard, roles: ["superadmin", "admin", "support", "parent"] },
       { title: "Payroll", url: "/payroll", icon: DollarSign, roles: ["superadmin"] },
       { title: "Subscriptions", url: "/subscriptions", icon: CreditCard, roles: ["superadmin"] },
-      { title: "Coupons", url: "/coupons", icon: Ticket, roles: ["superadmin"], globalOnly: true },
+      { title: "Coupons", url: "/coupons", icon: Ticket, roles: ["superadmin"] },
     ],
   },
   {
@@ -133,7 +132,7 @@ export const navigationConfig: NavGroup[] = [
     items: [
       { title: "My Progress", url: "/my-progress", icon: TrendingUp, roles: ["student"] },
       { title: "My Orders", url: "/my-orders", icon: ShoppingBag, roles: ["student", "parent"] },
-      { title: "Font Architect", url: "/font-architect", icon: PenTool, roles: ["superadmin"], globalOnly: true },
+      { title: "Font Architect", url: "/font-architect", icon: PenTool, roles: ["superadmin", "admin"] },
       { title: "Reports", url: "/reports", icon: BarChart3, roles: ["superadmin", "admin", "teacher"] },
       { title: "Notifications", url: "/notifications", icon: Bell, roles: ["superadmin", "admin", "support"] },
       { title: "Activity Logs", url: "/activity-logs", icon: Shield, roles: ["superadmin"] },
@@ -142,38 +141,17 @@ export const navigationConfig: NavGroup[] = [
   {
     label: "System",
     items: [
-      { title: "System Monitoring", url: "/monitoring", icon: Monitor, roles: ["superadmin"], globalOnly: true },
-      { title: "Settings", url: "/settings", icon: Settings, roles: ["superadmin"], globalOnly: true },
+      { title: "System Monitoring", url: "/monitoring", icon: Monitor, roles: ["superadmin"] },
+      { title: "Settings", url: "/settings", icon: Settings, roles: ["superadmin"] },
     ],
   },
 ];
 
-// export function getNavigationForRole(role: AppRole): NavGroup[] {
-//   return navigationConfig
-//     .map((group) => ({
-//       ...group,
-//       items: group.items.filter((item) => item.roles.includes(role)),
-//     }))
-//     .filter((group) => group.items.length > 0);
-// }
-
-export function getNavigationForRole(
-  role: AppRole,
-  isGlobalView: boolean = false, // ← New parameter
-): NavGroup[] {
+export function getNavigationForRole(role: AppRole): NavGroup[] {
   return navigationConfig
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => {
-        const hasRole = item.roles.includes(role);
-
-        // Handle globalOnly items
-        if (item.globalOnly) {
-          return hasRole && isGlobalView;
-        }
-
-        return hasRole;
-      }),
+      items: group.items.filter((item) => item.roles.includes(role)),
     }))
     .filter((group) => group.items.length > 0);
 }
