@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Session } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
-import type { UserProfile, AppRole } from '@/types/roles';
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { Session } from "@supabase/supabase-js";
+import { supabase } from "@/integrations/supabase/client";
+import type { UserProfile, AppRole } from "@/types/roles";
 
 interface DashboardContext {
   stats: Record<string, number>;
@@ -18,7 +18,7 @@ interface AuthContextValue {
   refreshProfile: () => Promise<void>;
 }
 
-const AUTH_CTX_KEY = '__auth_context__';
+const AUTH_CTX_KEY = "__auth_context__";
 if (!(window as any)[AUTH_CTX_KEY]) {
   (window as any)[AUTH_CTX_KEY] = createContext<AuthContextValue | null>(null);
 }
@@ -26,14 +26,15 @@ const AuthContext = (window as any)[AUTH_CTX_KEY] as React.Context<AuthContextVa
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
 }
 
 async function fetchProfile(userId: string): Promise<UserProfile | null> {
   const [profileRes, roleRes] = await Promise.all([
-    supabase.from('profiles').select('*').eq('user_id', userId).single(),
-    supabase.from('user_roles').select('role').eq('user_id', userId),
+    // supabase.from('profiles').select('*').eq('user_id', userId).single(),
+    supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
+    supabase.from("user_roles").select("role").eq("user_id", userId),
   ]);
 
   if (profileRes.error || !profileRes.data) return null;
@@ -41,13 +42,13 @@ async function fetchProfile(userId: string): Promise<UserProfile | null> {
   const p = profileRes.data;
   // A user may have 0 (mid-signup) or multiple role rows. Pick the
   // highest-priority role so checkout / promote flows don't get stuck.
-  const priority: AppRole[] = ['superadmin', 'admin', 'support', 'teacher', 'parent', 'student'];
+  const priority: AppRole[] = ["superadmin", "admin", "support", "teacher", "parent", "student"];
   const roles = (roleRes.data ?? []).map((r: any) => r.role as AppRole);
-  const resolvedRole = priority.find((r) => roles.includes(r)) ?? 'student';
+  const resolvedRole = priority.find((r) => roles.includes(r)) ?? "student";
   return {
     id: p.user_id,
-    email: p.email ?? '',
-    displayName: p.display_name ?? p.email ?? '',
+    email: p.email ?? "",
+    displayName: p.display_name ?? p.email ?? "",
     avatarUrl: p.avatar_url ?? undefined,
     organizationId: p.organization_id ?? undefined,
     role: resolvedRole,
@@ -70,28 +71,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let heartbeatTimer: number | null = null;
     const startHeartbeat = () => {
       if (heartbeatTimer != null) return;
-      const ping = () => { supabase.functions.invoke('heartbeat', { body: {} }).catch(() => {}); };
+      const ping = () => {
+        supabase.functions.invoke("heartbeat", { body: {} }).catch(() => {});
+      };
       ping();
       heartbeatTimer = window.setInterval(ping, 60_000);
     };
     const stopHeartbeat = () => {
-      if (heartbeatTimer != null) { window.clearInterval(heartbeatTimer); heartbeatTimer = null; }
+      if (heartbeatTimer != null) {
+        window.clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+      }
     };
 
     // Set up listener FIRST. Only react to actual sign-in / sign-out events;
     // ignore TOKEN_REFRESHED / INITIAL_SESSION / USER_UPDATED so tab-focus
     // refreshes do not flip `loading` and remount the entire protected tree.
     let currentUserId: string | null = null;
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, sess) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, sess) => {
       setSession(sess);
-      if (event === 'SIGNED_OUT' || !sess?.user) {
+      if (event === "SIGNED_OUT" || !sess?.user) {
         currentUserId = null;
         setProfile(null);
         setLoading(false);
         stopHeartbeat();
         return;
       }
-      if (event === 'SIGNED_IN' && sess.user.id !== currentUserId) {
+      if (event === "SIGNED_IN" && sess.user.id !== currentUserId) {
         currentUserId = sess.user.id;
         setLoading(true);
         setTimeout(async () => {
@@ -116,15 +124,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     });
 
-    return () => { subscription.unsubscribe(); stopHeartbeat(); };
+    return () => {
+      subscription.unsubscribe();
+      stopHeartbeat();
+    };
   }, [loadProfile]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     // Fire-and-forget audit log
-    supabase.functions.invoke('record-login-attempt', {
-      body: { email, success: !error, error_code: error?.message ?? null },
-    }).catch(() => {});
+    supabase.functions
+      .invoke("record-login-attempt", {
+        body: { email, success: !error, error_code: error?.message ?? null },
+      })
+      .catch(() => {});
     if (error) throw error;
   };
 
@@ -139,7 +152,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     // Best-effort: close server-side session row before token is dropped.
-    try { await supabase.functions.invoke('heartbeat', { body: { end: true } }); } catch {}
+    try {
+      await supabase.functions.invoke("heartbeat", { body: { end: true } });
+    } catch {}
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
     setSession(null);
@@ -151,7 +166,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ session, profile, dashboardContext, loading, signIn, signUp, signOut, refreshProfile }}>
+    <AuthContext.Provider
+      value={{ session, profile, dashboardContext, loading, signIn, signUp, signOut, refreshProfile }}
+    >
       {children}
     </AuthContext.Provider>
   );
