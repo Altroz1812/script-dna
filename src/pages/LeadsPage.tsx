@@ -517,34 +517,114 @@ export default function LeadsPage() {
 
                   {/* Approval Section (outside tabs) */}
                   {!isConverted && students.length > 0 && (
-                    <div className="border-t pt-4 mt-4">
-                      <div className="flex items-end gap-3">
-                        <div className="flex-1">
-                          <Label>Assign Organization</Label>
-                          <Select value={assignOrgId} onValueChange={setAssignOrgId}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select organization..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {organizations.map((o: any) => (
-                                <SelectItem key={o.id} value={o.id}>
-                                  {o.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <Button
-                          className="min-w-[220px]"
-                          disabled={approveMutation.isPending || !assignOrgId}
-                          onClick={() => approveMutation.mutate({ id: detailLead.id, organization_id: assignOrgId })}
-                        >
-                          {approveMutation.isPending
-                            ? "Creating accounts…"
-                            : `Approve & Create ${students.length} Student Account(s)`}
-                        </Button>
+                    <div className="border-t pt-4 mt-4 space-y-4">
+                      <div>
+                        <Label>Assign Organization *</Label>
+                        <Select value={assignOrgId} onValueChange={setAssignOrgId}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select organization..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {organizations.map((o: any) => (
+                              <SelectItem key={o.id} value={o.id}>
+                                {o.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
+
+                      <div className="rounded-md border p-3 space-y-3 bg-muted/30">
+                        <div className="text-sm font-medium">Record Payment</div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-xs">Method</Label>
+                            <Select
+                              value={payForm.method}
+                              onValueChange={(v) => setPayForm((f) => ({ ...f, method: v }))}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="cash">Cash</SelectItem>
+                                <SelectItem value="upi">UPI</SelectItem>
+                                <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                                <SelectItem value="cheque">Cheque</SelectItem>
+                                <SelectItem value="card">Card (POS)</SelectItem>
+                                <SelectItem value="cashfree">Cashfree (Online)</SelectItem>
+                                <SelectItem value="other">Other</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-xs">Status</Label>
+                            <Select
+                              value={payForm.status}
+                              onValueChange={(v: "pending" | "completed") =>
+                                setPayForm((f) => ({ ...f, status: v }))
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="completed">Paid Now</SelectItem>
+                                <SelectItem value="pending">Pay Later</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-xs">Reference No.</Label>
+                            <Input
+                              value={payForm.reference}
+                              onChange={(e) => setPayForm((f) => ({ ...f, reference: e.target.value }))}
+                              placeholder="UTR / Txn / Cheque #"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Payment Date</Label>
+                            <Input
+                              type="date"
+                              value={payForm.date}
+                              onChange={(e) => setPayForm((f) => ({ ...f, date: e.target.value }))}
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <Label className="text-xs">Notes</Label>
+                            <Input
+                              value={payForm.notes}
+                              onChange={(e) => setPayForm((f) => ({ ...f, notes: e.target.value }))}
+                              placeholder="Optional remarks"
+                            />
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          One payment row per student will be created under the selected organization
+                          (₹{meta.final_amount?.toLocaleString() ?? 0} total across {students.length} student
+                          {students.length === 1 ? "" : "s"}).
+                        </p>
+                      </div>
+
+                      <Button
+                        className="w-full"
+                        disabled={approveMutation.isPending || !assignOrgId}
+                        onClick={() =>
+                          approveMutation.mutate({
+                            id: detailLead.id,
+                            organization_id: assignOrgId,
+                            payment_method: payForm.method,
+                            reference_number: payForm.reference || undefined,
+                            payment_status: payForm.status,
+                            payment_date: payForm.date,
+                            payment_notes: payForm.notes || undefined,
+                          })
+                        }
+                      >
+                        {approveMutation.isPending
+                          ? "Creating accounts & payments…"
+                          : `Approve, Create ${students.length} Account(s) & Record Payment`}
+                      </Button>
                     </div>
                   )}
                 </div>
