@@ -23,6 +23,13 @@ export default function LeadsPage() {
   const [form, setForm] = useState({ name: "", email: "", phone: "", source: "", notes: "" });
   const [detailLead, setDetailLead] = useState<any | null>(null);
   const [assignOrgId, setAssignOrgId] = useState<string>("");
+  const [payForm, setPayForm] = useState<{
+    method: string;
+    reference: string;
+    status: "pending" | "completed";
+    date: string;
+    notes: string;
+  }>({ method: "cash", reference: "", status: "completed", date: new Date().toISOString().slice(0, 10), notes: "" });
 
   const { data: leads = [], isLoading } = useQuery<any[]>({
     queryKey: ["leads"],
@@ -78,11 +85,37 @@ export default function LeadsPage() {
   });
 
   const approveMutation = useMutation({
-    mutationFn: ({ id, organization_id }: { id: string; organization_id?: string }) =>
-      adminQuery("approve_lead", { id, organization_id }),
+    mutationFn: ({
+      id,
+      organization_id,
+      payment_method,
+      reference_number,
+      payment_status,
+      payment_date,
+      payment_notes,
+    }: {
+      id: string;
+      organization_id?: string;
+      payment_method?: string;
+      reference_number?: string;
+      payment_status?: "pending" | "completed";
+      payment_date?: string;
+      payment_notes?: string;
+    }) =>
+      adminQuery("approve_lead", {
+        id,
+        organization_id,
+        payment_method,
+        reference_number,
+        payment_status,
+        payment_date,
+        payment_notes,
+      }),
     onSuccess: (data: any) => {
       const errs = Array.isArray(data?.errors) ? data.errors : [];
-      toast.success(`Created ${data?.created_count ?? 0} student(s), enrolled ${data?.enrolled_count ?? 0}`);
+      toast.success(
+        `Created ${data?.created_count ?? 0} student(s), enrolled ${data?.enrolled_count ?? 0}, ${data?.payments_count ?? 0} payment(s)`,
+      );
       if (errs.length) toast.warning(`${errs.length} issue(s): ${errs.slice(0, 2).join("; ")}`);
       setDetailLead(null);
       setAssignOrgId("");
