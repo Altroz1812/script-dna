@@ -271,9 +271,9 @@ Deno.serve(async (req) => {
           order_currency: "INR",
           customer_details: {
             customer_id: user.id.replace(/-/g, "").slice(0, 20),
-            customer_email: profile?.email || user.email || "customer@example.com",
-            customer_phone: "9999999999",
-            customer_name: profile?.display_name || "Customer",
+            customer_email: resolvedEmail || "customer@example.com",
+            customer_phone: resolvedPhone || "9999999999",
+            customer_name: resolvedName,
           },
           order_meta: {
             return_url: `${req.headers.get("origin") || Deno.env.get("SUPABASE_URL")}/checkout?order_id=${order.id}`,
