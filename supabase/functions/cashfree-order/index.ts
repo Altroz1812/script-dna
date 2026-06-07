@@ -214,8 +214,10 @@ Deno.serve(async (req) => {
           notes: `Checkout submission • ${items.length} course(s) • ${studentsFlat.length} student(s) • ₹${finalAmount}`,
           metadata: {
             parent_user_id: user.id,
-            parent_email: profile?.email || user.email || null,
-            parent_name: profile?.display_name || null,
+            parent_email: resolvedEmail,
+            parent_name: resolvedName,
+            parent_phone: resolvedPhone,
+            address: address_details || null,
             items: items.map((i: any) => ({
               course_id: i.id,
               course_name: i.name,
