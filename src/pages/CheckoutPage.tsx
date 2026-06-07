@@ -189,6 +189,8 @@ export default function CheckoutPage() {
     if (!session) return;
     if (promoteAttempted.current) return;
 
+    // Wait — if profile is still loading (authLoading true), defer
+    if (authLoading) return;
     // If profile loaded and is already parent, advance immediately
     if (profile?.role === "parent") {
       clearIntent();
