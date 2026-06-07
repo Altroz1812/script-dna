@@ -414,7 +414,23 @@ Deno.serve(async (req) => {
 
       // ===== APPROVE LEAD: create student accounts + enroll into batches =====
       case 'approve_lead': {
-        const { id, organization_id: assignOrgId } = params as { id: string; organization_id?: string }
+        const {
+          id,
+          organization_id: assignOrgId,
+          payment_method: pmOverride,
+          reference_number: refOverride,
+          payment_status: payStatusOverride,
+          payment_date: payDateOverride,
+          payment_notes: payNotesOverride,
+        } = params as {
+          id: string
+          organization_id?: string
+          payment_method?: string
+          reference_number?: string
+          payment_status?: 'pending' | 'completed' | 'failed' | 'refunded'
+          payment_date?: string
+          payment_notes?: string
+        }
         if (!id) throw new Error('id required')
         if (!callerIsSuperadmin && !callerIsAdmin) {
           throw new Error('Only admins can approve leads')
@@ -443,6 +459,13 @@ Deno.serve(async (req) => {
         const created: any[] = []
         const enrolled: any[] = []
         const errors: string[] = []
+        const payments_created: any[] = []
+        // Resolve payment metadata: explicit overrides > metadata fallbacks.
+        const payMethod = pmOverride ?? meta.payment_method ?? null
+        const payRef = refOverride ?? meta.reference_number ?? null
+        const payStatus = payStatusOverride ?? (meta.payment_status === 'paid' ? 'completed' : 'pending')
+        const payDate = payDateOverride ?? new Date().toISOString().slice(0, 10)
+        const payNotesExtra = payNotesOverride ? ` • ${payNotesOverride}` : ''
         const slugify = (s: string) => (s || 'student').toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.|\.$/g, '') || 'student'
         const parentEmail: string | null = meta.parent_email ?? lead.email ?? null
         const emailDomain = parentEmail && parentEmail.includes('@') ? parentEmail.split('@')[1] : 'aurapen.app'
@@ -507,14 +530,48 @@ Deno.serve(async (req) => {
             student_id: newUserId, name: s.name, email: childEmail,
             temp_password: tempPassword, batch_id: s.batch_id ?? null,
           })
+          // Record an organisation-scoped payment row for this student.
+          const studentFee = typeof s.fee === 'number' && s.fee > 0
+            ? s.fee
+            : (Number(meta.final_amount) || 0) / Math.max(students.length, 1)
+          if (studentFee > 0) {
+            const desc = `Lead ${id.slice(0, 8)} • ${s.course_name ?? 'Course'}` +
+              (payMethod ? ` • ${payMethod}` : '') +
+              (payRef ? ` • Ref ${payRef}` : '') + payNotesExtra
+            const { data: payRow, error: payErr } = await supabase.from('payments').insert({
+              student_id: newUserId,
+              organization_id: orgId,
+              amount: studentFee,
+              currency: 'INR',
+              status: payStatus,
+              payment_date: payDate,
+              description: desc,
+            }).select('id').maybeSingle()
+            if (payErr) {
+              errors.push(`payment(${s.name}): ${payErr.message}`)
+            } else if (payRow) {
+              payments_created.push({ payment_id: payRow.id, student_id: newUserId, amount: studentFee })
+            }
+          }
         }
         await supabase.from('leads')
           .update({
             status: 'converted',
-            metadata: { ...meta, approved_at: new Date().toISOString(), approved_org_id: orgId, created_students: created, approval_errors: errors },
+            metadata: {
+              ...meta,
+              approved_at: new Date().toISOString(),
+              approved_org_id: orgId,
+              created_students: created,
+              approval_errors: errors,
+              payment_method: payMethod,
+              reference_number: payRef,
+              payment_status: payStatus,
+              payment_date: payDate,
+              payments_created,
+            },
           })
           .eq('id', id)
-        result = { success: true, created_count: created.length, enrolled_count: enrolled.length, created, errors }
+        result = { success: true, created_count: created.length, enrolled_count: enrolled.length, payments_count: payments_created.length, created, payments_created, errors }
         break
       }
 
