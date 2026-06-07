@@ -23,6 +23,14 @@ export default function LeadsPage() {
   const [form, setForm] = useState({ name: "", email: "", phone: "", source: "", notes: "" });
   const [detailLead, setDetailLead] = useState<any | null>(null);
   const [assignOrgId, setAssignOrgId] = useState<string>("");
+  const [recordPayment, setRecordPayment] = useState(false);
+  const [payForm, setPayForm] = useState({
+    amount: "",
+    method: "cash",
+    reference_number: "",
+    payment_date: new Date().toISOString().slice(0, 10),
+    status: "completed",
+  });
 
   const { data: leads = [], isLoading } = useQuery<any[]>({
     queryKey: ["leads"],
@@ -78,14 +86,16 @@ export default function LeadsPage() {
   });
 
   const approveMutation = useMutation({
-    mutationFn: ({ id, organization_id }: { id: string; organization_id?: string }) =>
-      adminQuery("approve_lead", { id, organization_id }),
+    mutationFn: ({ id, organization_id, payment }: { id: string; organization_id?: string; payment?: any }) =>
+      adminQuery("approve_lead", { id, organization_id, payment }),
     onSuccess: (data: any) => {
       const errs = Array.isArray(data?.errors) ? data.errors : [];
       toast.success(`Created ${data?.created_count ?? 0} student(s), enrolled ${data?.enrolled_count ?? 0}`);
       if (errs.length) toast.warning(`${errs.length} issue(s): ${errs.slice(0, 2).join("; ")}`);
+      if (data?.payment_recorded?.id) toast.success("Payment recorded");
       setDetailLead(null);
       setAssignOrgId("");
+      setRecordPayment(false);
       invalidate();
     },
     onError: (e: any) => toast.error(e.message),
