@@ -14,10 +14,10 @@ import {
   Percent,
   ShieldAlert,
   MapPin,
-  School,
-  Mail,
   User,
   Phone,
+  AlertCircle,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +26,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useCart, type StudentDetail } from "@/contexts/CartContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -34,7 +35,8 @@ import { toast } from "sonner";
 
 const STEPS = ["Sign In", "Student Details", "Address", "Review & Discounts", "Payment"];
 
-// Extended StudentDetail with email and school
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 interface ExtendedStudentDetail extends StudentDetail {
   name: string;
   grade: string;
@@ -43,22 +45,41 @@ interface ExtendedStudentDetail extends StudentDetail {
   schoolName?: string;
 }
 
-// Discount logic
+interface AddressDetails {
+  parentName: string;
+  parentPhone: string;
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  state: string;
+  pincode: string;
+  country: string;
+}
+
+type AuthStage =
+  | "idle" // default: show sign-in button
+  | "signing_in" // OAuth redirect in progress
+  | "returning" // back from OAuth, processing hash
+  | "promoting" // calling promote-to-parent edge fn
+  | "role_conflict" // signed-in with non-parent, non-promotable role
+  | "ready"; // authenticated as parent, proceed
+
+// ─── Discount logic ───────────────────────────────────────────────────────────
+
 function calculateDiscounts(
   items: { id: string; fee: number }[],
   studentDetails: Record<string, ExtendedStudentDetail[]>,
 ) {
-  let courseDiscount = 0;
   const courseCount = items.length;
   const subtotal = items.reduce((s, i) => s + (i.fee || 0), 0);
 
+  let courseDiscount = 0;
   if (courseCount >= 3) courseDiscount = subtotal * 0.1;
   else if (courseCount === 2) courseDiscount = subtotal * 0.05;
 
   let studentDiscount = 0;
   for (const item of items) {
-    const students = studentDetails[item.id] || [];
-    const count = students.length;
+    const count = (studentDetails[item.id] || []).length;
     if (count >= 3) studentDiscount += (item.fee || 0) * 0.1;
     else if (count === 2) studentDiscount += (item.fee || 0) * 0.05;
   }
@@ -73,24 +94,13 @@ function calculateDiscounts(
   };
 }
 
-// Address type
-interface AddressDetails {
-  parentName: string;
-  parentPhone: string;
-  addressLine1: string;
-  addressLine2: string;
-  city: string;
-  state: string;
-  pincode: string;
-  country: string;
-}
+// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function CheckoutPage() {
-  // ALL HOOKS AT THE TOP IN CONSISTENT ORDER
-  const { items, removeItem, clearCart, studentDetails, setStudentDetails, getStudentDetails } = useCart();
+  const { items, removeItem, clearCart, setStudentDetails, getStudentDetails } = useCart();
   const { session, profile, loading: authLoading, signOut, refreshProfile } = useAuth();
 
-  // State hooks
+  // Step & form state
   const [step, setStep] = useState(0);
   const [couponCode, setCouponCode] = useState("");
   const [couponDiscount, setCouponDiscount] = useState(0);
@@ -98,8 +108,6 @@ export default function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [orderId, setOrderId] = useState("");
-  const [promoting, setPromoting] = useState(false);
-  const [hasSignupIntent, setHasSignupIntent] = useState<boolean>(false);
   const [paymentMethod, setPaymentMethod] = useState<"now" | "later" | null>(null);
   const [referenceNumber, setReferenceNumber] = useState("");
   const [extendedStudentDetails, setExtendedStudentDetails] = useState<Record<string, ExtendedStudentDetail[]>>({});
@@ -114,37 +122,135 @@ export default function CheckoutPage() {
     country: "India",
   });
 
-  // Ref hooks
+  // Auth stage machine
+  const [authStage, setAuthStage] = useState<AuthStage>("idle");
+  const [authError, setAuthError] = useState<string | null>(null);
   const promoteAttempted = useRef(false);
 
-  // Initialize hasSignupIntent from sessionStorage
-  useEffect(() => {
-    try {
-      const intent = sessionStorage.getItem("checkout_signup_intent") === "1";
-      setHasSignupIntent(intent);
-    } catch {
-      // Ignore errors
-    }
-  }, []);
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
-  // Callback hooks
-  const clearSignupIntent = useCallback(() => {
+  const setIntent = () => {
+    try {
+      sessionStorage.setItem("checkout_signup_intent", "1");
+    } catch {}
+  };
+  const clearIntent = useCallback(() => {
     try {
       sessionStorage.removeItem("checkout_signup_intent");
     } catch {}
-    setHasSignupIntent(false);
   }, []);
+  const hasIntent = () => {
+    try {
+      return sessionStorage.getItem("checkout_signup_intent") === "1";
+    } catch {
+      return false;
+    }
+  };
 
-  // Initialize extended student details from cart context
+  // ── 1. Handle OAuth hash on return from Google ─────────────────────────────
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (!hash.includes("access_token=")) return;
+
+    setAuthStage("returning");
+    setAuthError(null);
+
+    const params = new URLSearchParams(hash.substring(1));
+    const accessToken = params.get("access_token");
+    const refreshToken = params.get("refresh_token");
+
+    if (!accessToken || !refreshToken) {
+      setAuthStage("idle");
+      setAuthError("Sign-in failed — missing tokens. Please try again.");
+      return;
+    }
+
+    supabase.auth
+      .setSession({ access_token: accessToken, refresh_token: refreshToken })
+      .then(async ({ data, error }) => {
+        window.history.replaceState(null, "", window.location.pathname);
+        if (error || !data?.session) {
+          setAuthStage("idle");
+          setAuthError("Could not restore session. Please sign in again.");
+          return;
+        }
+        try {
+          await refreshProfile();
+        } catch {}
+        // Stage will advance via the promotion effect below
+      });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── 2. Promotion / role-resolution effect ─────────────────────────────────
+  useEffect(() => {
+    if (!session || !profile) return;
+    if (promoteAttempted.current) return;
+
+    // Already a parent — just advance
+    if (profile.role === "parent") {
+      clearIntent();
+      setAuthStage("ready");
+      if (step === 0) setStep(1);
+      return;
+    }
+
+    // Roles that cannot be promoted (staff/admin)
+    const nonPromotableRoles = ["superadmin", "admin", "support", "teacher"];
+    if (nonPromotableRoles.includes(profile.role)) {
+      clearIntent();
+      setAuthStage("role_conflict");
+      return;
+    }
+
+    // New user or student — attempt promotion to parent
+    // Only promote when coming from checkout intent OR when on checkout page
+    promoteAttempted.current = true;
+    setAuthStage("promoting");
+    setAuthError(null);
+
+    (async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("promote-to-parent", { body: {} });
+        if (error) throw error;
+
+        if (data?.ok || data?.reason === "already_parent") {
+          await refreshProfile();
+          clearIntent();
+          setAuthStage("ready");
+          toast.success(data?.reason === "already_parent" ? "Welcome back!" : "Account ready for enrollment!");
+          if (step === 0) setStep(1);
+        } else if (data?.reason === "role_not_eligible") {
+          clearIntent();
+          setAuthStage("role_conflict");
+        } else {
+          throw new Error(data?.message || "Promotion failed");
+        }
+      } catch (e: any) {
+        console.error("Promotion error:", e);
+        clearIntent();
+        setAuthStage("idle");
+        setAuthError("Could not set up your account. Please try again or contact support.");
+      }
+    })();
+  }, [session, profile]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── 3. Force back to step 0 if session lost ────────────────────────────────
+  useEffect(() => {
+    if (!session && step > 0) {
+      setStep(0);
+      setAuthStage("idle");
+      promoteAttempted.current = false;
+    }
+  }, [session, step]);
+
+  // ── 4. Sync extended student details from cart ─────────────────────────────
   useEffect(() => {
     setExtendedStudentDetails((prev) => {
-      const newExtended: Record<string, ExtendedStudentDetail[]> = { ...prev };
-
+      const next: Record<string, ExtendedStudentDetail[]> = { ...prev };
       items.forEach((item) => {
         const existing = getStudentDetails(item.id) || [];
-
-        if (!newExtended[item.id] || newExtended[item.id].length === 0) {
-          newExtended[item.id] =
+        if (!next[item.id] || next[item.id].length === 0) {
+          next[item.id] =
             existing.length > 0
               ? existing.map((d: any) => ({
                   name: d.name || "",
@@ -154,201 +260,60 @@ export default function CheckoutPage() {
                   schoolName: d.schoolName || "",
                 }))
               : [{ name: "", grade: "", email: "", phone: "", schoolName: "" }];
-        } else {
-          newExtended[item.id] = newExtended[item.id].map((student, idx) => {
-            const base = existing[idx] || { name: "", grade: "" };
-            return {
-              ...student,
-              name: base.name || student.name || "",
-              grade: base.grade || student.grade || "",
-            };
-          });
         }
       });
-
-      // Clean up courses that were removed
-      Object.keys(newExtended).forEach((courseId) => {
-        if (!items.some((item) => item.id === courseId)) {
-          delete newExtended[courseId];
-        }
+      Object.keys(next).forEach((id) => {
+        if (!items.some((i) => i.id === id)) delete next[id];
       });
-
-      return newExtended;
+      return next;
     });
-  }, [items]);
+  }, [items]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Promote to parent logic
-  useEffect(() => {
-    if (!session || !profile || promoteAttempted.current) return;
-    if (profile.role === "parent") {
-      clearSignupIntent();
-      return;
-    }
+  // ── Handlers ───────────────────────────────────────────────────────────────
 
-    const intent = (() => {
-      try {
-        return sessionStorage.getItem("checkout_signup_intent") === "1";
-      } catch {
-        return false;
-      }
-    })();
-
-    if (!intent) return;
-
-    promoteAttempted.current = true;
-    setPromoting(true);
-
-    (async () => {
-      try {
-        const { data, error } = await supabase.functions.invoke("promote-to-parent", { body: {} });
-
-        if (error) throw error;
-
-        if (data?.ok) {
-          await refreshProfile();
-          toast.success("Account set up as parent");
-        } else if (data?.reason === "role_not_eligible" || data?.reason === "already_parent") {
-          toast.info("Continuing with existing account");
-        } else {
-          toast.error(data?.message || "Failed to set up parent account");
-        }
-      } catch (e: any) {
-        console.error("Promotion error:", e);
-        toast.info("Continuing checkout...");
-      } finally {
-        clearSignupIntent();
-        setPromoting(false);
-      }
-    })();
-  }, [session, profile, refreshProfile, clearSignupIntent]);
-
-  // Auto-advance after login
-  useEffect(() => {
-    if (session && profile?.role === "parent" && step === 0) {
-      setStep(1);
-      clearSignupIntent();
-    }
-  }, [session, profile, step, clearSignupIntent]);
-
-  // Force auth step if not logged in
-  useEffect(() => {
-    if (!session && step > 0) setStep(0);
-  }, [session, step]);
-
-  // ===== ADD THIS NEW useEffect =====
-  // Handle OAuth redirect with hash fragment
-  // Handle OAuth redirect with hash fragment
-  // Handle OAuth redirect with hash fragment
-  // useEffect(() => {
-  //   const hash = window.location.hash;
-
-  //   if (hash && hash.includes("access_token=")) {
-  //     console.log("Processing OAuth hash...");
-
-  //     const params = new URLSearchParams(hash.substring(1));
-  //     const accessToken = params.get("access_token");
-  //     const refreshToken = params.get("refresh_token");
-
-  //     if (accessToken && refreshToken) {
-  //       supabase.auth
-  //         .setSession({
-  //           access_token: accessToken,
-  //           refresh_token: refreshToken,
-  //         })
-  //         .then(({ data, error }) => {
-  //           if (!error && data?.session) {
-  //             window.history.replaceState(null, "", window.location.pathname);
-  //             setStep(1);
-  //             clearSignupIntent();
-  //             toast.success("Signed in successfully!");
-  //           }
-  //         });
-  //     }
-  //   }
-  // }, []);
-
-  // Handle OAuth redirect with hash fragment
-  useEffect(() => {
-    const hash = window.location.hash;
-
-    if (hash && hash.includes("access_token=")) {
-      console.log("Processing OAuth hash...");
-
-      const params = new URLSearchParams(hash.substring(1));
-      const accessToken = params.get("access_token");
-      const refreshToken = params.get("refresh_token");
-
-      if (accessToken && refreshToken) {
-        supabase.auth
-          .setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          })
-          .then(async ({ data, error }) => {
-            if (!error && data?.session) {
-              // Clean URL first
-              window.history.replaceState(null, "", window.location.pathname);
-
-              // Wait for profile to refresh
-              try {
-                await refreshProfile();
-              } catch (e) {
-                console.log("Profile refresh delayed, continuing...");
-              }
-
-              // Now advance
-              setStep(1);
-              clearSignupIntent();
-              toast.success("Signed in successfully!");
-            }
-          });
-      }
-    }
-  }, []);
-
-  // ===== ADD THIS FUNCTION HERE =====
   const handleGoogleSignIn = async () => {
+    setAuthError(null);
+    setAuthStage("signing_in");
+    setIntent();
     try {
-      try {
-        sessionStorage.setItem("checkout_signup_intent", "1");
-      } catch {}
-      setHasSignupIntent(true);
-
       const { error } = await lovable.auth.signInWithOAuth("google", {
         redirect_uri: window.location.origin + "/checkout",
-        extraParams: { prompt: "select_account" },
+        extraParams: { prompt: "select_account" }, // always shows account picker
       });
-
       if (error) {
-        toast.error("Sign-in failed: " + error.message);
-        clearSignupIntent();
+        setAuthStage("idle");
+        setAuthError("Google sign-in failed: " + error.message);
+        clearIntent();
       }
     } catch (err: any) {
-      toast.error("Failed to start Google sign in");
-      clearSignupIntent();
+      setAuthStage("idle");
+      setAuthError("Failed to start sign-in. Please try again.");
+      clearIntent();
     }
   };
 
   const handleSignOut = async () => {
-    clearSignupIntent();
+    clearIntent();
+    promoteAttempted.current = false;
+    setAuthStage("idle");
+    setAuthError(null);
+    setStep(0);
     await signOut();
   };
+
   const allStudentDetailsFilled = items.every((item) => {
     const details = extendedStudentDetails[item.id] || [];
-    return details.length > 0 && details.every((d) => d.name.trim() && d.grade.trim() && d.schoolName.trim());
+    return details.length > 0 && details.every((d) => d.name.trim() && d.grade.trim() && d.schoolName?.trim());
   });
 
-  const isAddressValid = () => {
-    return (
-      addressDetails.parentName.trim() !== "" &&
-      addressDetails.parentPhone.trim() !== "" &&
-      addressDetails.addressLine1.trim() !== "" &&
-      addressDetails.city.trim() !== "" &&
-      addressDetails.state.trim() !== "" &&
-      addressDetails.pincode.trim() !== "" &&
-      addressDetails.country.trim() !== ""
-    );
-  };
+  const isAddressValid = () =>
+    addressDetails.parentName.trim() !== "" &&
+    addressDetails.parentPhone.trim() !== "" &&
+    addressDetails.addressLine1.trim() !== "" &&
+    addressDetails.city.trim() !== "" &&
+    addressDetails.state.trim() !== "" &&
+    addressDetails.pincode.trim() !== "" &&
+    addressDetails.country.trim() !== "";
 
   const disc = calculateDiscounts(items, extendedStudentDetails);
   const finalAmount = Math.max(0, disc.final - couponDiscount);
@@ -361,7 +326,7 @@ export default function CheckoutPage() {
         .select("*")
         .eq("code", couponCode.trim().toUpperCase())
         .eq("is_active", true)
-        .single();
+        .maybeSingle();
 
       if (error || !data) {
         toast.error("Invalid or expired coupon");
@@ -374,7 +339,7 @@ export default function CheckoutPage() {
         return;
       }
       if (data.max_uses && data.used_count >= data.max_uses) {
-        toast.error("This coupon has reached its usage limit");
+        toast.error("Coupon usage limit reached");
         return;
       }
       if (data.min_amount && disc.final < Number(data.min_amount)) {
@@ -382,12 +347,10 @@ export default function CheckoutPage() {
         return;
       }
 
-      let discountAmt = 0;
-      if (data.discount_type === "percentage") {
-        discountAmt = disc.final * (Number(data.discount_value) / 100);
-      } else {
-        discountAmt = Number(data.discount_value);
-      }
+      const discountAmt =
+        data.discount_type === "percentage"
+          ? disc.final * (Number(data.discount_value) / 100)
+          : Number(data.discount_value);
 
       setCouponDiscount(Math.min(discountAmt, disc.final));
       setCouponApplied(true);
@@ -401,10 +364,7 @@ export default function CheckoutPage() {
     setExtendedStudentDetails((prev) => ({ ...prev, [courseId]: students }));
     setStudentDetails(
       courseId,
-      students.map(({ name, grade }) => ({
-        name: name.trim(),
-        grade: grade.trim(),
-      })),
+      students.map(({ name, grade }) => ({ name: name.trim(), grade: grade.trim() })),
     );
   };
 
@@ -436,21 +396,15 @@ export default function CheckoutPage() {
         reference_number: paymentMethod === "now" ? referenceNumber.trim() : null,
       };
 
-      const { data, error } = await supabase.functions.invoke("cashfree-order", {
-        body: payload,
-      });
-
+      const { data, error } = await supabase.functions.invoke("cashfree-order", { body: payload });
       if (error) throw new Error(error.message || "Order creation failed");
       if (data?.error) throw new Error(data.error);
 
       setOrderId(data?.order_id || "");
       setSuccess(true);
       clearCart();
-
       toast.success(
-        paymentMethod === "now"
-          ? "Payment reference submitted successfully!"
-          : "Order submitted! We will contact you soon.",
+        paymentMethod === "now" ? "Payment reference submitted!" : "Order submitted! We'll contact you soon.",
       );
     } catch (e: any) {
       toast.error(e.message || "Checkout failed");
@@ -458,6 +412,8 @@ export default function CheckoutPage() {
       setSubmitting(false);
     }
   };
+
+  // ── Success screen ─────────────────────────────────────────────────────────
 
   if (success) {
     return (
@@ -486,6 +442,8 @@ export default function CheckoutPage() {
     );
   }
 
+  // ── Main layout ────────────────────────────────────────────────────────────
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -499,6 +457,14 @@ export default function CheckoutPage() {
             <ShoppingCart className="h-5 w-5" />
             Checkout
           </h1>
+          {session && profile && (
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground hidden sm:block">{profile.email}</span>
+              <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-xs">
+                Sign out
+              </Button>
+            </div>
+          )}
         </div>
       </header>
 
@@ -516,17 +482,23 @@ export default function CheckoutPage() {
 
       <main className="max-w-4xl mx-auto px-6 py-8">
         {authLoading ? (
-          <div className="flex flex-col items-center justify-center py-20">
-            <div className="h-10 w-10 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
-            <p className="text-muted-foreground">Loading your session...</p>
-          </div>
-        ) : items.length === 0 && !success ? (
+          <LoadingScreen message="Loading your session..." />
+        ) : items.length === 0 ? (
           <EmptyCart />
-        ) : session && profile && profile.role !== "parent" && !promoting && !hasSignupIntent ? (
-          <RoleBlocked role={profile.role} onSignOut={handleSignOut} />
+        ) : authStage === "role_conflict" ? (
+          <RoleBlocked role={profile?.role ?? "unknown"} email={profile?.email} onSignOut={handleSignOut} />
         ) : (
           <AnimatePresence mode="wait">
-            {step === 0 && <AuthGateStep key="auth" onGoogleSignIn={handleGoogleSignIn} />}
+            {step === 0 && (
+              <AuthGateStep
+                key="auth"
+                authStage={authStage}
+                authError={authError}
+                profile={profile}
+                onGoogleSignIn={handleGoogleSignIn}
+                onSignOut={handleSignOut}
+              />
+            )}
             {step === 1 && (
               <StudentDetailsStep
                 key="students"
@@ -569,13 +541,12 @@ export default function CheckoutPage() {
         )}
 
         {/* Navigation */}
-        {/* Navigation */}
-        {items.length > 0 && !success && (!session || profile?.role === "parent") && (
+        {items.length > 0 && authStage !== "role_conflict" && (
           <div className="flex justify-between mt-8">
             <Button
               variant="outline"
               onClick={() => setStep((s) => Math.max(session ? 1 : 0, s - 1))}
-              disabled={step <= (session ? 1 : 0)}
+              disabled={step <= (session ? 1 : 0) || authStage === "promoting" || authStage === "returning"}
             >
               <ArrowLeft className="h-4 w-4 mr-2" /> Back
             </Button>
@@ -584,7 +555,7 @@ export default function CheckoutPage() {
               <Button
                 onClick={() => setStep((s) => s + 1)}
                 disabled={
-                  (step === 0 && !session) ||
+                  (step === 0 && authStage !== "ready") ||
                   (step === 1 && !allStudentDetailsFilled) ||
                   (step === 2 && !isAddressValid())
                 }
@@ -599,8 +570,16 @@ export default function CheckoutPage() {
   );
 }
 
-/* ─── Sub-components ──────────────────────────────────── */
-/* ─── Sub-components ──────────────────────────────────── */
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function LoadingScreen({ message }: { message: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-20">
+      <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
+      <p className="text-muted-foreground">{message}</p>
+    </div>
+  );
+}
 
 function EmptyCart() {
   return (
@@ -615,7 +594,15 @@ function EmptyCart() {
   );
 }
 
-function RoleBlocked({ role, onSignOut }: { role: string; onSignOut: () => void | Promise<void> }) {
+function RoleBlocked({
+  role,
+  email,
+  onSignOut,
+}: {
+  role: string;
+  email?: string;
+  onSignOut: () => void | Promise<void>;
+}) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -623,22 +610,48 @@ function RoleBlocked({ role, onSignOut }: { role: string; onSignOut: () => void 
       className="text-center py-16 max-w-md mx-auto"
     >
       <ShieldAlert className="mx-auto h-14 w-14 text-destructive mb-4" />
-      <h2 className="text-2xl font-bold text-foreground mb-2">Parent account required</h2>
+      <h2 className="text-2xl font-bold text-foreground mb-2">Different account type</h2>
+      {email && <p className="text-sm text-muted-foreground mb-1">{email}</p>}
+      <p className="text-muted-foreground mb-2">
+        This account is registered as <span className="font-semibold capitalize">{role}</span>.
+      </p>
       <p className="text-muted-foreground mb-6">
-        This account is registered as <span className="font-semibold capitalize">{role}</span>. Checkout and enrollment
-        payments are only available for parent accounts.
+        Enrollment is only available for parent accounts. Please sign out and use a different Google account.
       </p>
       <div className="flex gap-3 justify-center">
         <Button variant="outline" asChild>
           <Link to="/">Back to Home</Link>
         </Button>
-        <Button onClick={onSignOut}>Sign out</Button>
+        <Button onClick={onSignOut}>Sign out &amp; switch account</Button>
       </div>
     </motion.div>
   );
 }
 
-function AuthGateStep({ onGoogleSignIn }: { onGoogleSignIn: () => void }) {
+// ─── Auth Gate Step ───────────────────────────────────────────────────────────
+
+function AuthGateStep({
+  authStage,
+  authError,
+  profile,
+  onGoogleSignIn,
+  onSignOut,
+}: {
+  authStage: AuthStage;
+  authError: string | null;
+  profile: any;
+  onGoogleSignIn: () => void;
+  onSignOut: () => void;
+}) {
+  const isLoading = authStage === "signing_in" || authStage === "returning" || authStage === "promoting";
+
+  const loadingMessage =
+    authStage === "signing_in"
+      ? "Redirecting to Google..."
+      : authStage === "returning"
+        ? "Completing sign-in..."
+        : "Setting up your account...";
+
   return (
     <motion.div
       initial={{ opacity: 0, x: 30 }}
@@ -646,18 +659,83 @@ function AuthGateStep({ onGoogleSignIn }: { onGoogleSignIn: () => void }) {
       exit={{ opacity: 0, x: -30 }}
       className="flex flex-col items-center justify-center py-16"
     >
-      <LogIn className="h-16 w-16 text-primary mb-6" />
-      <h2 className="text-2xl font-bold text-foreground mb-2">Sign in to continue</h2>
-      <p className="text-muted-foreground mb-8 text-center max-w-sm">
-        Please sign in with your Google account to proceed with enrollment.
-      </p>
-      <Button size="lg" onClick={onGoogleSignIn} className="gap-2">
-        {/* Google SVG icon */}
-        Continue with Google
-      </Button>
+      {isLoading ? (
+        <>
+          <Loader2 className="h-12 w-12 text-primary animate-spin mb-6" />
+          <h2 className="text-xl font-semibold text-foreground mb-2">{loadingMessage}</h2>
+          <p className="text-muted-foreground text-sm">Please wait…</p>
+        </>
+      ) : (
+        <>
+          <LogIn className="h-14 w-14 text-primary mb-6" />
+          <h2 className="text-2xl font-bold text-foreground mb-2">Sign in to continue</h2>
+          <p className="text-muted-foreground mb-2 text-center max-w-sm">
+            Use your Google account to enroll. New accounts are automatically set up as parent accounts.
+          </p>
+          <p className="text-xs text-muted-foreground mb-8 text-center max-w-sm">
+            You'll be asked to select or add a Google account. Existing users are signed in directly.
+          </p>
+
+          {/* Error alert */}
+          {authError && (
+            <Alert variant="destructive" className="mb-6 max-w-sm">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{authError}</AlertDescription>
+            </Alert>
+          )}
+
+          {/* Signed in but still idle (edge case) */}
+          {profile && authStage === "idle" && (
+            <Alert className="mb-6 max-w-sm">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Signed in as <strong>{profile.email}</strong> but account setup is pending.{" "}
+                <button className="underline" onClick={onSignOut}>
+                  Sign out and try again
+                </button>
+                .
+              </AlertDescription>
+            </Alert>
+          )}
+
+          <Button size="lg" onClick={onGoogleSignIn} className="gap-3 px-8" disabled={isLoading}>
+            <GoogleIcon />
+            Continue with Google
+          </Button>
+
+          <p className="text-xs text-muted-foreground mt-4 text-center max-w-xs">
+            By continuing, you agree to our Terms of Service and Privacy Policy.
+          </p>
+        </>
+      )}
     </motion.div>
   );
 }
+
+function GoogleIcon() {
+  return (
+    <svg className="h-5 w-5" viewBox="0 0 24 24">
+      <path
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+        fill="#4285F4"
+      />
+      <path
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+        fill="#34A853"
+      />
+      <path
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+        fill="#FBBC05"
+      />
+      <path
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+        fill="#EA4335"
+      />
+    </svg>
+  );
+}
+
+// ─── Student Details Step ─────────────────────────────────────────────────────
 
 function StudentDetailsStep({
   items,
@@ -688,7 +766,7 @@ function StudentDetailsStep({
           <CardContent className="py-3 px-4 flex items-center gap-2 text-sm text-primary">
             <Percent className="h-4 w-4 shrink-0" />
             <span className="font-medium">
-              {items.length >= 3 ? "10%" : "5%"} multi-course discount applied for enrolling in {items.length} courses!
+              {items.length >= 3 ? "10%" : "5%"} multi-course discount applied for {items.length} courses!
             </span>
           </CardContent>
         </Card>
@@ -718,36 +796,21 @@ function StudentCourseCard({
   onChange: (s: ExtendedStudentDetail[]) => void;
   onRemove: () => void;
 }) {
-  const addStudent = () => {
-    if (students.length < 5) {
-      onChange([...students, { name: "", grade: "", email: "", phone: "", schoolName: "" }]);
-    }
-  };
-
-  const removeStudent = (idx: number) => {
-    onChange(students.filter((_, i) => i !== idx));
-  };
-
-  const updateStudent = (idx: number, field: keyof ExtendedStudentDetail, value: string) => {
-    const newStudents = [...students];
-    newStudents[idx] = { ...newStudents[idx], [field]: value };
-    onChange(newStudents);
-  };
-
-  // Initialize if no students
   useEffect(() => {
     if (students.length === 0) {
-      onChange([
-        {
-          name: "",
-          grade: "",
-          email: "",
-          phone: "",
-          schoolName: "",
-        },
-      ]);
+      onChange([{ name: "", grade: "", email: "", phone: "", schoolName: "" }]);
     }
   }, [students.length, onChange]);
+
+  const addStudent = () => {
+    if (students.length < 5) onChange([...students, { name: "", grade: "", email: "", phone: "", schoolName: "" }]);
+  };
+  const removeStudent = (idx: number) => onChange(students.filter((_, i) => i !== idx));
+  const updateStudent = (idx: number, field: keyof ExtendedStudentDetail, value: string) => {
+    const next = [...students];
+    next[idx] = { ...next[idx], [field]: value };
+    onChange(next);
+  };
 
   return (
     <Card>
@@ -783,7 +846,6 @@ function StudentCourseCard({
                 </Button>
               )}
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">Student Name *</Label>
@@ -838,7 +900,6 @@ function StudentCourseCard({
             + Add Another Student
           </Button>
         )}
-
         {students.length >= 2 && (
           <p className="text-xs text-primary flex items-center gap-1">
             <Percent className="h-3 w-3" />
@@ -850,6 +911,8 @@ function StudentCourseCard({
   );
 }
 
+// ─── Address Step ─────────────────────────────────────────────────────────────
+
 function AddressStep({
   addressDetails,
   setAddressDetails,
@@ -857,9 +920,8 @@ function AddressStep({
   addressDetails: AddressDetails;
   setAddressDetails: (details: AddressDetails) => void;
 }) {
-  const updateField = (field: keyof AddressDetails, value: string) => {
+  const update = (field: keyof AddressDetails, value: string) =>
     setAddressDetails({ ...addressDetails, [field]: value });
-  };
 
   return (
     <motion.div
@@ -871,38 +933,35 @@ function AddressStep({
       <div className="text-center mb-6">
         <MapPin className="mx-auto h-10 w-10 text-primary mb-2" />
         <h2 className="text-2xl font-bold text-foreground">Parent/Guardian Details</h2>
-        <p className="text-muted-foreground">Please provide parent/guardian contact information</p>
+        <p className="text-muted-foreground">Please provide parent/guardian contact and address</p>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <User className="h-5 w-5" />
-            Parent/Guardian Information
+            <User className="h-5 w-5" /> Parent/Guardian Information
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <Label htmlFor="parentName">Parent/Guardian Full Name *</Label>
+            <Label htmlFor="parentName">Full Name *</Label>
             <Input
               id="parentName"
-              placeholder="Enter parent/guardian name"
+              placeholder="Parent/Guardian name"
               value={addressDetails.parentName}
-              onChange={(e) => updateField("parentName", e.target.value)}
-              required
+              onChange={(e) => update("parentName", e.target.value)}
             />
           </div>
           <div>
-            <Label htmlFor="parentPhone">Parent/Guardian Phone Number *</Label>
+            <Label htmlFor="parentPhone">Phone Number *</Label>
             <Input
               id="parentPhone"
               type="tel"
-              placeholder="Enter phone number"
+              placeholder="Phone number"
               value={addressDetails.parentPhone}
-              onChange={(e) => updateField("parentPhone", e.target.value)}
-              required
+              onChange={(e) => update("parentPhone", e.target.value)}
             />
-            <p className="text-xs text-muted-foreground mt-1">We'll use this for communication regarding enrollment</p>
+            <p className="text-xs text-muted-foreground mt-1">We'll use this for enrollment communication</p>
           </div>
         </CardContent>
       </Card>
@@ -910,8 +969,7 @@ function AddressStep({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
-            Address Information
+            <MapPin className="h-5 w-5" /> Address
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -921,8 +979,7 @@ function AddressStep({
               id="addressLine1"
               placeholder="House/Flat No., Building Name"
               value={addressDetails.addressLine1}
-              onChange={(e) => updateField("addressLine1", e.target.value)}
-              required
+              onChange={(e) => update("addressLine1", e.target.value)}
             />
           </div>
           <div>
@@ -931,7 +988,7 @@ function AddressStep({
               id="addressLine2"
               placeholder="Street, Area, Landmark"
               value={addressDetails.addressLine2}
-              onChange={(e) => updateField("addressLine2", e.target.value)}
+              onChange={(e) => update("addressLine2", e.target.value)}
             />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -941,8 +998,7 @@ function AddressStep({
                 id="city"
                 placeholder="City"
                 value={addressDetails.city}
-                onChange={(e) => updateField("city", e.target.value)}
-                required
+                onChange={(e) => update("city", e.target.value)}
               />
             </div>
             <div>
@@ -951,8 +1007,7 @@ function AddressStep({
                 id="state"
                 placeholder="State"
                 value={addressDetails.state}
-                onChange={(e) => updateField("state", e.target.value)}
-                required
+                onChange={(e) => update("state", e.target.value)}
               />
             </div>
           </div>
@@ -963,8 +1018,7 @@ function AddressStep({
                 id="pincode"
                 placeholder="PIN Code"
                 value={addressDetails.pincode}
-                onChange={(e) => updateField("pincode", e.target.value)}
-                required
+                onChange={(e) => update("pincode", e.target.value)}
               />
             </div>
             <div>
@@ -973,8 +1027,7 @@ function AddressStep({
                 id="country"
                 placeholder="Country"
                 value={addressDetails.country}
-                onChange={(e) => updateField("country", e.target.value)}
-                required
+                onChange={(e) => update("country", e.target.value)}
               />
             </div>
           </div>
@@ -983,6 +1036,8 @@ function AddressStep({
     </motion.div>
   );
 }
+
+// ─── Discount Summary Step ────────────────────────────────────────────────────
 
 function DiscountSummaryStep({
   items,
@@ -1020,7 +1075,6 @@ function DiscountSummaryStep({
 
       <Card>
         <CardContent className="pt-6 space-y-4">
-          {/* Items */}
           {items.map((item) => {
             const students = studentDetails[item.id] || [];
             return (
@@ -1076,7 +1130,6 @@ function DiscountSummaryStep({
             <span>₹{Math.round(finalAmount).toLocaleString()}</span>
           </div>
 
-          {/* Coupon */}
           {!couponApplied && (
             <div className="flex gap-2 pt-2">
               <Input
@@ -1095,6 +1148,8 @@ function DiscountSummaryStep({
     </motion.div>
   );
 }
+
+// ─── Payment Step ─────────────────────────────────────────────────────────────
 
 function PaymentStep({
   finalAmount,
@@ -1126,9 +1181,7 @@ function PaymentStep({
         <p className="text-4xl font-bold text-primary mt-4">₹{Math.round(finalAmount).toLocaleString()}</p>
       </div>
 
-      {/* Payment Method Selection */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Pay Now */}
         <Card
           className={`cursor-pointer transition-all ${paymentMethod === "now" ? "border-primary ring-2 ring-primary/20" : "hover:border-primary/50"}`}
           onClick={() => setPaymentMethod("now")}
@@ -1139,8 +1192,6 @@ function PaymentStep({
             <p className="text-sm text-muted-foreground mt-1">Scan QR and pay via UPI</p>
           </CardContent>
         </Card>
-
-        {/* Pay Later */}
         <Card
           className={`cursor-pointer transition-all ${paymentMethod === "later" ? "border-primary ring-2 ring-primary/20" : "hover:border-primary/50"}`}
           onClick={() => setPaymentMethod("later")}
@@ -1153,7 +1204,6 @@ function PaymentStep({
         </Card>
       </div>
 
-      {/* Pay Now - QR Code & Reference */}
       {paymentMethod === "now" && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
           <Card>
@@ -1170,11 +1220,10 @@ function PaymentStep({
                 }}
               />
               <p className="text-sm text-muted-foreground text-center">
-                Scan this QR code using any UPI app (Google Pay, PhonePe, Paytm, etc.)
+                Scan using any UPI app (Google Pay, PhonePe, Paytm, etc.)
               </p>
             </CardContent>
           </Card>
-
           <Card>
             <CardContent className="pt-6">
               <Label htmlFor="ref">Payment Reference Number *</Label>
@@ -1185,13 +1234,12 @@ function PaymentStep({
                 onChange={(e) => setReferenceNumber(e.target.value)}
                 className="mt-2"
               />
-              <p className="text-xs text-muted-foreground mt-2">You can find this in your UPI payment confirmation</p>
+              <p className="text-xs text-muted-foreground mt-2">Find this in your UPI payment confirmation</p>
             </CardContent>
           </Card>
         </motion.div>
       )}
 
-      {/* Pay Later Message */}
       {paymentMethod === "later" && (
         <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/30">
           <CardContent className="p-6 text-center">
@@ -1202,7 +1250,6 @@ function PaymentStep({
         </Card>
       )}
 
-      {/* Submit Button */}
       {paymentMethod && (
         <Button
           size="lg"
