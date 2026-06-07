@@ -569,30 +569,37 @@ export default function CheckoutPage() {
         )}
 
         {/* Navigation */}
-       {items.length > 0 && !success && (!session || profile?.role === "parent") && (
-  <div className="flex justify-between mt-8">
-    <Button
-      variant="outline"
-      onClick={() => setStep((s) => Math.max(session ? 1 : 0, s - 1))}
-      disabled={step <= (session ? 1 : 0)}
-    >
-      <ArrowLeft className="h-4 w-4 mr-2" /> Back
-    </Button>
+        {/* Navigation */}
+        {items.length > 0 && !success && (!session || profile?.role === "parent") && (
+          <div className="flex justify-between mt-8">
+            <Button
+              variant="outline"
+              onClick={() => setStep((s) => Math.max(session ? 1 : 0, s - 1))}
+              disabled={step <= (session ? 1 : 0)}
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" /> Back
+            </Button>
 
-    {step < 4 && (
-      <Button
-        onClick={() => setStep((s) => s + 1)}
-        disabled={
-          (step === 0 && !session) ||
-          (step === 1 && !allStudentDetailsFilled) ||
-          (step === 2 && !isAddressValid())
-        }
-      >
-        Next <ArrowRight className="h-4 w-4 ml-2" />
-      </Button>
-    )}
-  </div>
-)}
+            {step < 4 && (
+              <Button
+                onClick={() => setStep((s) => s + 1)}
+                disabled={
+                  (step === 0 && !session) ||
+                  (step === 1 && !allStudentDetailsFilled) ||
+                  (step === 2 && !isAddressValid())
+                }
+              >
+                Next <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            )}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+/* ─── Sub-components ──────────────────────────────────── */
 /* ─── Sub-components ──────────────────────────────────── */
 
 function EmptyCart() {
