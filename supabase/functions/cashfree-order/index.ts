@@ -59,19 +59,17 @@ Deno.serve(async (req) => {
       const { app_id, secret_key, mode } = body;
       if (!app_id || !secret_key) return jsonRes({ error: "App ID and Secret Key are required" }, 400);
 
-      const { error: upsertError } = await supabaseAdmin
-        .from("payment_config")
-        .upsert(
-          {
-            provider: "cashfree",
-            app_id,
-            secret_key,
-            mode: mode || "sandbox",
-            is_active: true,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "provider" },
-        );
+      const { error: upsertError } = await supabaseAdmin.from("payment_config").upsert(
+        {
+          provider: "cashfree",
+          app_id,
+          secret_key,
+          mode: mode || "sandbox",
+          is_active: true,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "provider" },
+      );
 
       if (upsertError) return jsonRes({ error: upsertError.message }, 500);
       return jsonRes({ success: true });
@@ -206,9 +204,9 @@ Deno.serve(async (req) => {
         }
 
         await supabaseAdmin.from("leads").insert({
-          name: profile?.display_name || profile?.email || "Checkout enrollment",
-          email: profile?.email || user.email || null,
-          phone: null,
+          name: resolvedName,
+          email: resolvedEmail,
+          phone: resolvedPhone,
           source: "checkout",
           status: "new",
           organization_id,
