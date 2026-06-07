@@ -182,28 +182,30 @@ export default function CheckoutPage() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 2. Promotion / role-resolution effect ─────────────────────────────────
+  // Promote / role-resolution effect
+  // profile can be null for brand-new users who have no profile row yet —
+  // in that case we still attempt promotion; the edge function creates the row.
   useEffect(() => {
-    if (!session || !profile) return;
+    if (!session) return;
     if (promoteAttempted.current) return;
 
-    // Already a parent — just advance
-    if (profile.role === "parent") {
+    // If profile loaded and is already parent, advance immediately
+    if (profile?.role === "parent") {
       clearIntent();
       setAuthStage("ready");
       if (step === 0) setStep(1);
       return;
     }
 
-    // Roles that cannot be promoted (staff/admin)
+    // If profile loaded and is a non-promotable role, block
     const nonPromotableRoles = ["superadmin", "admin", "support", "teacher"];
-    if (nonPromotableRoles.includes(profile.role)) {
+    if (profile && nonPromotableRoles.includes(profile.role)) {
       clearIntent();
       setAuthStage("role_conflict");
       return;
     }
 
-    // New user or student — attempt promotion to parent
-    // Only promote when coming from checkout intent OR when on checkout page
+    // profile is null (new user) OR profile.role is student — attempt promotion
     promoteAttempted.current = true;
     setAuthStage("promoting");
     setAuthError(null);
