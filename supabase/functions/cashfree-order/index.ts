@@ -19,10 +19,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    const supabaseAdmin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     const body = await req.json();
     const { action } = body;
@@ -45,7 +42,10 @@ Deno.serve(async (req) => {
       if (!authHeader) return jsonRes({ error: "Unauthorized" }, 401);
 
       const token = authHeader.replace("Bearer ", "");
-      const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
+      const {
+        data: { user },
+        error: userError,
+      } = await supabaseAdmin.auth.getUser(token);
       if (userError || !user) return jsonRes({ error: "Unauthorized" }, 401);
 
       const { data: roleData } = await supabaseAdmin
@@ -62,8 +62,15 @@ Deno.serve(async (req) => {
       const { error: upsertError } = await supabaseAdmin
         .from("payment_config")
         .upsert(
-          { provider: "cashfree", app_id, secret_key, mode: mode || "sandbox", is_active: true, updated_at: new Date().toISOString() },
-          { onConflict: "provider" }
+          {
+            provider: "cashfree",
+            app_id,
+            secret_key,
+            mode: mode || "sandbox",
+            is_active: true,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "provider" },
         );
 
       if (upsertError) return jsonRes({ error: upsertError.message }, 500);
@@ -76,10 +83,13 @@ Deno.serve(async (req) => {
       if (!authHeader) return jsonRes({ error: "Unauthorized" }, 401);
 
       const token = authHeader.replace("Bearer ", "");
-      const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
+      const {
+        data: { user },
+        error: userError,
+      } = await supabaseAdmin.auth.getUser(token);
       if (userError || !user) return jsonRes({ error: "Unauthorized" }, 401);
 
-      const { items, student_details, coupon_code, payment_method, reference_number } = body;
+      const { items, student_details, address_details, coupon_code, payment_method, reference_number } = body;
       if (!items || !Array.isArray(items) || items.length === 0) {
         return jsonRes({ error: "No items provided" }, 400);
       }
@@ -87,14 +97,14 @@ Deno.serve(async (req) => {
       // Calculate discount server-side
       const subtotal = items.reduce((s: number, i: any) => s + (i.fee || 0), 0);
       let courseDiscount = 0;
-      if (items.length >= 3) courseDiscount = subtotal * 0.10;
+      if (items.length >= 3) courseDiscount = subtotal * 0.1;
       else if (items.length === 2) courseDiscount = subtotal * 0.05;
 
       let studentDiscount = 0;
       for (const item of items) {
         const students = student_details?.[item.id] || [];
         const count = students.length;
-        if (count >= 3) studentDiscount += (item.fee || 0) * 0.10;
+        if (count >= 3) studentDiscount += (item.fee || 0) * 0.1;
         else if (count === 2) studentDiscount += (item.fee || 0) * 0.05;
       }
 
@@ -122,11 +132,26 @@ Deno.serve(async (req) => {
       const finalAmount = Math.max(0, subtotal - totalDiscount);
 
       // Get user profile for Cashfree
+      // Get user profile — fall back to OAuth user_metadata for new users
       const { data: profile } = await supabaseAdmin
         .from("profiles")
         .select("email, display_name")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
+
+      // Resolve display name: address form > profile > Google metadata > email
+      const resolvedName =
+        address_details?.parentName?.trim() ||
+        profile?.display_name ||
+        user.user_metadata?.full_name ||
+        user.user_metadata?.name ||
+        profile?.email ||
+        user.email ||
+        "Unknown";
+
+      const resolvedEmail = profile?.email || user.email || user.user_metadata?.email || null;
+
+      const resolvedPhone = address_details?.parentPhone?.trim() || null;
 
       // Create order in DB
       const { data: order, error: orderError } = await supabaseAdmin
@@ -137,8 +162,11 @@ Deno.serve(async (req) => {
           discount_amount: totalDiscount,
           final_amount: finalAmount,
           student_details: student_details || {},
+          address_details: address_details || null,
           coupon_code: coupon_code || null,
           status: "pending",
+          payment_method: payment_method || null,
+          reference_number: payment_method === "now" ? reference_number || null : null,
         })
         .select("id")
         .single();
@@ -225,9 +253,7 @@ Deno.serve(async (req) => {
       }
 
       // Call Cashfree Create Order API
-      const cfBase = config.mode === "production"
-        ? "https://api.cashfree.com/pg"
-        : "https://sandbox.cashfree.com/pg";
+      const cfBase = config.mode === "production" ? "https://api.cashfree.com/pg" : "https://sandbox.cashfree.com/pg";
 
       const cfOrderId = `order_${order.id.replace(/-/g, "").slice(0, 20)}`;
 
@@ -283,11 +309,7 @@ Deno.serve(async (req) => {
       const { order_id } = body;
       if (!order_id) return jsonRes({ error: "order_id required" }, 400);
 
-      const { data: order } = await supabaseAdmin
-        .from("orders")
-        .select("*")
-        .eq("id", order_id)
-        .single();
+      const { data: order } = await supabaseAdmin.from("orders").select("*").eq("id", order_id).single();
 
       if (!order) return jsonRes({ error: "Order not found" }, 404);
 
