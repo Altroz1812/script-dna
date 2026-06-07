@@ -239,6 +239,35 @@ export default function CheckoutPage() {
   // Handle OAuth redirect with hash fragment
   // Handle OAuth redirect with hash fragment
   // Handle OAuth redirect with hash fragment
+  // useEffect(() => {
+  //   const hash = window.location.hash;
+
+  //   if (hash && hash.includes("access_token=")) {
+  //     console.log("Processing OAuth hash...");
+
+  //     const params = new URLSearchParams(hash.substring(1));
+  //     const accessToken = params.get("access_token");
+  //     const refreshToken = params.get("refresh_token");
+
+  //     if (accessToken && refreshToken) {
+  //       supabase.auth
+  //         .setSession({
+  //           access_token: accessToken,
+  //           refresh_token: refreshToken,
+  //         })
+  //         .then(({ data, error }) => {
+  //           if (!error && data?.session) {
+  //             window.history.replaceState(null, "", window.location.pathname);
+  //             setStep(1);
+  //             clearSignupIntent();
+  //             toast.success("Signed in successfully!");
+  //           }
+  //         });
+  //     }
+  //   }
+  // }, []);
+
+  // Handle OAuth redirect with hash fragment
   useEffect(() => {
     const hash = window.location.hash;
 
@@ -255,9 +284,19 @@ export default function CheckoutPage() {
             access_token: accessToken,
             refresh_token: refreshToken,
           })
-          .then(({ data, error }) => {
+          .then(async ({ data, error }) => {
             if (!error && data?.session) {
+              // Clean URL first
               window.history.replaceState(null, "", window.location.pathname);
+
+              // Wait for profile to refresh
+              try {
+                await refreshProfile();
+              } catch (e) {
+                console.log("Profile refresh delayed, continuing...");
+              }
+
+              // Now advance
               setStep(1);
               clearSignupIntent();
               toast.success("Signed in successfully!");
