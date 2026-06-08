@@ -12,10 +12,20 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Plus, Trash2, Eye, CheckCircle2 } from "lucide-react";
+import { Plus, Trash2, Eye, CheckCircle2, IndianRupee } from "lucide-react";
 import { TableSkeleton } from "@/components/ui/loading-skeletons";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const STATUSES = ["new", "contacted", "qualified", "converted", "lost"] as const;
+const PAYMENT_MODES = [
+  { value: "cash", label: "Cash" },
+  { value: "upi", label: "UPI" },
+  { value: "bank_transfer", label: "Bank Transfer" },
+  { value: "cheque", label: "Cheque" },
+  { value: "card", label: "Card" },
+  { value: "cashfree", label: "Cashfree (online)" },
+  { value: "other", label: "Other" },
+];
 
 export default function LeadsPage() {
   const queryClient = useQueryClient();
@@ -23,6 +33,14 @@ export default function LeadsPage() {
   const [form, setForm] = useState({ name: "", email: "", phone: "", source: "", notes: "" });
   const [detailLead, setDetailLead] = useState<any | null>(null);
   const [assignOrgId, setAssignOrgId] = useState<string>("");
+  const [allowPartial, setAllowPartial] = useState(false);
+  const [payForm, setPayForm] = useState({
+    amount: "",
+    mode: "cash",
+    reference: "",
+    date: new Date().toISOString().slice(0, 10),
+    notes: "",
+  });
 
   const { data: leads = [], isLoading } = useQuery<any[]>({
     queryKey: ["leads"],
@@ -78,17 +96,36 @@ export default function LeadsPage() {
   });
 
   const approveMutation = useMutation({
-    mutationFn: ({ id, organization_id }: { id: string; organization_id?: string }) =>
-      adminQuery("approve_lead", { id, organization_id }),
+    mutationFn: ({ id, organization_id, allow_partial }: { id: string; organization_id?: string; allow_partial?: boolean }) =>
+      adminQuery("approve_lead", { id, organization_id, allow_partial }),
     onSuccess: (data: any) => {
       const errs = Array.isArray(data?.errors) ? data.errors : [];
-      toast.success(`Created ${data?.created_count ?? 0} student(s), enrolled ${data?.enrolled_count ?? 0}`);
+      toast.success(
+        `Created ${data?.created_count ?? 0} student(s), enrolled ${data?.enrolled_count ?? 0}, recorded ${data?.payments_created ?? 0} payment(s)`
+      );
       if (errs.length) toast.warning(`${errs.length} issue(s): ${errs.slice(0, 2).join("; ")}`);
       setDetailLead(null);
       setAssignOrgId("");
+      setAllowPartial(false);
       invalidate();
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(e.message || "Approval failed"),
+  });
+
+  const recordPaymentMutation = useMutation({
+    mutationFn: (vars: { id: string; amount: number; mode: string; reference?: string; date?: string; notes?: string }) =>
+      adminQuery("record_lead_payment", vars),
+    onSuccess: (data: any) => {
+      toast.success(`Payment recorded. Status: ${data?.payment_status ?? "—"}`);
+      // Optimistically refresh detail dialog by re-reading leads list
+      queryClient.invalidateQueries({ queryKey: ["leads"] }).then(() => {
+        // Replace detailLead with fresh row
+        const next = queryClient.getQueryData<any[]>(["leads"])?.find((x) => x.id === detailLead?.id);
+        if (next) setDetailLead(next);
+      });
+      setPayForm({ amount: "", mode: "cash", reference: "", date: new Date().toISOString().slice(0, 10), notes: "" });
+    },
+    onError: (e: any) => toast.error(e.message || "Failed to record payment"),
   });
 
   const handleCreate = () => {
