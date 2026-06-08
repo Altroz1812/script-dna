@@ -203,7 +203,7 @@ export default function Login() {
               </div>
             </CardContent>
             <CardFooter className="flex flex-col gap-3">
-              <Button type="submit" variant="glow" className="w-full" disabled={loading || !!demoLoading}>
+              <Button type="submit" variant="glow" className="w-full" disabled={loading || !!demoLoading || googleLoading}>
                 {loading ? (
                   <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Signing in…</span>
                 ) : 'Sign In'}
