@@ -12,10 +12,20 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Plus, Trash2, Eye, CheckCircle2 } from "lucide-react";
+import { Plus, Trash2, Eye, CheckCircle2, IndianRupee } from "lucide-react";
 import { TableSkeleton } from "@/components/ui/loading-skeletons";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const STATUSES = ["new", "contacted", "qualified", "converted", "lost"] as const;
+const PAYMENT_MODES = [
+  { value: "cash", label: "Cash" },
+  { value: "upi", label: "UPI" },
+  { value: "bank_transfer", label: "Bank Transfer" },
+  { value: "cheque", label: "Cheque" },
+  { value: "card", label: "Card" },
+  { value: "cashfree", label: "Cashfree (online)" },
+  { value: "other", label: "Other" },
+];
 
 export default function LeadsPage() {
   const queryClient = useQueryClient();
@@ -23,6 +33,14 @@ export default function LeadsPage() {
   const [form, setForm] = useState({ name: "", email: "", phone: "", source: "", notes: "" });
   const [detailLead, setDetailLead] = useState<any | null>(null);
   const [assignOrgId, setAssignOrgId] = useState<string>("");
+  const [allowPartial, setAllowPartial] = useState(false);
+  const [payForm, setPayForm] = useState({
+    amount: "",
+    mode: "cash",
+    reference: "",
+    date: new Date().toISOString().slice(0, 10),
+    notes: "",
+  });
 
   const { data: leads = [], isLoading } = useQuery<any[]>({
     queryKey: ["leads"],
@@ -78,17 +96,36 @@ export default function LeadsPage() {
   });
 
   const approveMutation = useMutation({
-    mutationFn: ({ id, organization_id }: { id: string; organization_id?: string }) =>
-      adminQuery("approve_lead", { id, organization_id }),
+    mutationFn: ({ id, organization_id, allow_partial }: { id: string; organization_id?: string; allow_partial?: boolean }) =>
+      adminQuery("approve_lead", { id, organization_id, allow_partial }),
     onSuccess: (data: any) => {
       const errs = Array.isArray(data?.errors) ? data.errors : [];
-      toast.success(`Created ${data?.created_count ?? 0} student(s), enrolled ${data?.enrolled_count ?? 0}`);
+      toast.success(
+        `Created ${data?.created_count ?? 0} student(s), enrolled ${data?.enrolled_count ?? 0}, recorded ${data?.payments_created ?? 0} payment(s)`
+      );
       if (errs.length) toast.warning(`${errs.length} issue(s): ${errs.slice(0, 2).join("; ")}`);
       setDetailLead(null);
       setAssignOrgId("");
+      setAllowPartial(false);
       invalidate();
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(e.message || "Approval failed"),
+  });
+
+  const recordPaymentMutation = useMutation({
+    mutationFn: (vars: { id: string; amount: number; mode: string; reference?: string; date?: string; notes?: string }) =>
+      adminQuery("record_lead_payment", vars),
+    onSuccess: (data: any) => {
+      toast.success(`Payment recorded. Status: ${data?.payment_status ?? "—"}`);
+      // Optimistically refresh detail dialog by re-reading leads list
+      queryClient.invalidateQueries({ queryKey: ["leads"] }).then(() => {
+        // Replace detailLead with fresh row
+        const next = queryClient.getQueryData<any[]>(["leads"])?.find((x) => x.id === detailLead?.id);
+        if (next) setDetailLead(next);
+      });
+      setPayForm({ amount: "", mode: "cash", reference: "", date: new Date().toISOString().slice(0, 10), notes: "" });
+    },
+    onError: (e: any) => toast.error(e.message || "Failed to record payment"),
   });
 
   const handleCreate = () => {
@@ -427,32 +464,165 @@ export default function LeadsPage() {
 
                     {/* Payment Tab */}
                     <TabsContent value="payment" className="flex-1 overflow-auto p-4 border rounded-md mt-2">
-                      <div className="grid grid-cols-2 gap-6">
-                        <div>
-                          <Label className="text-muted-foreground">Payment Method</Label>
-                          <div className="text-lg font-medium mt-1 capitalize">{meta.payment_method || "—"}</div>
-                        </div>
-                        <div>
-                          <Label className="text-muted-foreground">Final Amount</Label>
-                          <div className="text-2xl font-semibold mt-1">
-                            ₹{meta.final_amount?.toLocaleString() ?? "—"}
+                      {(() => {
+                        const payments: any[] = Array.isArray(meta.payments) ? meta.payments : [];
+                        const totalDue = Number(meta.final_amount ?? 0);
+                        const totalPaid = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
+                        const balance = Math.max(0, totalDue - totalPaid);
+                        const status =
+                          totalDue <= 0 ? "unpaid" : totalPaid >= totalDue ? "full" : totalPaid > 0 ? "partial" : "unpaid";
+                        const fmt = (n: number) => `₹${n.toLocaleString("en-IN")}`;
+                        return (
+                          <div className="space-y-6">
+                            {/* Summary */}
+                            <div className="grid grid-cols-4 gap-4">
+                              <div className="rounded-lg border p-3">
+                                <Label className="text-muted-foreground text-xs">Total Due</Label>
+                                <div className="text-xl font-semibold mt-1">{fmt(totalDue)}</div>
+                              </div>
+                              <div className="rounded-lg border p-3">
+                                <Label className="text-muted-foreground text-xs">Total Paid</Label>
+                                <div className="text-xl font-semibold mt-1 text-emerald-500">{fmt(totalPaid)}</div>
+                              </div>
+                              <div className="rounded-lg border p-3">
+                                <Label className="text-muted-foreground text-xs">Balance</Label>
+                                <div className="text-xl font-semibold mt-1 text-amber-500">{fmt(balance)}</div>
+                              </div>
+                              <div className="rounded-lg border p-3">
+                                <Label className="text-muted-foreground text-xs">Payment Status</Label>
+                                <Badge
+                                  className="mt-1 capitalize"
+                                  variant={status === "full" ? "default" : status === "partial" ? "secondary" : "outline"}
+                                >
+                                  {status === "full" ? "Fully Paid" : status === "partial" ? "Partial" : "Unpaid"}
+                                </Badge>
+                              </div>
+                            </div>
+
+                            {/* Recorded payments list */}
+                            <div>
+                              <Label className="text-muted-foreground mb-2 block">Recorded Payments ({payments.length})</Label>
+                              {payments.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">No payments recorded yet.</p>
+                              ) : (
+                                <div className="border rounded-md overflow-hidden">
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow>
+                                        <TableHead>Date</TableHead>
+                                        <TableHead>Mode</TableHead>
+                                        <TableHead>Reference</TableHead>
+                                        <TableHead>Notes</TableHead>
+                                        <TableHead className="text-right">Amount</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {payments.map((p: any, i: number) => (
+                                        <TableRow key={p.id || i}>
+                                          <TableCell className="text-sm">{p.date}</TableCell>
+                                          <TableCell className="capitalize text-sm">{(p.mode || "").replace("_", " ")}</TableCell>
+                                          <TableCell className="text-sm">{p.reference || "—"}</TableCell>
+                                          <TableCell className="text-sm text-muted-foreground">{p.notes || "—"}</TableCell>
+                                          <TableCell className="text-right font-medium">{fmt(Number(p.amount))}</TableCell>
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Record new payment */}
+                            {!isConverted && (
+                              <div className="border rounded-lg p-4 bg-muted/20">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <IndianRupee className="h-4 w-4 text-primary" />
+                                  <h4 className="font-semibold text-sm">Record Payment</h4>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                  <div>
+                                    <Label className="text-xs">Amount (₹) *</Label>
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={payForm.amount}
+                                      placeholder={balance > 0 ? balance.toString() : "0"}
+                                      onChange={(e) => setPayForm((f) => ({ ...f, amount: e.target.value }))}
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">Mode *</Label>
+                                    <Select value={payForm.mode} onValueChange={(v) => setPayForm((f) => ({ ...f, mode: v }))}>
+                                      <SelectTrigger>
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {PAYMENT_MODES.map((m) => (
+                                          <SelectItem key={m.value} value={m.value}>
+                                            {m.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">Date</Label>
+                                    <Input
+                                      type="date"
+                                      value={payForm.date}
+                                      onChange={(e) => setPayForm((f) => ({ ...f, date: e.target.value }))}
+                                    />
+                                  </div>
+                                  <div className="md:col-span-2">
+                                    <Label className="text-xs">Reference / Txn ID</Label>
+                                    <Input
+                                      value={payForm.reference}
+                                      placeholder="UTR, cheque #, txn id…"
+                                      onChange={(e) => setPayForm((f) => ({ ...f, reference: e.target.value }))}
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">Notes</Label>
+                                    <Input
+                                      value={payForm.notes}
+                                      onChange={(e) => setPayForm((f) => ({ ...f, notes: e.target.value }))}
+                                    />
+                                  </div>
+                                </div>
+                                <div className="flex justify-end mt-3 gap-2">
+                                  {balance > 0 && (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => setPayForm((f) => ({ ...f, amount: balance.toString() }))}
+                                    >
+                                      Fill balance ({fmt(balance)})
+                                    </Button>
+                                  )}
+                                  <Button
+                                    size="sm"
+                                    disabled={recordPaymentMutation.isPending || !Number(payForm.amount)}
+                                    onClick={() =>
+                                      recordPaymentMutation.mutate({
+                                        id: detailLead.id,
+                                        amount: Number(payForm.amount),
+                                        mode: payForm.mode,
+                                        reference: payForm.reference || undefined,
+                                        date: payForm.date || undefined,
+                                        notes: payForm.notes || undefined,
+                                      })
+                                    }
+                                  >
+                                    {recordPaymentMutation.isPending ? "Saving…" : "Add Payment"}
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
                           </div>
-                        </div>
-                        {meta.payment_id && (
-                          <div>
-                            <Label className="text-muted-foreground">Transaction ID</Label>
-                            <div className="font-mono text-sm mt-1">{meta.payment_id}</div>
-                          </div>
-                        )}
-                        {meta.payment_status && (
-                          <div>
-                            <Label className="text-muted-foreground">Payment Status</Label>
-                            <Badge className="mt-1" variant={meta.payment_status === "paid" ? "default" : "secondary"}>
-                              {meta.payment_status}
-                            </Badge>
-                          </div>
-                        )}
-                      </div>
+                        );
+                      })()}
                     </TabsContent>
 
                     {/* Courses & Batches Tab */}
@@ -485,33 +655,73 @@ export default function LeadsPage() {
                   {/* Approval Section (outside tabs) */}
                   {!isConverted && students.length > 0 && (
                     <div className="border-t pt-4 mt-4">
-                      <div className="flex items-end gap-3">
-                        <div className="flex-1">
-                          <Label>Assign Organization</Label>
-                          <Select value={assignOrgId} onValueChange={setAssignOrgId}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select organization..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {organizations.map((o: any) => (
-                                <SelectItem key={o.id} value={o.id}>
-                                  {o.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <Button
-                          className="min-w-[220px]"
-                          disabled={approveMutation.isPending || !assignOrgId}
-                          onClick={() => approveMutation.mutate({ id: detailLead.id, organization_id: assignOrgId })}
-                        >
-                          {approveMutation.isPending
-                            ? "Creating accounts…"
-                            : `Approve & Create ${students.length} Student Account(s)`}
-                        </Button>
-                      </div>
+                      {(() => {
+                        const payments: any[] = Array.isArray(meta.payments) ? meta.payments : [];
+                        const totalDue = Number(meta.final_amount ?? 0);
+                        const totalPaid = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
+                        const isFullyPaid = totalDue > 0 && totalPaid >= totalDue;
+                        const isPartial = totalPaid > 0 && totalPaid < totalDue;
+                        const canApprove = !!assignOrgId && (isFullyPaid || allowPartial || totalDue === 0);
+                        return (
+                          <div className="space-y-3">
+                            <div className="flex items-end gap-3">
+                              <div className="flex-1">
+                                <Label>Assign Organization *</Label>
+                                <Select value={assignOrgId} onValueChange={setAssignOrgId}>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select organization..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {organizations.map((o: any) => (
+                                      <SelectItem key={o.id} value={o.id}>
+                                        {o.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <Button
+                                className="min-w-[240px]"
+                                disabled={approveMutation.isPending || !canApprove}
+                                onClick={() =>
+                                  approveMutation.mutate({
+                                    id: detailLead.id,
+                                    organization_id: assignOrgId,
+                                    allow_partial: allowPartial,
+                                  })
+                                }
+                              >
+                                {approveMutation.isPending
+                                  ? "Creating accounts…"
+                                  : `Approve & Create ${students.length} Student Account(s)`}
+                              </Button>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-3 text-xs">
+                              <Badge variant={isFullyPaid ? "default" : isPartial ? "secondary" : "outline"} className="capitalize">
+                                {isFullyPaid ? "Fully Paid" : isPartial ? "Partial Payment" : "Unpaid"} · ₹
+                                {totalPaid.toLocaleString("en-IN")} / ₹{totalDue.toLocaleString("en-IN")}
+                              </Badge>
+                              {!isFullyPaid && totalDue > 0 && (
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                  <Checkbox
+                                    checked={allowPartial}
+                                    onCheckedChange={(v) => setAllowPartial(!!v)}
+                                  />
+                                  <span>Approve with {isPartial ? "partial" : "no"} payment (override)</span>
+                                </label>
+                              )}
+                              {!assignOrgId && (
+                                <span className="text-muted-foreground">Select an organization to continue.</span>
+                              )}
+                              {assignOrgId && !canApprove && (
+                                <span className="text-amber-500">
+                                  Confirm full payment in the Payment tab, or tick the override.
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
