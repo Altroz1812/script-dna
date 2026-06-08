@@ -741,14 +741,27 @@ export type Database = {
       }
       orders: {
         Row: {
+          address_details: Json | null
+          address_line1: string | null
+          address_line2: string | null
           cashfree_order_id: string | null
+          city: string | null
+          country: string | null
           coupon_code: string | null
           created_at: string
           discount_amount: number
           final_amount: number
           id: string
+          lead_payload: Json | null
           organization_id: string | null
+          parent_email: string | null
+          parent_name: string | null
+          parent_phone: string | null
+          payment_method: string | null
           payment_session_id: string | null
+          pincode: string | null
+          reference_number: string | null
+          state: string | null
           status: string
           student_details: Json
           total_amount: number
@@ -756,14 +769,27 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          address_details?: Json | null
+          address_line1?: string | null
+          address_line2?: string | null
           cashfree_order_id?: string | null
+          city?: string | null
+          country?: string | null
           coupon_code?: string | null
           created_at?: string
           discount_amount?: number
           final_amount: number
           id?: string
+          lead_payload?: Json | null
           organization_id?: string | null
+          parent_email?: string | null
+          parent_name?: string | null
+          parent_phone?: string | null
+          payment_method?: string | null
           payment_session_id?: string | null
+          pincode?: string | null
+          reference_number?: string | null
+          state?: string | null
           status?: string
           student_details?: Json
           total_amount: number
@@ -771,14 +797,27 @@ export type Database = {
           user_id: string
         }
         Update: {
+          address_details?: Json | null
+          address_line1?: string | null
+          address_line2?: string | null
           cashfree_order_id?: string | null
+          city?: string | null
+          country?: string | null
           coupon_code?: string | null
           created_at?: string
           discount_amount?: number
           final_amount?: number
           id?: string
+          lead_payload?: Json | null
           organization_id?: string | null
+          parent_email?: string | null
+          parent_name?: string | null
+          parent_phone?: string | null
+          payment_method?: string | null
           payment_session_id?: string | null
+          pincode?: string | null
+          reference_number?: string | null
+          state?: string | null
           status?: string
           student_details?: Json
           total_amount?: number

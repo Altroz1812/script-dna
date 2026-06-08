@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useCart, CartItem } from '@/contexts/CartContext';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { BatchPickerDialog } from '@/components/courses/BatchPickerDialog';
 import heroVideo from '@/assets/hero-video.mp4';
 
@@ -88,6 +89,7 @@ function AnimatedSection({ children, className, id }: { children: React.ReactNod
 
 export default function LandingPage() {
   const { addItem, removeItem, isInCart, count, total, items } = useCart();
+  const { session, profile } = useAuth();
   const [mobileMenu, setMobileMenu] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const navigate = useNavigate();
@@ -169,9 +171,17 @@ export default function LandingPage() {
                 </span>
               )}
             </button>
-            <Link to="/login" className="hidden sm:block">
-              <Button variant="ghost" size="sm">Log In</Button>
-            </Link>
+            {session ? (
+              <Link to="/dashboard" className="hidden sm:block">
+                <Button variant="default" size="sm" className="bg-gradient-to-r from-primary to-accent">
+                  Go to Dashboard
+                </Button>
+              </Link>
+            ) : (
+              <Link to="/login" className="hidden sm:block">
+                <Button variant="ghost" size="sm">Log In</Button>
+              </Link>
+            )}
             {/* Get Started button hidden for now */}
             <button className="md:hidden p-2" onClick={() => setMobileMenu(!mobileMenu)}>
               {mobileMenu ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -185,7 +195,13 @@ export default function LandingPage() {
             <a href="#features" onClick={e => { smoothScroll(e, 'features'); setMobileMenu(false); }} className="block py-2 text-muted-foreground">Features</a>
             <a href="#courses" onClick={e => { smoothScroll(e, 'courses'); setMobileMenu(false); }} className="block py-2 text-muted-foreground">Courses</a>
             <a href="#testimonials" onClick={e => { smoothScroll(e, 'testimonials'); setMobileMenu(false); }} className="block py-2 text-muted-foreground">Reviews</a>
-            <Link to="/login" onClick={() => setMobileMenu(false)} className="block py-2 text-muted-foreground">Log In</Link>
+            {session ? (
+              <Link to="/dashboard" onClick={() => setMobileMenu(false)} className="block py-2 text-primary font-medium">
+                Go to Dashboard{profile?.displayName ? ` (${profile.displayName})` : ''}
+              </Link>
+            ) : (
+              <Link to="/login" onClick={() => setMobileMenu(false)} className="block py-2 text-muted-foreground">Log In</Link>
+            )}
           </div>
         )}
       </nav>

@@ -12,6 +12,7 @@ import { ROLE_LABELS, type AppRole } from '@/types/roles';
 import { checkRateLimit, resetRateLimit, formatRetryTime, sanitizeEmail } from '@/lib/security';
 import { MorphingBlob } from '@/components/ui/morphing-blob';
 import aurapenLogo from '@/assets/aurapen-logo.png';
+import { lovable } from '@/integrations/lovable/index';
 
 const DEMO_ACCOUNTS: { email: string; password: string; role: AppRole; name: string; org?: string }[] = [
   { email: 'superadmin@demo.com', password: 'Demo1234!', role: 'superadmin', name: 'Super Admin', org: 'Platform' },
@@ -45,6 +46,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [demoLoading, setDemoLoading] = useState<string | null>(null);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const { signIn, session, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -98,6 +100,25 @@ export default function Login() {
     }
   };
 
+  const handleGoogleSignIn = async () => {
+    if (googleLoading || loading || !!demoLoading) return;
+    setGoogleLoading(true);
+    try {
+      const result = await lovable.auth.signInWithOAuth('google', {
+        redirect_uri: window.location.origin + '/dashboard',
+        extraParams: { prompt: 'select_account' },
+      });
+      if (result.error) {
+        toast({ title: 'Google sign-in failed', description: result.error.message, variant: 'destructive' });
+        setGoogleLoading(false);
+      }
+      // On redirect: browser leaves this page; nothing else to do.
+    } catch (err: any) {
+      toast({ title: 'Google sign-in failed', description: getErrorMessage(err), variant: 'destructive' });
+      setGoogleLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-start sm:items-center justify-center bg-background p-4 py-8 sm:py-4 relative overflow-auto">
       {/* Animated grid pattern */}
@@ -134,6 +155,28 @@ export default function Login() {
           </CardHeader>
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full bg-white/[0.04] border-white/[0.12] hover:bg-white/[0.08] gap-2"
+                onClick={handleGoogleSignIn}
+                disabled={googleLoading || loading || !!demoLoading}
+              >
+                {googleLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="#EA4335" d="M12 11v3.2h4.5c-.2 1.2-1.4 3.5-4.5 3.5-2.7 0-4.9-2.2-4.9-5s2.2-5 4.9-5c1.5 0 2.6.6 3.2 1.2l2.2-2.1C16 5.4 14.2 4.5 12 4.5 7.9 4.5 4.6 7.8 4.6 12s3.3 7.5 7.4 7.5c4.3 0 7.1-3 7.1-7.2 0-.5-.1-.9-.1-1.3H12z"/>
+                  </svg>
+                )}
+                Continue with Google
+              </Button>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-white/[0.08]" /></div>
+                <div className="relative flex justify-center text-[10px] uppercase">
+                  <span className="bg-card px-2 text-muted-foreground">or sign in with email</span>
+                </div>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -160,7 +203,7 @@ export default function Login() {
               </div>
             </CardContent>
             <CardFooter className="flex flex-col gap-3">
-              <Button type="submit" variant="glow" className="w-full" disabled={loading || !!demoLoading}>
+              <Button type="submit" variant="glow" className="w-full" disabled={loading || !!demoLoading || googleLoading}>
                 {loading ? (
                   <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Signing in…</span>
                 ) : 'Sign In'}
