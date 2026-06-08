@@ -655,33 +655,73 @@ export default function LeadsPage() {
                   {/* Approval Section (outside tabs) */}
                   {!isConverted && students.length > 0 && (
                     <div className="border-t pt-4 mt-4">
-                      <div className="flex items-end gap-3">
-                        <div className="flex-1">
-                          <Label>Assign Organization</Label>
-                          <Select value={assignOrgId} onValueChange={setAssignOrgId}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select organization..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {organizations.map((o: any) => (
-                                <SelectItem key={o.id} value={o.id}>
-                                  {o.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <Button
-                          className="min-w-[220px]"
-                          disabled={approveMutation.isPending || !assignOrgId}
-                          onClick={() => approveMutation.mutate({ id: detailLead.id, organization_id: assignOrgId })}
-                        >
-                          {approveMutation.isPending
-                            ? "Creating accounts…"
-                            : `Approve & Create ${students.length} Student Account(s)`}
-                        </Button>
-                      </div>
+                      {(() => {
+                        const payments: any[] = Array.isArray(meta.payments) ? meta.payments : [];
+                        const totalDue = Number(meta.final_amount ?? 0);
+                        const totalPaid = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
+                        const isFullyPaid = totalDue > 0 && totalPaid >= totalDue;
+                        const isPartial = totalPaid > 0 && totalPaid < totalDue;
+                        const canApprove = !!assignOrgId && (isFullyPaid || allowPartial || totalDue === 0);
+                        return (
+                          <div className="space-y-3">
+                            <div className="flex items-end gap-3">
+                              <div className="flex-1">
+                                <Label>Assign Organization *</Label>
+                                <Select value={assignOrgId} onValueChange={setAssignOrgId}>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select organization..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {organizations.map((o: any) => (
+                                      <SelectItem key={o.id} value={o.id}>
+                                        {o.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <Button
+                                className="min-w-[240px]"
+                                disabled={approveMutation.isPending || !canApprove}
+                                onClick={() =>
+                                  approveMutation.mutate({
+                                    id: detailLead.id,
+                                    organization_id: assignOrgId,
+                                    allow_partial: allowPartial,
+                                  })
+                                }
+                              >
+                                {approveMutation.isPending
+                                  ? "Creating accounts…"
+                                  : `Approve & Create ${students.length} Student Account(s)`}
+                              </Button>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-3 text-xs">
+                              <Badge variant={isFullyPaid ? "default" : isPartial ? "secondary" : "outline"} className="capitalize">
+                                {isFullyPaid ? "Fully Paid" : isPartial ? "Partial Payment" : "Unpaid"} · ₹
+                                {totalPaid.toLocaleString("en-IN")} / ₹{totalDue.toLocaleString("en-IN")}
+                              </Badge>
+                              {!isFullyPaid && totalDue > 0 && (
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                  <Checkbox
+                                    checked={allowPartial}
+                                    onCheckedChange={(v) => setAllowPartial(!!v)}
+                                  />
+                                  <span>Approve with {isPartial ? "partial" : "no"} payment (override)</span>
+                                </label>
+                              )}
+                              {!assignOrgId && (
+                                <span className="text-muted-foreground">Select an organization to continue.</span>
+                              )}
+                              {assignOrgId && !canApprove && (
+                                <span className="text-amber-500">
+                                  Confirm full payment in the Payment tab, or tick the override.
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
