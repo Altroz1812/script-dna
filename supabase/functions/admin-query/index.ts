@@ -415,7 +415,7 @@ Deno.serve(async (req) => {
 
       // ===== APPROVE LEAD: create student accounts + enroll into batches =====
       case 'approve_lead': {
-        const { id } = params as { id: string }
+        const { id, allow_partial } = params as { id: string; allow_partial?: boolean }
         if (!id) throw new Error('id required')
         if (!callerIsSuperadmin && !callerIsAdmin) {
           throw new Error('Only admins can approve leads')
@@ -430,6 +430,22 @@ Deno.serve(async (req) => {
         const meta: any = lead.metadata ?? {}
         const students: any[] = Array.isArray(meta.students) ? meta.students : []
         if (students.length === 0) throw new Error('No student details on lead')
+
+        // Payment gate: require recorded payments to cover final_amount unless
+        // caller explicitly allows partial approval.
+        const payments: any[] = Array.isArray(meta.payments) ? meta.payments : []
+        const totalDue = Number(meta.final_amount ?? 0)
+        const totalPaid = payments.reduce((s, p) => s + Number(p.amount || 0), 0)
+        const paymentStatus = totalDue <= 0
+          ? 'unpaid'
+          : (totalPaid >= totalDue ? 'full' : (totalPaid > 0 ? 'partial' : 'unpaid'))
+        if (paymentStatus !== 'full' && !allow_partial) {
+          throw new Error(
+            `Payment not confirmed. Recorded ₹${totalPaid.toFixed(0)} of ₹${totalDue.toFixed(0)}. ` +
+            'Record full payment or check "Approve with partial payment".'
+          )
+        }
+
         const orgId = lead.organization_id ?? targetOrgId ?? null
         const created: any[] = []
         const enrolled: any[] = []
@@ -486,13 +502,103 @@ Deno.serve(async (req) => {
             temp_password: tempPassword, batch_id: s.batch_id ?? null,
           })
         }
+
+        // Materialize recorded lead payments into the payments table now that
+        // we have real student rows. Each recorded payment is attached to the
+        // first created student with a description tagging the lead + mode.
+        const paymentRows: any[] = []
+        if (created.length > 0 && payments.length > 0) {
+          const anchorStudentId = created[0].student_id
+          for (const p of payments) {
+            const amt = Number(p.amount || 0)
+            if (!(amt > 0)) continue
+            const desc = [
+              `Lead ${id.slice(0, 8)}`,
+              p.mode ? `via ${p.mode}` : null,
+              p.reference ? `ref ${p.reference}` : null,
+              p.notes || null,
+            ].filter(Boolean).join(' · ')
+            const { data: pay, error: payErr } = await supabase.from('payments').insert({
+              student_id: anchorStudentId,
+              organization_id: orgId,
+              amount: amt,
+              currency: 'INR',
+              status: 'completed',
+              payment_date: p.date || new Date().toISOString().slice(0, 10),
+              description: desc,
+            }).select().maybeSingle()
+            if (!payErr && pay) paymentRows.push(pay)
+          }
+        }
+
         await supabase.from('leads')
           .update({
             status: 'converted',
-            metadata: { ...meta, approved_at: new Date().toISOString(), created_students: created },
+            metadata: {
+              ...meta,
+              approved_at: new Date().toISOString(),
+              created_students: created,
+              payment_status: paymentStatus,
+              total_paid: totalPaid,
+              payment_rows_created: paymentRows.length,
+            },
           })
           .eq('id', id)
-        result = { success: true, created_count: created.length, enrolled_count: enrolled.length, created }
+        result = {
+          success: true,
+          created_count: created.length,
+          enrolled_count: enrolled.length,
+          payments_created: paymentRows.length,
+          payment_status: paymentStatus,
+          total_paid: totalPaid,
+          total_due: totalDue,
+          created,
+        }
+        break
+      }
+
+      // ===== RECORD A PAYMENT ON A LEAD (pre-approval, stored in metadata) =====
+      case 'record_lead_payment': {
+        const { id, amount, mode, reference, date, notes } = params as {
+          id: string; amount: number; mode: string;
+          reference?: string; date?: string; notes?: string;
+        }
+        if (!id) throw new Error('id required')
+        if (!(Number(amount) > 0)) throw new Error('amount must be > 0')
+        if (!mode) throw new Error('mode required')
+        if (!callerIsSuperadmin && !callerIsAdmin && !callerIsSupport) {
+          throw new Error('Only admins / support can record lead payments')
+        }
+        const { data: lead, error: leadErr } = await supabase
+          .from('leads').select('id, organization_id, metadata, status').eq('id', id).maybeSingle()
+        if (leadErr) throw leadErr
+        if (!lead) throw new Error('Lead not found')
+        if (!callerIsSuperadmin && lead.organization_id && !callerOrgMemberships.includes(lead.organization_id)) {
+          throw new Error('Forbidden: lead belongs to another organization')
+        }
+        const meta: any = lead.metadata ?? {}
+        const existing: any[] = Array.isArray(meta.payments) ? meta.payments : []
+        const entry = {
+          id: crypto.randomUUID(),
+          amount: Number(amount),
+          mode: String(mode),
+          reference: reference ?? null,
+          date: date || new Date().toISOString().slice(0, 10),
+          notes: notes ?? null,
+          recorded_at: new Date().toISOString(),
+          recorded_by: userId,
+        }
+        const nextPayments = [...existing, entry]
+        const totalDue = Number(meta.final_amount ?? 0)
+        const totalPaid = nextPayments.reduce((s, p) => s + Number(p.amount || 0), 0)
+        const paymentStatus = totalDue <= 0
+          ? 'unpaid'
+          : (totalPaid >= totalDue ? 'full' : (totalPaid > 0 ? 'partial' : 'unpaid'))
+        const { error: upErr } = await supabase.from('leads').update({
+          metadata: { ...meta, payments: nextPayments, total_paid: totalPaid, payment_status: paymentStatus },
+        }).eq('id', id)
+        if (upErr) throw upErr
+        result = { success: true, total_paid: totalPaid, total_due: totalDue, payment_status: paymentStatus, entry }
         break
       }
 
