@@ -29,3 +29,9 @@ verify_jwt = false
 
 [functions.livekit-update-participant]
 verify_jwt = false
+
+[functions.student-create]
+verify_jwt = false
+
+[functions.student-login-resolve]
+verify_jwt = false
