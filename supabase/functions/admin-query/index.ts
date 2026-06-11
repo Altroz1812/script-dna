@@ -449,21 +449,41 @@ Deno.serve(async (req) => {
         const orgId = lead.organization_id ?? targetOrgId ?? null
         const created: any[] = []
         const enrolled: any[] = []
-        const slugify = (s: string) => (s || 'student').toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.|\.$/g, '') || 'student'
-        const parentEmail: string | null = meta.parent_email ?? lead.email ?? null
-        const emailDomain = parentEmail && parentEmail.includes('@') ? parentEmail.split('@')[1] : 'aurapen.app'
-        const stamp = Date.now().toString(36)
+        // Generate org-prefixed Student IDs (e.g. SUN-482917); password = ID.
+        let orgPrefix = 'STU'
+        if (orgId) {
+          const { data: orgRow } = await supabase
+            .from('organizations').select('slug, name').eq('id', orgId).maybeSingle()
+          const src = (orgRow?.slug || orgRow?.name || 'STU') as string
+          const cleaned = src.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3)
+          if (cleaned.length >= 2) orgPrefix = cleaned
+        }
+        const SYNTHETIC_DOMAIN = 'students.aurapen.local'
+        const genDigits = (n: number) => {
+          let s = ''
+          for (let i = 0; i < n; i++) s += Math.floor(Math.random() * 10).toString()
+          return s
+        }
+        const generateUniqueStudentId = async (): Promise<string> => {
+          for (let attempt = 0; attempt < 8; attempt++) {
+            const candidate = `${orgPrefix}-${genDigits(6)}`
+            const { data: dup } = await supabase
+              .from('profiles').select('user_id').eq('student_login_id', candidate).maybeSingle()
+            if (!dup) return candidate
+          }
+          throw new Error('Could not generate unique student ID')
+        }
         for (let idx = 0; idx < students.length; idx++) {
           const s = students[idx]
           if (!s?.name) continue
-          const childEmail = `${slugify(s.name)}.${stamp}${idx}@${emailDomain}`
-          // Random initial password the admin can reset.
-          const tempPassword = crypto.randomUUID().replace(/-/g, '').slice(0, 12) + 'A1!'
+          const studentLoginId = await generateUniqueStudentId()
+          const childEmail = `${studentLoginId.toLowerCase()}@${SYNTHETIC_DOMAIN}`
+          const tempPassword = studentLoginId // password equals ID
           const { data: authData, error: authError } = await supabase.auth.admin.createUser({
             email: childEmail,
             password: tempPassword,
             email_confirm: true,
-            user_metadata: { display_name: s.name },
+            user_metadata: { display_name: s.name, student_login_id: studentLoginId },
           })
           if (authError) {
             console.error('createUser failed', authError.message)
@@ -471,7 +491,12 @@ Deno.serve(async (req) => {
           }
           const newUserId = authData.user.id
           await supabase.from('profiles')
-            .update({ display_name: s.name, organization_id: orgId })
+            .update({
+              display_name: s.name,
+              organization_id: orgId,
+              student_login_id: studentLoginId,
+              email: childEmail,
+            })
             .eq('user_id', newUserId)
           // Ensure role = student (trigger already inserts 'student', but be safe)
           const { data: existingRole } = await supabase
@@ -498,8 +523,12 @@ Deno.serve(async (req) => {
             if (!enrollErr) enrolled.push({ student_id: newUserId, batch_id: s.batch_id })
           }
           created.push({
-            student_id: newUserId, name: s.name, email: childEmail,
-            temp_password: tempPassword, batch_id: s.batch_id ?? null,
+            student_id: newUserId,
+            name: s.name,
+            email: childEmail,
+            student_login_id: studentLoginId,
+            temp_password: tempPassword,
+            batch_id: s.batch_id ?? null,
           })
         }
 
