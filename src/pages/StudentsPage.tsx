@@ -64,7 +64,7 @@ export default function StudentsPage() {
 
           const { data: profiles, error: pErr } = await supabase
             .from('profiles')
-            .select('user_id, display_name, email')
+            .select('user_id, display_name, email, student_login_id')
             .in('user_id', studentIds);
           if (pErr) throw pErr;
 
@@ -75,6 +75,7 @@ export default function StudentsPage() {
             user_id: s.student_id,
             display_name: profileMap[s.student_id]?.display_name || null,
             email: profileMap[s.student_id]?.email || null,
+            student_login_id: profileMap[s.student_id]?.student_login_id || null,
             enrollments: s.batches.map(name => ({ batches: { name } })),
           }));
         } else {
