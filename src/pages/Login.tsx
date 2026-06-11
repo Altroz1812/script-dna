@@ -13,6 +13,8 @@ import { checkRateLimit, resetRateLimit, formatRetryTime, sanitizeEmail } from '
 import { MorphingBlob } from '@/components/ui/morphing-blob';
 import aurapenLogo from '@/assets/aurapen-logo.png';
 import { lovable } from '@/integrations/lovable/index';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { supabase } from '@/integrations/supabase/client';
 
 const DEMO_ACCOUNTS: { email: string; password: string; role: AppRole; name: string; org?: string }[] = [
   { email: 'superadmin@demo.com', password: 'Demo1234!', role: 'superadmin', name: 'Super Admin', org: 'Platform' },
@@ -47,6 +49,10 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [demoLoading, setDemoLoading] = useState<string | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [mode, setMode] = useState<'email' | 'student'>('email');
+  const [studentId, setStudentId] = useState('');
+  const [studentPassword, setStudentPassword] = useState('');
+  const [studentLoading, setStudentLoading] = useState(false);
   const { signIn, session, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -119,6 +125,43 @@ export default function Login() {
     }
   };
 
+  const handleStudentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (studentLoading) return;
+    const raw = studentId.trim().toUpperCase();
+    if (!raw || !/^[A-Z0-9-]{4,24}$/.test(raw)) {
+      toast({ title: 'Invalid Student ID', description: 'Enter the ID printed on your student card.', variant: 'destructive' });
+      return;
+    }
+    const rateCheck = checkRateLimit(`student-login:${raw}`);
+    if (!rateCheck.allowed) {
+      toast({
+        title: 'Too many attempts',
+        description: `Try again in ${formatRetryTime(rateCheck.retryAfterMs)}.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+    setStudentLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('student-login-resolve', {
+        body: { student_login_id: raw },
+      });
+      if (error) throw error;
+      if ((data as any)?.error || !(data as any)?.email) {
+        throw new Error('Student ID not found');
+      }
+      const resolvedEmail = (data as any).email as string;
+      const pwd = studentPassword.trim() || raw; // default password = ID
+      await signIn(resolvedEmail, pwd);
+      resetRateLimit(`student-login:${raw}`);
+    } catch (err: any) {
+      toast({ title: 'Sign in failed', description: getErrorMessage(err), variant: 'destructive' });
+    } finally {
+      setStudentLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-start sm:items-center justify-center bg-background p-4 py-8 sm:py-4 relative overflow-auto">
       {/* Animated grid pattern */}
@@ -153,6 +196,13 @@ export default function Login() {
             <CardTitle className="text-xl font-display">Welcome back</CardTitle>
             <CardDescription>Sign in to AuraPen</CardDescription>
           </CardHeader>
+          <Tabs value={mode} onValueChange={(v) => setMode(v as 'email' | 'student')} className="px-6">
+            <TabsList className="grid grid-cols-2 w-full bg-white/[0.04]">
+              <TabsTrigger value="email">Email</TabsTrigger>
+              <TabsTrigger value="student">Student ID</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          {mode === 'email' ? (
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
               <Button
@@ -214,6 +264,45 @@ export default function Login() {
               </div>
             </CardFooter>
           </form>
+          ) : (
+          <form onSubmit={handleStudentSubmit}>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="student-id">Student ID</Label>
+                <Input
+                  id="student-id"
+                  type="text"
+                  value={studentId}
+                  onChange={(e) => setStudentId(e.target.value.toUpperCase())}
+                  placeholder="SUN-482917"
+                  required
+                  autoComplete="username"
+                  className="bg-white/[0.04] border-white/[0.1] focus:border-primary/50 transition-colors font-mono tracking-wider"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="student-password">Password</Label>
+                <Input
+                  id="student-password"
+                  type="password"
+                  value={studentPassword}
+                  onChange={(e) => setStudentPassword(e.target.value)}
+                  placeholder="Same as Student ID by default"
+                  autoComplete="current-password"
+                  className="bg-white/[0.04] border-white/[0.1] focus:border-primary/50 transition-colors"
+                />
+                <p className="text-xs text-muted-foreground">Leave blank to use your ID as the password.</p>
+              </div>
+            </CardContent>
+            <CardFooter className="flex flex-col gap-3">
+              <Button type="submit" variant="glow" className="w-full" disabled={studentLoading}>
+                {studentLoading ? (
+                  <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Signing in…</span>
+                ) : 'Sign In as Student'}
+              </Button>
+            </CardFooter>
+          </form>
+          )}
         </Card>
 
         {/* Demo Logins */}
