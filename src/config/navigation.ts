@@ -31,6 +31,7 @@ export interface NavItem {
   url: string;
   icon: LucideIcon;
   roles: AppRole[];
+  globalOnly?: boolean;
 }
 
 export interface NavGroup {
@@ -59,6 +60,14 @@ export const navigationConfig: NavGroup[] = [
         icon: BookOpen,
         roles: ["superadmin", "admin", "support", "teacher", "student"],
       },
+
+      {
+        title: "Courses",
+        url: "/courses",
+        icon: BookOpen,
+        roles: ["parent"],
+      },
+
       { title: "Curriculum", url: "/curriculum", icon: Layers, roles: ["superadmin", "admin"] },
       {
         title: "Batches",
@@ -112,9 +121,16 @@ export const navigationConfig: NavGroup[] = [
   {
     label: "Management",
     items: [
-      { title: "Organizations", url: "/organizations", icon: Shield, roles: ["superadmin"] },
+      { title: "Organizations", url: "/organizations", icon: Shield, roles: ["superadmin"], globalOnly: true },
       { title: "Users", url: "/users", icon: Users, roles: ["superadmin", "admin"] },
-      { title: "Roles & Permissions", url: "/roles", icon: Shield, roles: ["superadmin"] },
+      { title: "Roles & Permissions", url: "/roles", icon: Shield, roles: ["superadmin"], globalOnly: true },
+      {
+        title: "Certificates",
+        url: "/certificates",
+        icon: FileCheck, // Uses the Lucide FileCheck icon
+        roles: ["superadmin"], // STRICTLY ONLY SUPERADMIN
+        globalOnly: true, // Ensures it only shows if isGlobalView is true
+      },
       {
         title: "Students",
         url: "/students",
@@ -124,7 +140,7 @@ export const navigationConfig: NavGroup[] = [
       { title: "Payments", url: "/payments", icon: CreditCard, roles: ["superadmin", "admin", "support", "parent"] },
       { title: "Payroll", url: "/payroll", icon: DollarSign, roles: ["superadmin"] },
       { title: "Subscriptions", url: "/subscriptions", icon: CreditCard, roles: ["superadmin"] },
-      { title: "Coupons", url: "/coupons", icon: Ticket, roles: ["superadmin"] },
+      { title: "Coupons", url: "/coupons", icon: Ticket, roles: ["superadmin"], globalOnly: true },
     ],
   },
   {
@@ -132,7 +148,7 @@ export const navigationConfig: NavGroup[] = [
     items: [
       { title: "My Progress", url: "/my-progress", icon: TrendingUp, roles: ["student"] },
       { title: "My Orders", url: "/my-orders", icon: ShoppingBag, roles: ["student", "parent"] },
-      { title: "Font Architect", url: "/font-architect", icon: PenTool, roles: ["superadmin", "admin"] },
+      { title: "Font Architect", url: "/font-architect", icon: PenTool, roles: ["superadmin"], globalOnly: true },
       { title: "Reports", url: "/reports", icon: BarChart3, roles: ["superadmin", "admin", "teacher"] },
       { title: "Notifications", url: "/notifications", icon: Bell, roles: ["superadmin", "admin", "support"] },
       { title: "Activity Logs", url: "/activity-logs", icon: Shield, roles: ["superadmin"] },
@@ -141,17 +157,38 @@ export const navigationConfig: NavGroup[] = [
   {
     label: "System",
     items: [
-      { title: "System Monitoring", url: "/monitoring", icon: Monitor, roles: ["superadmin"] },
-      { title: "Settings", url: "/settings", icon: Settings, roles: ["superadmin"] },
+      { title: "System Monitoring", url: "/monitoring", icon: Monitor, roles: ["superadmin"], globalOnly: true },
+      { title: "Settings", url: "/settings", icon: Settings, roles: ["superadmin"], globalOnly: true },
     ],
   },
 ];
 
-export function getNavigationForRole(role: AppRole): NavGroup[] {
+// export function getNavigationForRole(role: AppRole): NavGroup[] {
+//   return navigationConfig
+//     .map((group) => ({
+//       ...group,
+//       items: group.items.filter((item) => item.roles.includes(role)),
+//     }))
+//     .filter((group) => group.items.length > 0);
+// }
+
+export function getNavigationForRole(
+  role: AppRole,
+  isGlobalView: boolean = false, // ← New parameter
+): NavGroup[] {
   return navigationConfig
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => item.roles.includes(role)),
+      items: group.items.filter((item) => {
+        const hasRole = item.roles.includes(role);
+
+        // Handle globalOnly items
+        if (item.globalOnly) {
+          return hasRole && isGlobalView;
+        }
+
+        return hasRole;
+      }),
     }))
     .filter((group) => group.items.length > 0);
 }
