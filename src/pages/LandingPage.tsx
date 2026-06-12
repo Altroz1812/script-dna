@@ -376,8 +376,7 @@ export default function LandingPage() {
               transition={{ delay: 0.2, duration: 0.5 }}
             >
               <Badge variant="outline" className="border-primary/40 text-primary px-4 py-1.5 text-sm">
-                <Sparkles className="w-3.5 h-3.5 mr-1.5 animate-pulse" /> Complete Handwriting Academy Platform
-              </Badge>
+                <Sparkles className="w-3.5 h-3.5 mr-1.5 animate-pulse" /> A Beautiful Handwritting Starts Here </Badge>
             </motion.div>
 
             <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tight leading-[1.1]">
