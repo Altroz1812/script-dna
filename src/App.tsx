@@ -2,28 +2,30 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { lazy, Suspense } from "react";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { CartProvider } from "@/contexts/CartContext";
 import { ActiveOrgProvider } from "@/contexts/ActiveOrgContext";
 import { ClassroomSessionProvider } from "@/contexts/ClassroomSessionContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { AppLayout } from "@/components/layout/AppLayout";
-// Eager: landing + auth (first paint critical)
 import LandingPage from "@/pages/LandingPage";
 import Login from "@/pages/Login";
 import { useIsMobileApp } from "@/hooks/useIsMobileApp";
-import { Navigate } from "react-router-dom";
 import Signup from "@/pages/Signup";
 import NotFound from "@/pages/NotFound";
 import Unauthorized from "@/pages/Unauthorized";
-import { MobileIntroVideo, shouldShowIntro } from "@/components/MobileIntroVideo";
-// Lazy: everything else (route-level code splitting)
+import { useAuth } from "@/contexts/AuthContext";
+import { useRBAC } from "@/hooks/useRBAC";
+import AddChildPage from "@/pages/AddChildPage";
+
+// Existing lazy imports...
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Index = lazy(() => import("@/pages/Index"));
 const FontCompiler = lazy(() => import("@/pages/FontCompiler"));
 const CoursesPage = lazy(() => import("@/pages/CoursesPage"));
+const ParentCoursesPage = lazy(() => import("@/pages/ParentCoursesPage"));
 const BatchesPage = lazy(() => import("@/pages/BatchesPage"));
 const BatchDetailPage = lazy(() => import("@/pages/BatchDetailPage"));
 const UsersPage = lazy(() => import("@/pages/UsersPage"));
@@ -59,6 +61,7 @@ const OrderHistoryPage = lazy(() => import("@/pages/OrderHistoryPage"));
 const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
 const SelectOrganizationPage = lazy(() => import("@/pages/SelectOrganizationPage"));
 const PracticeCanvasPage = lazy(() => import("@/pages/PracticeCanvasPage"));
+const CertificatesManagementPage = lazy(() => import("@/pages/CertificatesManagementPage"));
 
 const RouteFallback = () => (
   <div className="flex items-center justify-center min-h-[50vh]">
@@ -68,23 +71,28 @@ const RouteFallback = () => (
 
 const RootRoute = () => {
   const isMobile = useIsMobileApp();
-  const navigate = useNavigate();
-  const [showIntro, setShowIntro] = useState(() => isMobile && shouldShowIntro());
-
-  useEffect(() => {
-    if (isMobile && !showIntro) {
-      navigate('/login', { replace: true });
-    }
-  }, [isMobile, showIntro, navigate]);
-
-  if (isMobile && showIntro) {
-    return <MobileIntroVideo onDone={() => setShowIntro(false)} />;
-  }
-  if (isMobile) {
-    return null;
-  }
+  if (isMobile) return <Navigate to="/login" replace />;
   return <LandingPage />;
 };
+
+// NEW: Courses route wrapper that conditionally renders based on role
+const CoursesRouteWrapper = () => {
+  const { profile, loading } = useAuth();
+  const { role } = useRBAC();
+
+  if (loading) {
+    return <RouteFallback />;
+  }
+
+  // Admin/Teacher/Support roles get the management view
+  if (role === "superadmin" || role === "admin" || role === "teacher" || role === "support") {
+    return <CoursesPage />;
+  }
+
+  // Parents and students get the shopping/browsing view
+  return <ParentCoursesPage />;
+};
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -103,71 +111,131 @@ const App = () => (
       <CartProvider>
         <Toaster />
         <Sonner />
-        <BrowserRouter>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <AuthProvider>
             <ActiveOrgProvider>
-            <ClassroomSessionProvider>
-            <Suspense fallback={<RouteFallback />}>
-            <Routes>
-              {/* Public routes */}
-              <Route path="/" element={<RootRoute />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/signup" element={<Signup />} />
-              <Route path="/checkout" element={<CheckoutPage />} />
-              <Route path="/forgot-password" element={<ForgotPassword />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
-              <Route path="/unauthorized" element={<Unauthorized />} />
-              <Route
-                path="/select-organization"
-                element={
-                  <ProtectedRoute allowedRoles={['superadmin', 'admin', 'support', 'teacher']}>
-                    <SelectOrganizationPage />
-                  </ProtectedRoute>
-                }
-              />
+              <ClassroomSessionProvider>
+                <Suspense fallback={<RouteFallback />}>
+                  <Routes>
+                    {/* Public routes — no auth required */}
+                    <Route path="/" element={<RootRoute />} />
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/signup" element={<Signup />} />
+                    <Route path="/checkout" element={<CheckoutPage />} />
+                    <Route path="/forgot-password" element={<ForgotPassword />} />
+                    <Route path="/reset-password" element={<ResetPassword />} />
+                    <Route path="/unauthorized" element={<Unauthorized />} />
 
-              {/* Protected app routes */}
-              <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/courses" element={<CoursesPage />} />
-                <Route path="/batches" element={<BatchesPage />} />
-                <Route path="/batches/:batchId" element={<BatchDetailPage />} />
-                <Route path="/schedule" element={<SchedulePage />} />
-                <Route path="/attendance" element={<AttendancePage />} />
-                <Route path="/live-classes" element={<LiveClassesPage />} />
-                <Route path="/materials" element={<MaterialsPage />} />
-                <Route path="/leads" element={<LeadsPage />} />
-                <Route path="/enrollments" element={<EnrollmentsPage />} />
-                <Route path="/users" element={<UsersPage />} />
-                <Route path="/students" element={<StudentsPage />} />
-                <Route path="/payments" element={<PaymentsPage />} />
-                <Route path="/payroll" element={<PayrollPage />} />
-                <Route path="/font-architect" element={<Index />} />
-                <Route path="/font-compiler" element={<FontCompiler />} />
-                <Route path="/reports" element={<ReportsPage />} />
-                <Route path="/notifications" element={<NotificationsPage />} />
-                <Route path="/organizations" element={<OrganizationsPage />} />
-                <Route path="/roles" element={<RolesPage />} />
-                <Route path="/settings" element={<ProtectedRoute allowedRoles={['superadmin']}><SettingsPage /></ProtectedRoute>} />
-                <Route path="/profile" element={<ProfilePage />} />
-                <Route path="/activity-logs" element={<ActivityLogsPage />} />
-                <Route path="/subscriptions" element={<SubscriptionPlansPage />} />
-                <Route path="/coupons" element={<CouponsPage />} />
-                <Route path="/curriculum" element={<CurriculumPage />} />
-                <Route path="/monitoring" element={<SystemMonitoringPage />} />
-                <Route path="/practice" element={<PracticeAssignmentsPage />} />
-                <Route path="/practice-canvas" element={<PracticeCanvasPage />} />
-                <Route path="/submissions" element={<StudentSubmissionsPage />} />
-                <Route path="/courses/:courseId/lessons" element={<StudentLessonViewer />} />
-                <Route path="/my-progress" element={<StudentProgressPage />} />
-                <Route path="/my-children" element={<ParentChildrenPage />} />
-                <Route path="/child-progress" element={<ParentProgressPage />} />
-                <Route path="/my-orders" element={<OrderHistoryPage />} />
-              </Route>
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-            </Suspense>
-            </ClassroomSessionProvider>
+                    {/* Org picker — all authenticated roles */}
+                    <Route
+                      path="/select-organization"
+                      element={
+                        <ProtectedRoute
+                          allowedRoles={["superadmin", "admin", "support", "teacher", "parent", "student"]}
+                        >
+                          <SelectOrganizationPage />
+                        </ProtectedRoute>
+                      }
+                    />
+
+                    {/* Protected app shell — all authenticated roles */}
+                    <Route
+                      element={
+                        <ProtectedRoute>
+                          <AppLayout />
+                        </ProtectedRoute>
+                      }
+                    >
+                      <Route path="/dashboard" element={<Dashboard />} />
+
+                      {/* Single courses route that conditionally renders based on role */}
+                      <Route
+                        path="/courses"
+                        element={
+                          <ProtectedRoute
+                            allowedRoles={["superadmin", "admin", "teacher", "support", "parent", "student"]}
+                          >
+                            <CoursesRouteWrapper />
+                          </ProtectedRoute>
+                        }
+                      />
+
+                      <Route path="/batches" element={<BatchesPage />} />
+                      <Route path="/batches/:batchId" element={<BatchDetailPage />} />
+                      <Route path="/schedule" element={<SchedulePage />} />
+                      <Route path="/attendance" element={<AttendancePage />} />
+                      <Route path="/live-classes" element={<LiveClassesPage />} />
+                      <Route path="/materials" element={<MaterialsPage />} />
+                      <Route path="/leads" element={<LeadsPage />} />
+                      <Route path="/enrollments" element={<EnrollmentsPage />} />
+                      <Route path="/users" element={<UsersPage />} />
+                      <Route path="/students" element={<StudentsPage />} />
+                      <Route path="/payments" element={<PaymentsPage />} />
+                      <Route path="/payroll" element={<PayrollPage />} />
+                      <Route path="/font-architect" element={<Index />} />
+                      <Route path="/font-compiler" element={<FontCompiler />} />
+                      <Route path="/reports" element={<ReportsPage />} />
+                      <Route path="/notifications" element={<NotificationsPage />} />
+                      <Route path="/organizations" element={<OrganizationsPage />} />
+                      <Route path="/roles" element={<RolesPage />} />
+
+                      {/* Settings: superadmin only */}
+                      <Route
+                        path="/settings"
+                        element={
+                          <ProtectedRoute allowedRoles={["superadmin"]}>
+                            <SettingsPage />
+                          </ProtectedRoute>
+                        }
+                      />
+
+                      <Route
+                        path="/add-child"
+                        element={
+                          <ProtectedRoute allowedRoles={["parent"]}>
+                            <AddChildPage />
+                          </ProtectedRoute>
+                        }
+                      />
+                      {/* Settings: superadmin only */}
+                      <Route
+                        path="/settings"
+                        element={
+                          <ProtectedRoute allowedRoles={["superadmin"]}>
+                            <SettingsPage />
+                          </ProtectedRoute>
+                        }
+                      />
+
+                      {/* Certificates: superadmin only */}
+                      <Route
+                        path="/certificates"
+                        element={
+                          <ProtectedRoute allowedRoles={["superadmin"]}>
+                            <CertificatesManagementPage />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route path="/profile" element={<ProfilePage />} />
+                      <Route path="/activity-logs" element={<ActivityLogsPage />} />
+                      <Route path="/subscriptions" element={<SubscriptionPlansPage />} />
+                      <Route path="/coupons" element={<CouponsPage />} />
+                      <Route path="/curriculum" element={<CurriculumPage />} />
+                      <Route path="/monitoring" element={<SystemMonitoringPage />} />
+                      <Route path="/practice" element={<PracticeAssignmentsPage />} />
+                      <Route path="/practice-canvas" element={<PracticeCanvasPage />} />
+                      <Route path="/submissions" element={<StudentSubmissionsPage />} />
+                      <Route path="/courses/:courseId/lessons" element={<StudentLessonViewer />} />
+                      <Route path="/my-progress" element={<StudentProgressPage />} />
+                      <Route path="/my-children" element={<ParentChildrenPage />} />
+                      <Route path="/child-progress" element={<ParentProgressPage />} />
+                      <Route path="/my-orders" element={<OrderHistoryPage />} />
+                    </Route>
+
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </Suspense>
+              </ClassroomSessionProvider>
             </ActiveOrgProvider>
           </AuthProvider>
         </BrowserRouter>
