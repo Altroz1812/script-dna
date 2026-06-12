@@ -16,10 +16,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import {
   ArrowLeft, Copy, ExternalLink, Users, BookOpen, Clock, Calendar,
-  CheckCircle2, Radio, Hourglass, XCircle, User as UserIcon, Mail, GraduationCap, Plus, UserPlus, Trash2,
+  CheckCircle2, Radio, Hourglass, XCircle, User as UserIcon, Mail, GraduationCap, Plus, UserPlus, Trash2, Award,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
+import { Checkbox } from '@/components/ui/checkbox';
 
 type Detail = {
   batch: any;
