@@ -185,6 +185,77 @@ export type Database = {
           },
         ]
       }
+      certificates: {
+        Row: {
+          batch_id: string
+          course_id: string
+          course_name: string
+          created_at: string
+          id: string
+          issued_at: string
+          issued_by: string | null
+          organization_id: string
+          status: string
+          student_id: string
+          student_name: string
+        }
+        Insert: {
+          batch_id: string
+          course_id: string
+          course_name: string
+          created_at?: string
+          id?: string
+          issued_at?: string
+          issued_by?: string | null
+          organization_id: string
+          status?: string
+          student_id: string
+          student_name: string
+        }
+        Update: {
+          batch_id?: string
+          course_id?: string
+          course_name?: string
+          created_at?: string
+          id?: string
+          issued_at?: string
+          issued_by?: string | null
+          organization_id?: string
+          status?: string
+          student_id?: string
+          student_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "certificates_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "certificates_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "certificates_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "certificates_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       coupons: {
         Row: {
           code: string

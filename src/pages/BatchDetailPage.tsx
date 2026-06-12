@@ -16,10 +16,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import {
   ArrowLeft, Copy, ExternalLink, Users, BookOpen, Clock, Calendar,
-  CheckCircle2, Radio, Hourglass, XCircle, User as UserIcon, Mail, GraduationCap, Plus, UserPlus, Trash2,
+  CheckCircle2, Radio, Hourglass, XCircle, User as UserIcon, Mail, GraduationCap, Plus, UserPlus, Trash2, Award,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
+import { Checkbox } from '@/components/ui/checkbox';
 
 type Detail = {
   batch: any;
@@ -95,6 +96,58 @@ export default function BatchDetailPage() {
     mutationFn: (studentId: string) => batchService.removeStudent(batchId!, studentId),
     onSuccess: () => { toast.success('Student removed'); invalidate(); },
     onError: (e: any) => toast.error(e?.message || 'Failed to remove student'),
+  });
+
+  // ---- Certificates ----
+  const { data: certificates = [] } = useQuery({
+    queryKey: ['batch_certificates', batchId],
+    enabled: !!batchId,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('certificates')
+        .select('id, student_id, issued_at, status')
+        .eq('batch_id', batchId!);
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string; student_id: string; issued_at: string; status: string }>;
+    },
+  });
+  const issuedIds = useMemo(() => new Set(certificates.map((c) => c.student_id)), [certificates]);
+  const [selectedForCert, setSelectedForCert] = useState<Set<string>>(new Set());
+  const toggleCertStudent = (id: string) => {
+    setSelectedForCert((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const issueCertsMut = useMutation({
+    mutationFn: async () => {
+      if (!data) throw new Error('Batch not loaded');
+      const toIssue = data.students.filter(
+        (s) => selectedForCert.has(s.student_id) && !issuedIds.has(s.student_id),
+      );
+      if (toIssue.length === 0) throw new Error('No new students selected');
+      const rows = toIssue.map((s) => ({
+        student_id: s.student_id,
+        batch_id: data.batch.id,
+        course_id: data.batch.course_id,
+        organization_id: data.batch.organization_id,
+        student_name: s.display_name || s.email || 'Student',
+        course_name: data.batch.courses?.name || 'Course',
+        issued_by: profile?.id ?? null,
+        status: 'issued',
+      }));
+      const { error } = await (supabase as any).from('certificates').insert(rows);
+      if (error) throw error;
+      return rows.length;
+    },
+    onSuccess: (n) => {
+      toast.success(`${n} certificate${n === 1 ? '' : 's'} issued`);
+      setSelectedForCert(new Set());
+      queryClient.invalidateQueries({ queryKey: ['batch_certificates', batchId] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to issue certificates'),
   });
 
   const { data, isLoading } = useQuery<Detail>({
@@ -381,6 +434,79 @@ export default function BatchDetailPage() {
           </Button>
         </div>
       )}
+
+      {/* Course Completion & Certificates */}
+      {(() => {
+        const isBatchTeacher = batch.teacher_id && batch.teacher_id === profile?.id;
+        const canIssue = isAdmin || isBatchTeacher;
+        const allDone = progress.sessions_total > 0 && progress.sessions_completed === progress.sessions_total;
+        if (!canIssue) return null;
+        return (
+          <Card className={allDone ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-dashed'}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Award className="h-4 w-4 text-emerald-500" />
+                Course Completion & Certificates
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {!allDone ? (
+                <p className="text-xs text-muted-foreground">
+                  Certificates can be issued once every session is marked completed
+                  ({progress.sessions_completed}/{progress.sessions_total} done).
+                </p>
+              ) : students.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No students enrolled.</p>
+              ) : (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    Select students who have successfully completed the course. A certificate will be issued for each.
+                  </p>
+                  <ul className="divide-y divide-border/40 rounded-md border border-border/50">
+                    {students.map((s) => {
+                      const issued = issuedIds.has(s.student_id);
+                      const checked = issued || selectedForCert.has(s.student_id);
+                      return (
+                        <li key={s.student_id} className="flex items-center gap-3 p-2.5">
+                          <Checkbox
+                            checked={checked}
+                            disabled={issued}
+                            onCheckedChange={() => !issued && toggleCertStudent(s.student_id)}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium truncate">{s.display_name || '—'}</div>
+                            <div className="text-[11px] text-muted-foreground truncate">{s.email}</div>
+                          </div>
+                          {issued ? (
+                            <Badge variant="outline" className="text-[10px] bg-emerald-500/15 text-emerald-500 border-emerald-500/30">
+                              <Award className="h-3 w-3 mr-1" /> Issued
+                            </Badge>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground">Pending</span>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[11px] text-muted-foreground">
+                      {certificates.length}/{students.length} students already certified
+                    </p>
+                    <Button
+                      size="sm"
+                      disabled={selectedForCert.size === 0 || issueCertsMut.isPending}
+                      onClick={() => issueCertsMut.mutate()}
+                    >
+                      <Award className="h-3.5 w-3.5 mr-1.5" />
+                      {issueCertsMut.isPending ? 'Issuing…' : `Issue ${selectedForCert.size || ''} Certificate${selectedForCert.size === 1 ? '' : 's'}`}
+                    </Button>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* Assign Teacher Dialog */}
       <Dialog open={teacherDialogOpen} onOpenChange={setTeacherDialogOpen}>

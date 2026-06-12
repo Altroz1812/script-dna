@@ -4,10 +4,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { BookOpen, TrendingUp, FileCheck, Brain, Target, BarChart3 } from 'lucide-react';
+import { BookOpen, TrendingUp, FileCheck, Brain, Target, BarChart3, Award, Download, Eye } from 'lucide-react';
 import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
 import { useIsMobileApp } from '@/hooks/useIsMobileApp';
 import MobileStudentProgressPage from './mobile/MobileStudentProgressPage';
+import { Button } from '@/components/ui/button';
+import { downloadCertificate } from '@/services/certificateService';
+import { useState } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 export default function StudentProgressPage() {
   const __isMobile = useIsMobileApp();
@@ -41,6 +45,23 @@ export default function StudentProgressPage() {
     },
     enabled: !!profile,
   });
+
+  const { data: certificates = [], isLoading: loadingCerts } = useQuery({
+    queryKey: ['student_certificates', profile?.id],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('certificates')
+        .select('id, student_name, course_name, issued_at, status')
+        .eq('student_id', profile!.id)
+        .order('issued_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string; student_name: string; course_name: string; issued_at: string; status: string }>;
+    },
+    enabled: !!profile,
+  });
+
+  const [previewCert, setPreviewCert] = useState<{ name: string; course: string } | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const reviewedSubs = submissions.filter((s: any) => s.status === 'reviewed' && s.score != null);
   const avgScore = reviewedSubs.length > 0
@@ -186,6 +207,88 @@ export default function StudentProgressPage() {
               </p>
             </CardContent>
           </Card>
+
+          {/* Certificates */}
+          <div>
+            <h2 className="text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
+              <Award className="h-5 w-5 text-emerald-500" /> Certificates
+            </h2>
+            {loadingCerts ? (
+              <Card><CardContent className="p-6 text-sm text-muted-foreground">Loading certificates…</CardContent></Card>
+            ) : certificates.length === 0 ? (
+              <Card>
+                <CardContent className="p-8 text-center text-muted-foreground">
+                  <Award className="mx-auto h-10 w-10 mb-3 opacity-50" />
+                  <p>No certificates issued yet. Complete a course to earn one.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2">
+                {certificates.map((c) => (
+                  <Card key={c.id} className="border-emerald-500/30 bg-emerald-500/5">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <CardTitle className="text-base">{c.course_name}</CardTitle>
+                          <CardDescription className="text-xs">
+                            Issued {new Date(c.issued_at).toLocaleDateString('en-IN')}
+                          </CardDescription>
+                        </div>
+                        <Badge variant="outline" className="bg-emerald-500/15 text-emerald-500 border-emerald-500/30 text-[10px]">
+                          <Award className="h-3 w-3 mr-1" /> Certified
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setPreviewCert({ name: c.student_name, course: c.course_name })}
+                      >
+                        <Eye className="h-3.5 w-3.5 mr-1.5" /> View
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={downloadingId === c.id}
+                        onClick={async () => {
+                          setDownloadingId(c.id);
+                          try {
+                            await downloadCertificate(c.student_name, c.course_name);
+                          } catch (e: any) {
+                            console.error(e);
+                          } finally {
+                            setDownloadingId(null);
+                          }
+                        }}
+                      >
+                        <Download className="h-3.5 w-3.5 mr-1.5" />
+                        {downloadingId === c.id ? 'Generating…' : 'Download'}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <Dialog open={!!previewCert} onOpenChange={(o) => !o && setPreviewCert(null)}>
+            <DialogContent className="max-w-3xl">
+              <DialogHeader>
+                <DialogTitle>Certificate Preview</DialogTitle>
+              </DialogHeader>
+              {previewCert && (
+                <div className="relative w-full">
+                  <img src="/certificate.jpeg" alt="Certificate" className="w-full h-auto" />
+                  <div className="absolute left-[5%] right-[5%] top-[55%] text-[#2c3e50] font-serif font-bold uppercase text-xl md:text-3xl">
+                    {previewCert.name}
+                  </div>
+                  <div className="absolute left-[5%] right-[5%] top-[74%] text-[#555] font-serif italic text-base md:text-2xl">
+                    {previewCert.course}
+                  </div>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
         </>
       )}
     </div>
