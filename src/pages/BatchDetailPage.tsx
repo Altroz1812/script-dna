@@ -134,7 +134,7 @@ export default function BatchDetailPage() {
         course_id: data.batch.course_id,
         organization_id: data.batch.organization_id,
         student_name: s.display_name || s.email || 'Student',
-        course_name: data.batch.courses?.name || course?.name || 'Course',
+        course_name: data.batch.courses?.name || 'Course',
         issued_by: profile?.id ?? null,
         status: 'issued',
       }));
