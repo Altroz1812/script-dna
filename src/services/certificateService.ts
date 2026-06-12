@@ -25,22 +25,16 @@ export async function downloadCertificate(studentName: string, companyName: stri
       // Draw standard clean template
       ctx.drawImage(img, 0, 0, img.width, img.height);
 
-      // Render Student Name
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#2c3e50'; 
-      ctx.font = 'bold 42px "Times New Roman", serif';
-      
-      const nameX = img.width * 0.34; 
-      const nameY = img.height * 0.55; 
-      ctx.fillText(studentName.toUpperCase(), nameX, nameY);
+      // Render Student Name (above the underline)
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#2c3e50';
+      ctx.font = `bold ${Math.round(img.width * 0.035)}px "Times New Roman", serif`;
+      ctx.fillText(studentName.toUpperCase(), img.width * 0.05, img.height * 0.59);
 
-      // Render Company details
-      ctx.font = 'italic 32px "Times New Roman", serif';
+      // Render Course / Company (below "training course in" line)
+      ctx.font = `italic ${Math.round(img.width * 0.028)}px "Times New Roman", serif`;
       ctx.fillStyle = '#555555';
-      
-      const companyX = img.width * 0.34;
-      const companyY = img.height * 0.67;
-      ctx.fillText(companyName, companyX, companyY);
+      ctx.fillText(companyName, img.width * 0.05, img.height * 0.78);
 
       // Export file format pipeline
       canvas.toBlob((blob) => {
