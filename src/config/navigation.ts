@@ -127,9 +127,8 @@ export const navigationConfig: NavGroup[] = [
       {
         title: "Certificates",
         url: "/certificates",
-        icon: FileCheck, // Uses the Lucide FileCheck icon
-        roles: ["superadmin"], // STRICTLY ONLY SUPERADMIN
-        globalOnly: true, // Ensures it only shows if isGlobalView is true
+        icon: FileCheck,
+        roles: ["superadmin", "admin"],
       },
       {
         title: "Students",
