@@ -4,10 +4,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { BookOpen, TrendingUp, FileCheck, Brain, Target, BarChart3 } from 'lucide-react';
+import { BookOpen, TrendingUp, FileCheck, Brain, Target, BarChart3, Award, Download, Eye } from 'lucide-react';
 import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
 import { useIsMobileApp } from '@/hooks/useIsMobileApp';
 import MobileStudentProgressPage from './mobile/MobileStudentProgressPage';
+import { Button } from '@/components/ui/button';
+import { downloadCertificate } from '@/services/certificateService';
+import { useState } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 export default function StudentProgressPage() {
   const __isMobile = useIsMobileApp();
@@ -41,6 +45,23 @@ export default function StudentProgressPage() {
     },
     enabled: !!profile,
   });
+
+  const { data: certificates = [], isLoading: loadingCerts } = useQuery({
+    queryKey: ['student_certificates', profile?.id],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('certificates')
+        .select('id, student_name, course_name, issued_at, status')
+        .eq('student_id', profile!.id)
+        .order('issued_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string; student_name: string; course_name: string; issued_at: string; status: string }>;
+    },
+    enabled: !!profile,
+  });
+
+  const [previewCert, setPreviewCert] = useState<{ name: string; course: string } | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const reviewedSubs = submissions.filter((s: any) => s.status === 'reviewed' && s.score != null);
   const avgScore = reviewedSubs.length > 0
