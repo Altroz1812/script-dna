@@ -98,6 +98,58 @@ export default function BatchDetailPage() {
     onError: (e: any) => toast.error(e?.message || 'Failed to remove student'),
   });
 
+  // ---- Certificates ----
+  const { data: certificates = [] } = useQuery({
+    queryKey: ['batch_certificates', batchId],
+    enabled: !!batchId,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('certificates')
+        .select('id, student_id, issued_at, status')
+        .eq('batch_id', batchId!);
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string; student_id: string; issued_at: string; status: string }>;
+    },
+  });
+  const issuedIds = useMemo(() => new Set(certificates.map((c) => c.student_id)), [certificates]);
+  const [selectedForCert, setSelectedForCert] = useState<Set<string>>(new Set());
+  const toggleCertStudent = (id: string) => {
+    setSelectedForCert((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const issueCertsMut = useMutation({
+    mutationFn: async () => {
+      if (!data) throw new Error('Batch not loaded');
+      const toIssue = data.students.filter(
+        (s) => selectedForCert.has(s.student_id) && !issuedIds.has(s.student_id),
+      );
+      if (toIssue.length === 0) throw new Error('No new students selected');
+      const rows = toIssue.map((s) => ({
+        student_id: s.student_id,
+        batch_id: data.batch.id,
+        course_id: data.batch.course_id,
+        organization_id: data.batch.organization_id,
+        student_name: s.display_name || s.email || 'Student',
+        course_name: data.batch.courses?.name || course?.name || 'Course',
+        issued_by: profile?.id ?? null,
+        status: 'issued',
+      }));
+      const { error } = await (supabase as any).from('certificates').insert(rows);
+      if (error) throw error;
+      return rows.length;
+    },
+    onSuccess: (n) => {
+      toast.success(`${n} certificate${n === 1 ? '' : 's'} issued`);
+      setSelectedForCert(new Set());
+      queryClient.invalidateQueries({ queryKey: ['batch_certificates', batchId] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to issue certificates'),
+  });
+
   const { data, isLoading } = useQuery<Detail>({
     queryKey: ['batch_detail', batchId],
     enabled: !!batchId,
