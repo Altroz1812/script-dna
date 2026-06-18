@@ -172,7 +172,8 @@ export default function MobileLiveClassesPage() {
             />
             {canManage && (
               <button
-                className="absolute top-12 right-3 z-30 text-[11px] px-3 py-1.5 rounded-full bg-destructive/90 text-destructive-foreground flex items-center gap-1.5 shadow-lg backdrop-blur-sm"
+                className="absolute left-3 z-30 text-[11px] px-3 py-1.5 rounded-full bg-destructive/90 text-destructive-foreground flex items-center gap-1.5 shadow-lg backdrop-blur-sm"
+                style={{ bottom: 'calc(env(safe-area-inset-bottom) + 5rem)' }}
                 onClick={() => setEndingClass(activeClass)}
               >
                 <Square className="w-3 h-3" /> End
