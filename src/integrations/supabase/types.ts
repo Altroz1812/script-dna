@@ -133,6 +133,10 @@ export type Database = {
       }
       batches: {
         Row: {
+          approval_status: string
+          approval_type: string
+          batch_status: string
+          certificate_hold: boolean
           course_id: string
           created_at: string
           id: string
@@ -142,9 +146,14 @@ export type Database = {
           name: string
           organization_id: string
           teacher_id: string | null
+          teacher_review_status: string
           updated_at: string
         }
         Insert: {
+          approval_status?: string
+          approval_type?: string
+          batch_status?: string
+          certificate_hold?: boolean
           course_id: string
           created_at?: string
           id?: string
@@ -154,9 +163,14 @@ export type Database = {
           name: string
           organization_id: string
           teacher_id?: string | null
+          teacher_review_status?: string
           updated_at?: string
         }
         Update: {
+          approval_status?: string
+          approval_type?: string
+          batch_status?: string
+          certificate_hold?: boolean
           course_id?: string
           created_at?: string
           id?: string
@@ -166,6 +180,7 @@ export type Database = {
           name?: string
           organization_id?: string
           teacher_id?: string | null
+          teacher_review_status?: string
           updated_at?: string
         }
         Relationships: [
@@ -253,6 +268,59 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      class_extension_requests: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          batch_id: string
+          created_at: string
+          id: string
+          num_classes: number | null
+          reason: string | null
+          rejected_reason: string | null
+          request_type: string
+          requested_by: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          batch_id: string
+          created_at?: string
+          id?: string
+          num_classes?: number | null
+          reason?: string | null
+          rejected_reason?: string | null
+          request_type?: string
+          requested_by: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          batch_id?: string
+          created_at?: string
+          id?: string
+          num_classes?: number | null
+          reason?: string | null
+          rejected_reason?: string | null
+          request_type?: string
+          requested_by?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_extension_requests_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "batches"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1583,6 +1651,10 @@ export type Database = {
       recompute_dashboard_stats: { Args: never; Returns: undefined }
       student_in_batch: {
         Args: { _batch_id: string; _student_id: string }
+        Returns: boolean
+      }
+      teacher_can_manage_batch: {
+        Args: { _batch_id: string; _teacher_id: string }
         Returns: boolean
       }
       teacher_has_student: {
