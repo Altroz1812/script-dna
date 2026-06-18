@@ -10,6 +10,7 @@ import {
   useParticipants,
   VideoTrack,
   RoomAudioRenderer,
+  useRoomContext,
 } from '@livekit/components-react';
 import {
   Track,
@@ -17,6 +18,7 @@ import {
   type RoomOptions,
   VideoPresets,
   DisconnectReason,
+  RoomEvent,
 } from 'livekit-client';
 import '@livekit/components-styles';
 import { StudentDataListener } from './StudentDataListener';
@@ -317,11 +319,10 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
               options={ROOM_OPTIONS}
               style={{ height: '100%', width: '100%', display: 'flex' }}
               onConnected={handleLiveKitConnected}
-              onReconnecting={handleReconnecting}
-              onReconnected={handleReconnected}
               onError={handleLiveKitError}
               onDisconnected={handleLiveKitDisconnected}
             >
+              <ReconnectWatcher onReconnecting={handleReconnecting} onReconnected={handleReconnected} />
               <ClassroomStage isTeacher={!!isTeacher} onLeave={handleLeave} />
               <RoomAudioRenderer />
               <StudentDataListener />
