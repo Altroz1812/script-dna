@@ -362,6 +362,26 @@ function isModerator(p: Participant | undefined): boolean {
   return !!p.permissions?.canPublish && !!p.permissions?.canPublishData;
 }
 
+function ReconnectWatcher({
+  onReconnecting,
+  onReconnected,
+}: {
+  onReconnecting: () => void;
+  onReconnected: () => void;
+}) {
+  const room = useRoomContext();
+  useEffect(() => {
+    if (!room) return;
+    room.on(RoomEvent.Reconnecting, onReconnecting);
+    room.on(RoomEvent.Reconnected, onReconnected);
+    return () => {
+      room.off(RoomEvent.Reconnecting, onReconnecting);
+      room.off(RoomEvent.Reconnected, onReconnected);
+    };
+  }, [room, onReconnecting, onReconnected]);
+  return null;
+}
+
 function ClassroomStage({ isTeacher, onLeave }: { isTeacher: boolean; onLeave: () => void }) {
   const cameraTracks = useTracks(
     [{ source: Track.Source.Camera, withPlaceholder: true }],
