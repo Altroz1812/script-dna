@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { X, Minimize2, Loader2, MessageSquare, WifiOff, AlertTriangle } from 'lucide-react';
+import { X, Minimize2, Loader2, MessageSquare, WifiOff, AlertTriangle, RotateCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
@@ -11,7 +11,13 @@ import {
   VideoTrack,
   RoomAudioRenderer,
 } from '@livekit/components-react';
-import { Track, type Participant } from 'livekit-client';
+import {
+  Track,
+  type Participant,
+  type RoomOptions,
+  VideoPresets,
+  DisconnectReason,
+} from 'livekit-client';
 import '@livekit/components-styles';
 import { StudentDataListener } from './StudentDataListener';
 import { ClassroomChat } from './ClassroomChat';
@@ -31,6 +37,27 @@ interface VideoClassroomProps {
 
 type ConnectionState = 'idle' | 'fetching' | 'ready' | 'failed';
 
+// Tuned room options for stability + adaptive quality.
+const ROOM_OPTIONS: RoomOptions = {
+  adaptiveStream: true,
+  dynacast: true,
+  publishDefaults: {
+    simulcast: true,
+    dtx: true,
+    red: true,
+    videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360],
+    videoCodec: 'vp8',
+  },
+  reconnectPolicy: {
+    nextRetryDelayInMs: (ctx) => {
+      // Exponential backoff up to 10s, give up after ~12 attempts
+      if (ctx.retryCount > 12) return null;
+      return Math.min(1000 * Math.pow(1.5, ctx.retryCount), 10_000);
+    },
+  },
+  disconnectOnPageLeave: true,
+};
+
 export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, classId, onClose, onMinimize, onClassStarted }: VideoClassroomProps) {
   const [token, setToken] = useState<string | null>(null);
   const [serverUrl, setServerUrl] = useState<string | null>(null);
@@ -40,8 +67,13 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
   const [chatOpen, setChatOpen] = useState(false);
   const [unread, setUnread] = useState(0);
   const [waitingForTeacher, setWaitingForTeacher] = useState(!isTeacher && classStatus === 'scheduled');
+  const [reconnecting, setReconnecting] = useState(false);
+  const [online, setOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
+  const intentionalCloseRef = useRef(false);
+  const retryAttemptRef = useRef(0);
   const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const waitingPollRef = useRef<ReturnType<typeof setInterval>>();
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const fetchToken = useCallback(async () => {
     setConnectionState('fetching');
@@ -66,19 +98,18 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
       setServerUrl(data.url);
       setConnectionState('ready');
 
-      // Safety timeout — if LiveKitRoom doesn't connect within 15s, show error
+      // Safety timeout — if LiveKitRoom doesn't connect within 30s, show error
+      if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
       connectionTimeoutRef.current = setTimeout(() => {
         setErrorType('unreachable');
         setError('Connection timed out. The video server did not respond in time.');
         setConnectionState('failed');
         setToken(null);
         setServerUrl(null);
-      }, 15000);
+      }, 30_000);
     } catch (err: any) {
-      if (!error) {
-        setErrorType('generic');
-        setError(err.message || 'Failed to connect to classroom');
-      }
+      setErrorType((t) => (t === 'config' ? t : 'generic'));
+      setError(err.message || 'Failed to connect to classroom');
       setConnectionState('failed');
     }
   }, [roomName, displayName, isTeacher]);
@@ -109,21 +140,75 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
     if (!waitingForTeacher) {
       fetchToken();
     }
-    return () => { if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current); };
+    return () => {
+      if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    };
   }, [fetchToken, waitingForTeacher]);
+
+  // Network online/offline awareness
+  useEffect(() => {
+    const on = () => {
+      setOnline(true);
+      // If we previously failed because of net, try again automatically
+      if (connectionState === 'failed' && errorType === 'unreachable') {
+        retryAttemptRef.current = 0;
+        fetchToken();
+      }
+    };
+    const off = () => setOnline(false);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    return () => {
+      window.removeEventListener('online', on);
+      window.removeEventListener('offline', off);
+    };
+  }, [connectionState, errorType, fetchToken]);
 
   const handleLiveKitConnected = useCallback(() => {
     if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
+    retryAttemptRef.current = 0;
+    setReconnecting(false);
   }, []);
 
+  const handleReconnecting = useCallback(() => setReconnecting(true), []);
+  const handleReconnected = useCallback(() => setReconnecting(false), []);
+
   const handleLiveKitError = useCallback((err: Error) => {
-    if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
-    setErrorType('unreachable');
-    setError(err.message || 'Lost connection to video server.');
-    setConnectionState('failed');
-    setToken(null);
-    setServerUrl(null);
+    // Don't tear down on transient errors — LiveKit will try to recover.
+    // Just surface a soft "reconnecting" badge.
+    setReconnecting(true);
+    // eslint-disable-next-line no-console
+    console.warn('[LiveKit] error:', err?.message || err);
   }, []);
+
+  const handleLiveKitDisconnected = useCallback((reason?: DisconnectReason) => {
+    if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
+    // User-initiated leave → close.
+    if (intentionalCloseRef.current || reason === DisconnectReason.CLIENT_INITIATED) {
+      onClose();
+      return;
+    }
+    // Try to recover automatically with a fresh token (handles expired token, server hiccups).
+    const attempt = retryAttemptRef.current++;
+    if (attempt >= 4) {
+      setErrorType('unreachable');
+      setError('Lost connection to the classroom. Please retry.');
+      setConnectionState('failed');
+      setToken(null);
+      setServerUrl(null);
+      setReconnecting(false);
+      return;
+    }
+    setReconnecting(true);
+    const delay = Math.min(1500 * Math.pow(1.7, attempt), 8000);
+    retryTimerRef.current = setTimeout(() => fetchToken(), delay);
+  }, [fetchToken, onClose]);
+
+  const handleLeave = useCallback(() => {
+    intentionalCloseRef.current = true;
+    onClose();
+  }, [onClose]);
 
   const isLoading = connectionState === 'fetching';
   const isFailed = connectionState === 'failed';
@@ -132,7 +217,19 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
     <div className="w-full h-full bg-background overflow-hidden flex flex-col">
       {/* Header bar */}
       <div className="flex items-center justify-between px-4 py-2 bg-muted/50 border-b border-border shrink-0">
-        <span className="text-sm font-medium text-foreground">Live Classroom</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-foreground">Live Classroom</span>
+          {!online && (
+            <Badge variant="destructive" className="gap-1 text-[10px]">
+              <WifiOff className="h-3 w-3" /> Offline
+            </Badge>
+          )}
+          {online && reconnecting && (
+            <Badge variant="secondary" className="gap-1 text-[10px]">
+              <RotateCw className="h-3 w-3 animate-spin" /> Reconnecting…
+            </Badge>
+          )}
+        </div>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" className="h-7 w-7 relative" onClick={() => { setChatOpen(o => !o); setUnread(0); }}>
             <MessageSquare className="h-4 w-4" />
@@ -147,7 +244,7 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
               <Minimize2 className="h-4 w-4" />
             </Button>
           )}
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose} title="Leave class">
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleLeave} title="Leave class">
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -165,7 +262,7 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
                 <h3 className="text-lg font-semibold text-foreground">Waiting for teacher to start…</h3>
                 <p className="text-sm text-muted-foreground">You'll be connected automatically once the class begins.</p>
               </div>
-              <Button variant="outline" size="sm" onClick={onClose}>Leave Waiting Room</Button>
+              <Button variant="outline" size="sm" onClick={handleLeave}>Leave Waiting Room</Button>
             </div>
           )}
 
@@ -201,8 +298,8 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
                     <p className="text-xs text-muted-foreground mb-3">Server URL may be inactive or unreachable.</p>
                   )}
                   <div className="flex gap-2">
-                    <Button size="sm" onClick={fetchToken}>Retry</Button>
-                    <Button size="sm" variant="outline" onClick={onClose}>Close</Button>
+                    <Button size="sm" onClick={() => { retryAttemptRef.current = 0; fetchToken(); }}>Retry</Button>
+                    <Button size="sm" variant="outline" onClick={handleLeave}>Close</Button>
                   </div>
                 </AlertDescription>
               </Alert>
@@ -211,17 +308,21 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
 
           {token && serverUrl && connectionState === 'ready' && (
             <LiveKitRoom
+              key={token /* force fresh Room on token refresh */}
               serverUrl={serverUrl}
               token={token}
               connect={true}
               video={!!isTeacher}
               audio={!!isTeacher}
+              options={ROOM_OPTIONS}
               style={{ height: '100%', width: '100%', display: 'flex' }}
               onConnected={handleLiveKitConnected}
+              onReconnecting={handleReconnecting}
+              onReconnected={handleReconnected}
               onError={handleLiveKitError}
-              onDisconnected={onClose}
+              onDisconnected={handleLiveKitDisconnected}
             >
-              <ClassroomStage isTeacher={!!isTeacher} onLeave={onClose} />
+              <ClassroomStage isTeacher={!!isTeacher} onLeave={handleLeave} />
               <RoomAudioRenderer />
               <StudentDataListener />
               {chatOpen && (
