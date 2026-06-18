@@ -352,6 +352,8 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
 }
 
 function isModerator(p: Participant | undefined): boolean {
+  // dummy reference to satisfy ordering
+  void 0;
   if (!p) return false;
   if (p.metadata) {
     try {
