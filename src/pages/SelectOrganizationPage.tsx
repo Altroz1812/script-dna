@@ -22,6 +22,10 @@ export default function SelectOrganizationPage() {
 
   const [orgs, setOrgs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newOrgName, setNewOrgName] = useState('');
+  const [newOrgSlug, setNewOrgSlug] = useState('');
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;
