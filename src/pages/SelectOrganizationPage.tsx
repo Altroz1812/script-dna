@@ -48,6 +48,34 @@ export default function SelectOrganizationPage() {
     }
   }, [authLoading, profile, isSuperAdmin, navigate, availableOrgs, orgsLoading]);
 
+  const loadOrgs = () => {
+    if (!isSuperAdmin) return;
+    setLoading(true);
+    adminQuery('list_organizations', { __skip_org_filter: true })
+      .then(setOrgs)
+      .catch((e) => toast.error(e.message))
+      .finally(() => setLoading(false));
+  };
+
+  const handleCreate = async () => {
+    const name = newOrgName.trim();
+    const slug = newOrgSlug.trim();
+    if (!name || !slug) { toast.error('Name and slug required'); return; }
+    setCreating(true);
+    try {
+      await adminQuery('create_organization', { name, slug });
+      toast.success('Organization created');
+      setNewOrgName('');
+      setNewOrgSlug('');
+      setCreateOpen(false);
+      loadOrgs();
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to create organization');
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const pick = (id: string | null, name: string | null) => {
     setActiveOrg(id, name);
     toast.success(id ? `Switched to ${name}` : 'Switched to Global view');
