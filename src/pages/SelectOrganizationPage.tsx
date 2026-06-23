@@ -94,6 +94,29 @@ export default function SelectOrganizationPage() {
             </motion.div>
             )}
 
+            {/* Add Organisation tile — SuperAdmin only */}
+            {isSuperAdmin && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+                <Card
+                  onClick={() => { navigate('/organizations', { replace: true }); }}
+                  className="glass-panel cursor-pointer hover:border-primary/40 transition-all duration-300 group h-full border-dashed border-2"
+                >
+                  <CardContent className="p-5 flex flex-col gap-3 h-full">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500/20 to-primary/20 flex items-center justify-center">
+                      <Plus className="w-6 h-6 text-emerald-500" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-lg">Add Organisation</h3>
+                      <p className="text-sm text-muted-foreground">Create a new tenant for the platform</p>
+                    </div>
+                    <Button variant="ghost" size="sm" className="justify-start text-primary group-hover:translate-x-1 transition-transform">
+                      Create <ArrowRight className="ml-1 h-4 w-4" />
+                    </Button>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+
             {orgs.map((o, i) => (
               <motion.div
                 key={o.id}
