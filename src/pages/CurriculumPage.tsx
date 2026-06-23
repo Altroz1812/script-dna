@@ -298,13 +298,36 @@ export default function CurriculumPage() {
                           <CardTitle className="text-base truncate">{m.title}</CardTitle>
                         </CollapsibleTrigger>
                         <div className="flex gap-1 shrink-0">
-                          <Button variant="ghost" size="sm" onClick={() => openAddLesson(m.id)}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation(); // Prevents the Collapsible from toggling
+                              openAddLesson(m.id);
+                            }}
+                          >
                             <Plus className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" onClick={() => openEditModule(m)}>
+
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation(); // Prevents the Collapsible from toggling
+                              openEditModule(m);
+                            }}
+                          >
                             <Pencil className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleDeleteModule(m.id)}>
+
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation(); // Prevents the Collapsible from toggling
+                              handleDeleteModule(m.id);
+                            }}
+                          >
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         </div>
