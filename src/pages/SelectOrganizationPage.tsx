@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Building2, Globe2, Loader2, ArrowRight, Users } from 'lucide-react';
+import { Building2, Globe2, Loader2, ArrowRight, Users, Plus } from 'lucide-react';
 import { adminQuery } from '@/services/api/adminService';
 import { useActiveOrg } from '@/contexts/ActiveOrgContext';
 import { useAuth } from '@/contexts/AuthContext';
