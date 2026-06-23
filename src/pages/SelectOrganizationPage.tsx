@@ -8,6 +8,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRBAC } from '@/hooks/useRBAC';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { MorphingBlob } from '@/components/ui/morphing-blob';
 
@@ -19,6 +22,10 @@ export default function SelectOrganizationPage() {
 
   const [orgs, setOrgs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newOrgName, setNewOrgName] = useState('');
+  const [newOrgSlug, setNewOrgSlug] = useState('');
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;
@@ -40,6 +47,34 @@ export default function SelectOrganizationPage() {
       setLoading(false);
     }
   }, [authLoading, profile, isSuperAdmin, navigate, availableOrgs, orgsLoading]);
+
+  const loadOrgs = () => {
+    if (!isSuperAdmin) return;
+    setLoading(true);
+    adminQuery('list_organizations', { __skip_org_filter: true })
+      .then(setOrgs)
+      .catch((e) => toast.error(e.message))
+      .finally(() => setLoading(false));
+  };
+
+  const handleCreate = async () => {
+    const name = newOrgName.trim();
+    const slug = newOrgSlug.trim();
+    if (!name || !slug) { toast.error('Name and slug required'); return; }
+    setCreating(true);
+    try {
+      await adminQuery('create_organization', { name, slug });
+      toast.success('Organization created');
+      setNewOrgName('');
+      setNewOrgSlug('');
+      setCreateOpen(false);
+      loadOrgs();
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to create organization');
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const pick = (id: string | null, name: string | null) => {
     setActiveOrg(id, name);
@@ -96,25 +131,53 @@ export default function SelectOrganizationPage() {
 
             {/* Add Organisation tile — SuperAdmin only */}
             {isSuperAdmin && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-                <Card
-                  onClick={() => { navigate('/organizations', { replace: true }); }}
-                  className="glass-panel cursor-pointer hover:border-primary/40 transition-all duration-300 group h-full border-dashed border-2"
-                >
-                  <CardContent className="p-5 flex flex-col gap-3 h-full">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500/20 to-primary/20 flex items-center justify-center">
-                      <Plus className="w-6 h-6 text-emerald-500" />
+              <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+                <DialogTrigger asChild>
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+                    <Card className="glass-panel cursor-pointer hover:border-primary/40 transition-all duration-300 group h-full border-dashed border-2">
+                      <CardContent className="p-5 flex flex-col gap-3 h-full">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500/20 to-primary/20 flex items-center justify-center">
+                          <Plus className="w-6 h-6 text-emerald-500" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-lg">Add Organisation</h3>
+                          <p className="text-sm text-muted-foreground">Create a new tenant for the platform</p>
+                        </div>
+                        <Button variant="ghost" size="sm" className="justify-start text-primary group-hover:translate-x-1 transition-transform pointer-events-none">
+                          Create <ArrowRight className="ml-1 h-4 w-4" />
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader><DialogTitle>Create Organization</DialogTitle></DialogHeader>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="org-name">Name</Label>
+                      <Input
+                        id="org-name"
+                        value={newOrgName}
+                        onChange={(e) => setNewOrgName(e.target.value)}
+                        placeholder="e.g. AuraPen Bangalore"
+                      />
                     </div>
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-lg">Add Organisation</h3>
-                      <p className="text-sm text-muted-foreground">Create a new tenant for the platform</p>
+                    <div>
+                      <Label htmlFor="org-slug">Slug</Label>
+                      <Input
+                        id="org-slug"
+                        value={newOrgSlug}
+                        onChange={(e) => setNewOrgSlug(e.target.value)}
+                        placeholder="e.g. aurapen-bangalore"
+                      />
                     </div>
-                    <Button variant="ghost" size="sm" className="justify-start text-primary group-hover:translate-x-1 transition-transform">
-                      Create <ArrowRight className="ml-1 h-4 w-4" />
+                    <Button onClick={handleCreate} disabled={creating} className="w-full">
+                      {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Create
                     </Button>
-                  </CardContent>
-                </Card>
-              </motion.div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             )}
 
             {orgs.map((o, i) => (
