@@ -373,7 +373,7 @@ export default function SelectOrganizationPage() {
 
       {/* Create dialog body — convert to a form for proper required-field UX */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Create Organization</DialogTitle></DialogHeader>
           <form onSubmit={handleCreate} className="space-y-4">
             <div>
