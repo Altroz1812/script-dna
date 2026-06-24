@@ -408,6 +408,47 @@ export default function SelectOrganizationPage() {
               />
               <p className="text-xs text-muted-foreground mt-1">Lowercase letters, numbers and dashes only.</p>
             </div>
+            <div>
+              <Label htmlFor="org-logo-2">Logo URL</Label>
+              <Input
+                id="org-logo-2"
+                value={newOrgLogo}
+                onChange={(e) => setNewOrgLogo(e.target.value)}
+                placeholder="https://… (optional)"
+                type="url"
+                maxLength={500}
+              />
+            </div>
+            <div>
+              <Label htmlFor="org-address-2">Address <span className="text-destructive">*</span></Label>
+              <Textarea
+                id="org-address-2"
+                value={newOrgAddress}
+                onChange={(e) => setNewOrgAddress(e.target.value)}
+                placeholder="Street, city, state, PIN"
+                required
+                maxLength={300}
+                rows={2}
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="org-website-2">Website <span className="text-destructive">*</span></Label>
+                <Input id="org-website-2" type="url" value={newOrgWebsite} onChange={(e) => setNewOrgWebsite(e.target.value)} placeholder="https://…" required maxLength={200} />
+              </div>
+              <div>
+                <Label htmlFor="org-contact-2">Contact Number <span className="text-destructive">*</span></Label>
+                <Input id="org-contact-2" type="tel" value={newOrgContact} onChange={(e) => setNewOrgContact(e.target.value)} placeholder="+91 98765 43210" required maxLength={20} />
+              </div>
+              <div>
+                <Label htmlFor="org-poc-2">Point of Contact <span className="text-destructive">*</span></Label>
+                <Input id="org-poc-2" value={newOrgPoc} onChange={(e) => setNewOrgPoc(e.target.value)} placeholder="Full name" required maxLength={100} />
+              </div>
+              <div>
+                <Label htmlFor="org-email-2">Email ID <span className="text-destructive">*</span></Label>
+                <Input id="org-email-2" type="email" value={newOrgEmail} onChange={(e) => setNewOrgEmail(e.target.value)} placeholder="contact@org.com" required maxLength={120} />
+              </div>
+            </div>
             <Button type="submit" disabled={creating} className="w-full">
               {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Create
@@ -418,7 +459,7 @@ export default function SelectOrganizationPage() {
 
       {/* Edit branding dialog */}
       <Dialog open={!!editOrg} onOpenChange={(v) => { if (!v) setEditOrg(null); }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Edit: {editOrg?.name}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div>
@@ -428,6 +469,28 @@ export default function SelectOrganizationPage() {
             <div>
               <Label>Logo URL</Label>
               <Input value={editLogo} onChange={(e) => setEditLogo(e.target.value)} placeholder="https://…" />
+            </div>
+            <div>
+              <Label>Address <span className="text-destructive">*</span></Label>
+              <Textarea value={editAddress} onChange={(e) => setEditAddress(e.target.value)} rows={2} maxLength={300} required />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <Label>Website <span className="text-destructive">*</span></Label>
+                <Input type="url" value={editWebsite} onChange={(e) => setEditWebsite(e.target.value)} required />
+              </div>
+              <div>
+                <Label>Contact Number <span className="text-destructive">*</span></Label>
+                <Input type="tel" value={editContact} onChange={(e) => setEditContact(e.target.value)} required />
+              </div>
+              <div>
+                <Label>Point of Contact <span className="text-destructive">*</span></Label>
+                <Input value={editPoc} onChange={(e) => setEditPoc(e.target.value)} required />
+              </div>
+              <div>
+                <Label>Email ID <span className="text-destructive">*</span></Label>
+                <Input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} required />
+              </div>
             </div>
             <div>
               <Label>Primary Color</Label>
