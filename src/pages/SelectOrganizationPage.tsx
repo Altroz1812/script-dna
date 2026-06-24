@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { MorphingBlob } from '@/components/ui/morphing-blob';
 
@@ -26,6 +27,12 @@ export default function SelectOrganizationPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [newOrgName, setNewOrgName] = useState('');
   const [newOrgSlug, setNewOrgSlug] = useState('');
+  const [newOrgLogo, setNewOrgLogo] = useState('');
+  const [newOrgAddress, setNewOrgAddress] = useState('');
+  const [newOrgWebsite, setNewOrgWebsite] = useState('');
+  const [newOrgContact, setNewOrgContact] = useState('');
+  const [newOrgPoc, setNewOrgPoc] = useState('');
+  const [newOrgEmail, setNewOrgEmail] = useState('');
   const [creating, setCreating] = useState(false);
 
   // Edit branding
@@ -33,6 +40,11 @@ export default function SelectOrganizationPage() {
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('#6366f1');
   const [editLogo, setEditLogo] = useState('');
+  const [editAddress, setEditAddress] = useState('');
+  const [editWebsite, setEditWebsite] = useState('');
+  const [editContact, setEditContact] = useState('');
+  const [editPoc, setEditPoc] = useState('');
+  const [editEmail, setEditEmail] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
 
   // Members
@@ -78,14 +90,43 @@ export default function SelectOrganizationPage() {
     e?.preventDefault();
     const name = newOrgName.trim();
     const slug = newOrgSlug.trim() || slugify(name);
+    const address = newOrgAddress.trim();
+    const website = newOrgWebsite.trim();
+    const contact = newOrgContact.trim();
+    const poc = newOrgPoc.trim();
+    const email = newOrgEmail.trim();
+    const logo = newOrgLogo.trim();
     if (!name) { toast.error('Organization name is required'); return; }
     if (!slug || !/^[a-z0-9-]+$/.test(slug)) { toast.error('Slug must contain only lowercase letters, numbers and dashes'); return; }
+    if (!address) { toast.error('Address is required'); return; }
+    if (!website) { toast.error('Website is required'); return; }
+    if (!contact || !/^[+\d][\d\s\-()]{6,}$/.test(contact)) { toast.error('Valid contact number is required'); return; }
+    if (!poc) { toast.error('Point of contact is required'); return; }
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast.error('Valid email is required'); return; }
     setCreating(true);
     try {
-      await adminQuery('create_organization', { name, slug });
+      const created: any = await adminQuery('create_organization', { name, slug });
+      const newId = created?.id;
+      if (newId) {
+        await adminQuery('update_org_branding', {
+          id: newId,
+          branding: {
+            display_name: name,
+            logo_url: logo || null,
+            primary_color: '#6366f1',
+            address,
+            website,
+            contact_number: contact,
+            point_of_contact: poc,
+            email,
+          },
+        });
+      }
       toast.success('Organization created');
       setNewOrgName('');
       setNewOrgSlug('');
+      setNewOrgLogo(''); setNewOrgAddress(''); setNewOrgWebsite('');
+      setNewOrgContact(''); setNewOrgPoc(''); setNewOrgEmail('');
       setCreateOpen(false);
       loadOrgs();
     } catch (e: any) {
@@ -101,15 +142,34 @@ export default function SelectOrganizationPage() {
     setEditName(b.display_name || o.name || '');
     setEditColor(b.primary_color || '#6366f1');
     setEditLogo(o.logo_url || b.logo_url || '');
+    setEditAddress(b.address || '');
+    setEditWebsite(b.website || '');
+    setEditContact(b.contact_number || '');
+    setEditPoc(b.point_of_contact || '');
+    setEditEmail(b.email || '');
   };
 
   const handleSaveEdit = async () => {
     if (!editOrg) return;
+    if (!editAddress.trim()) { toast.error('Address is required'); return; }
+    if (!editWebsite.trim()) { toast.error('Website is required'); return; }
+    if (!editContact.trim() || !/^[+\d][\d\s\-()]{6,}$/.test(editContact.trim())) { toast.error('Valid contact number is required'); return; }
+    if (!editPoc.trim()) { toast.error('Point of contact is required'); return; }
+    if (!editEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editEmail.trim())) { toast.error('Valid email is required'); return; }
     setSavingEdit(true);
     try {
       await adminQuery('update_org_branding', {
         id: editOrg.id,
-        branding: { display_name: editName || null, logo_url: editLogo || null, primary_color: editColor },
+        branding: {
+          display_name: editName || null,
+          logo_url: editLogo || null,
+          primary_color: editColor,
+          address: editAddress.trim(),
+          website: editWebsite.trim(),
+          contact_number: editContact.trim(),
+          point_of_contact: editPoc.trim(),
+          email: editEmail.trim(),
+        },
       });
       toast.success('Organization updated');
       setEditOrg(null);
