@@ -228,53 +228,25 @@ export default function SelectOrganizationPage() {
 
             {/* Add Organisation tile — SuperAdmin only */}
             {isSuperAdmin && (
-              <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-                <DialogTrigger asChild>
-                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-                    <Card className="glass-panel cursor-pointer hover:border-primary/40 transition-all duration-300 group h-full border-dashed border-2">
-                      <CardContent className="p-5 flex flex-col gap-3 h-full">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500/20 to-primary/20 flex items-center justify-center">
-                          <Plus className="w-6 h-6 text-emerald-500" />
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-lg">Add Organisation</h3>
-                          <p className="text-sm text-muted-foreground">Create a new tenant for the platform</p>
-                        </div>
-                        <Button variant="ghost" size="sm" className="justify-start text-primary group-hover:translate-x-1 transition-transform pointer-events-none">
-                          Create <ArrowRight className="ml-1 h-4 w-4" />
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader><DialogTitle>Create Organization</DialogTitle></DialogHeader>
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="org-name">Name</Label>
-                      <Input
-                        id="org-name"
-                        value={newOrgName}
-                        onChange={(e) => setNewOrgName(e.target.value)}
-                        placeholder="e.g. AuraPen Bangalore"
-                      />
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+                <Card
+                  onClick={() => setCreateOpen(true)}
+                  className="glass-panel cursor-pointer hover:border-primary/40 transition-all duration-300 group h-full border-dashed border-2"
+                >
+                  <CardContent className="p-4 sm:p-5 flex flex-col gap-3 h-full">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500/20 to-primary/20 flex items-center justify-center">
+                      <Plus className="w-6 h-6 text-emerald-500" />
                     </div>
-                    <div>
-                      <Label htmlFor="org-slug">Slug</Label>
-                      <Input
-                        id="org-slug"
-                        value={newOrgSlug}
-                        onChange={(e) => setNewOrgSlug(e.target.value)}
-                        placeholder="e.g. aurapen-bangalore"
-                      />
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-base sm:text-lg">Add Organisation</h3>
+                      <p className="text-sm text-muted-foreground">Create a new tenant for the platform</p>
                     </div>
-                    <Button onClick={handleCreate} disabled={creating} className="w-full">
-                      {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                      Create
+                    <Button variant="ghost" size="sm" className="justify-start text-primary group-hover:translate-x-1 transition-transform pointer-events-none">
+                      Create <ArrowRight className="ml-1 h-4 w-4" />
                     </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
+                  </CardContent>
+                </Card>
+              </motion.div>
             )}
 
             {orgs.map((o, i) => (
