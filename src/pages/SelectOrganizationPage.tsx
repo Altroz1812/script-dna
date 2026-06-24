@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Building2, Globe2, Loader2, ArrowRight, Users, Plus, Pencil, Trash2, UserPlus, UserMinus, Palette } from 'lucide-react';
+import { Building2, Globe2, Loader2, ArrowRight, Users, Plus, Pencil, Trash2, UserPlus, UserMinus } from 'lucide-react';
 import { adminQuery } from '@/services/api/adminService';
 import { useActiveOrg } from '@/contexts/ActiveOrgContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -10,7 +10,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { MorphingBlob } from '@/components/ui/morphing-blob';
