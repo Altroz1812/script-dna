@@ -301,6 +301,16 @@ export default function SelectOrganizationPage() {
         )}
       </div>
 
+      {isSuperAdmin && (
+        <Button
+          onClick={() => setCreateOpen(true)}
+          className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-xl backdrop-blur-md bg-primary/90 hover:bg-primary text-primary-foreground sm:hidden"
+          aria-label="Add organization"
+        >
+          <Plus className="h-7 w-7" />
+        </Button>
+      )}
+
       {/* Create dialog body — convert to a form for proper required-field UX */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-md">
