@@ -5,15 +5,17 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Reuse a single service-role client across warm invocations.
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL')!,
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  { auth: { persistSession: false, autoRefreshToken: false } },
+)
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
 
   try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    )
-
     const body = await req.json().catch(() => ({}))
     const email: string = (body.email ?? '').toString().trim().toLowerCase()
     const success: boolean = !!body.success
@@ -43,22 +45,9 @@ Deno.serve(async (req) => {
       email, success, ip_address: ip, user_agent: ua, error_code, user_id: userId,
     })
 
-    let sessionId: string | null = null
-    if (success && userId) {
-      // Close any orphan open sessions for this user older than 12h
-      await supabase.from('user_sessions')
-        .update({ ended_at: new Date().toISOString() })
-        .is('ended_at', null)
-        .eq('user_id', userId)
-        .lt('last_seen_at', new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString())
-
-      const { data: sess } = await supabase.from('user_sessions').insert({
-        user_id: userId, ip_address: ip, user_agent: ua,
-      }).select('id').single()
-      sessionId = sess?.id ?? null
-    }
-
-    return new Response(JSON.stringify({ ok: true, session_id: sessionId }), {
+    // Note: user_sessions lifecycle is owned by the `heartbeat` function
+    // to avoid duplicate inserts and row-contention on login bursts.
+    return new Response(JSON.stringify({ ok: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (e: any) {
