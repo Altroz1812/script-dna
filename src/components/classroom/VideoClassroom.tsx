@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { X, Minimize2, Loader2, MessageSquare, WifiOff, AlertTriangle, RotateCw } from 'lucide-react';
+import { X, Minimize2, Loader2, MessageSquare, WifiOff, AlertTriangle, RotateCw, CheckCircle2, Unplug, Radio } from 'lucide-react';
+
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
