@@ -33,6 +33,7 @@ export const READ_CACHEABLE_ACTIONS = new Set<string>([
   'list_coupons',
   'list_parents',
   'list_notifications',
+  'list_classroom_settings',
   'revenue_analytics',
   'org_performance',
   'student_trends',
@@ -102,6 +103,8 @@ const INVALIDATIONS: Record<string, string[]> = {
   set_user_organizations: ['list_organizations', 'list_users'],
   add_org_member: ['list_organizations', 'list_users'],
   remove_org_member: ['list_organizations', 'list_users'],
+  upsert_classroom_settings: ['list_classroom_settings'],
+  delete_classroom_settings: ['list_classroom_settings'],
 }
 
 type CacheEntry = { expiresAt: number; payload: any }
