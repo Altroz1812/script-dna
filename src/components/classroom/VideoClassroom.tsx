@@ -82,6 +82,7 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
   const [online, setOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
   const intentionalCloseRef = useRef(false);
   const retryAttemptRef = useRef(0);
+  const [joinKey, setJoinKey] = useState(0);
   const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const waitingPollRef = useRef<ReturnType<typeof setInterval>>();
   const retryTimerRef = useRef<ReturnType<typeof setTimeout>>();
@@ -91,6 +92,12 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
     setError(null);
     setToken(null);
     setServerUrl(null);
+    // Fresh join — clear any stale "intentional close" flag and bump the join
+    // key so LiveKitRoom remounts cleanly even if the new token string happens
+    // to match (prevents stale Room state across rejoins).
+    intentionalCloseRef.current = false;
+    setReconnecting(false);
+    setJoinKey((k) => k + 1);
 
     try {
       const { data, error: fnError } = await supabase.functions.invoke('livekit-token', {
@@ -197,6 +204,19 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
     if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
     // User-initiated leave → close.
     if (intentionalCloseRef.current || reason === DisconnectReason.CLIENT_INITIATED) {
+      onClose();
+      return;
+    }
+    // Server replaced this session because the same identity rejoined from
+    // another tab/device, or the moderator removed the participant. Either way
+    // do NOT auto-reconnect — that would steal the new session back and cause
+    // a rejoin loop / "out of sync" symptoms.
+    if (
+      reason === DisconnectReason.DUPLICATE_IDENTITY ||
+      reason === DisconnectReason.PARTICIPANT_REMOVED ||
+      reason === DisconnectReason.ROOM_DELETED
+    ) {
+      intentionalCloseRef.current = true;
       onClose();
       return;
     }
@@ -319,7 +339,7 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
 
           {token && serverUrl && connectionState === 'ready' && (
             <LiveKitRoom
-              key={token /* force fresh Room on token refresh */}
+              key={`${joinKey}:${token}` /* force fresh Room on each (re)join */}
               serverUrl={serverUrl}
               token={token}
               connect={true}
