@@ -25,11 +25,24 @@ export function RoleAwareControls({ onLeave }: { onLeave?: () => void }) {
 
   if (!isModerator) {
     return (
-      <div className="flex items-center justify-center gap-2 p-2 border-t border-border bg-muted/30">
-        <Button size="sm" variant="destructive" onClick={leave} className="gap-1.5">
-          <LogOut className="h-3.5 w-3.5" />
-          Leave Class
-        </Button>
+      <div className="flex flex-col border-t border-border bg-muted/30">
+        <ControlBar
+          controls={{
+            microphone: true,
+            camera: true,
+            screenShare: false,
+            chat: false,
+            leave: false,
+            settings: false,
+          }}
+          variation="minimal"
+        />
+        <div className="flex items-center justify-center p-2">
+          <Button size="sm" variant="destructive" onClick={leave} className="gap-1.5">
+            <LogOut className="h-3.5 w-3.5" />
+            Leave Class
+          </Button>
+        </div>
       </div>
     );
   }

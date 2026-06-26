@@ -17,6 +17,7 @@ import {
   type Participant,
   type RoomOptions,
   VideoPresets,
+  AudioPresets,
   DisconnectReason,
   RoomEvent,
 } from 'livekit-client';
@@ -47,8 +48,16 @@ const ROOM_OPTIONS: RoomOptions = {
     simulcast: true,
     dtx: true,
     red: true,
+    // Higher bitrate stereo opus for noticeably better voice clarity & loudness
+    audioPreset: AudioPresets.musicHighQuality,
     videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360],
     videoCodec: 'vp8',
+  },
+  audioCaptureDefaults: {
+    autoGainControl: true,
+    echoCancellation: true,
+    noiseSuppression: true,
+    channelCount: 1,
   },
   reconnectPolicy: {
     nextRetryDelayInMs: (ctx) => {

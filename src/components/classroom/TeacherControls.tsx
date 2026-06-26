@@ -148,7 +148,7 @@ export function TeacherControls() {
       </Button>
 
       {/* Per-participant dropdown */}
-      <DropdownMenu>
+      <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
@@ -159,7 +159,12 @@ export function TeacherControls() {
             <span className="hidden sm:inline">Manage</span> ({remoteParticipants.length})
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuContent
+          align="end"
+          sideOffset={8}
+          collisionPadding={12}
+          className="w-64 max-h-[70vh] overflow-y-auto z-[200]"
+        >
           <DropdownMenuLabel className="flex items-center gap-1.5">
             <Shield className="h-3.5 w-3.5" />
             Participant Controls
