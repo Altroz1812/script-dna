@@ -8,7 +8,7 @@ import { OfflineBanner } from './ui/OfflineBanner';
 export function MobileAppShell() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-[100dvh] flex flex-col bg-background safe-x">
       <OfflineBanner />
       <MobileTopBar onOpenMenu={() => setDrawerOpen(true)} />
       <main
