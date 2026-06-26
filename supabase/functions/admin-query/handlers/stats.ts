@@ -40,7 +40,7 @@ export async function handle(action: string, ctx: HandlerCtx, params: any): Prom
         break
       }
       case 'get_teacher_dashboard': {
-        const teacherId = params?.teacher_id || ctx.callerId
+        const teacherId = params?.teacher_id || ctx.callerUserId
         const { data: row } = await ctx.supabase
           .from('teacher_dashboard_stats').select('*').eq('teacher_id', teacherId).maybeSingle()
         result = {
@@ -52,7 +52,7 @@ export async function handle(action: string, ctx: HandlerCtx, params: any): Prom
         break
       }
       case 'get_student_dashboard': {
-        const studentId = params?.student_id || ctx.callerId
+        const studentId = params?.student_id || ctx.callerUserId
         const { data: row } = await ctx.supabase
           .from('student_dashboard_stats').select('*').eq('student_id', studentId).maybeSingle()
         result = {
@@ -66,7 +66,7 @@ export async function handle(action: string, ctx: HandlerCtx, params: any): Prom
         break
       }
       case 'get_parent_dashboard': {
-        const parentId = params?.parent_id || ctx.callerId
+        const parentId = params?.parent_id || ctx.callerUserId
         const { data: row } = await ctx.supabase
           .from('parent_dashboard_stats').select('*').eq('parent_id', parentId).maybeSingle()
         result = {
