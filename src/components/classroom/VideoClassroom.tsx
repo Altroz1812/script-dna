@@ -80,6 +80,7 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
   const [unread, setUnread] = useState(0);
   const [waitingForTeacher, setWaitingForTeacher] = useState(!isTeacher && classStatus === 'scheduled');
   const [reconnecting, setReconnecting] = useState(false);
+  const [livekitConnected, setLivekitConnected] = useState(false);
   const [online, setOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
   const intentionalCloseRef = useRef(false);
   const retryAttemptRef = useRef(0);
