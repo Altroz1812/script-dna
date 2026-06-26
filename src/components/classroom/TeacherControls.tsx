@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { useState, useCallback } from 'react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -7,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Mic, MicOff, Video, VideoOff, UserX, Shield, Users } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, UserX, Shield, Users, Check } from 'lucide-react';
 import { useParticipants, useRoomContext } from '@livekit/components-react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,6 +18,31 @@ export function TeacherControls() {
   const participants = useParticipants();
   const remoteParticipants = participants.filter(
     (p) => p.identity !== room.localParticipant.identity
+  );
+
+  // Per-identity granted publish sources (mic / camera independent).
+  // Note: this is teacher-side bookkeeping; LiveKit is the source of truth.
+  const [grants, setGrants] = useState<Record<string, { mic: boolean; cam: boolean }>>({});
+
+  const getGrant = (id: string) => grants[id] ?? { mic: false, cam: false };
+
+  const applyGrant = useCallback(
+    async (identity: string, next: { mic: boolean; cam: boolean }) => {
+      const sources: string[] = [];
+      if (next.mic) sources.push('microphone');
+      if (next.cam) sources.push('camera');
+      // Always allow screen share alongside any granted publish so teachers
+      // can selectively allow students to share without re-granting later.
+      if (next.mic || next.cam) sources.push('screen_share', 'screen_share_audio');
+      const ok = await updatePermission(identity, {
+        canPublish: next.mic || next.cam,
+        sources,
+      });
+      if (ok) setGrants((g) => ({ ...g, [identity]: next }));
+      return ok;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [room.name],
   );
 
   const updatePermission = async (
@@ -51,25 +77,39 @@ export function TeacherControls() {
     );
   };
 
-  const enableMic = async (identity: string) => {
-    const ok = await updatePermission(identity, {
-      canPublish: true,
-      sources: ['microphone', 'camera', 'screen_share', 'screen_share_audio'],
-    });
+  const grantMic = async (identity: string) => {
+    const cur = getGrant(identity);
+    const ok = await applyGrant(identity, { ...cur, mic: true });
     if (ok) {
       signal('enable_audio', identity);
-      toast({ title: 'Microphone enabled for participant' });
+      toast({ title: 'Microphone allowed', description: identity });
     }
   };
 
-  const enableCamera = async (identity: string) => {
-    const ok = await updatePermission(identity, {
-      canPublish: true,
-      sources: ['microphone', 'camera', 'screen_share', 'screen_share_audio'],
-    });
+  const revokeMic = async (identity: string) => {
+    const cur = getGrant(identity);
+    const ok = await applyGrant(identity, { ...cur, mic: false });
+    if (ok) {
+      signal('mute_audio', identity);
+      toast({ title: 'Microphone revoked', description: identity });
+    }
+  };
+
+  const grantCamera = async (identity: string) => {
+    const cur = getGrant(identity);
+    const ok = await applyGrant(identity, { ...cur, cam: true });
     if (ok) {
       signal('enable_camera', identity);
-      toast({ title: 'Camera enabled for participant' });
+      toast({ title: 'Camera allowed', description: identity });
+    }
+  };
+
+  const revokeCamera = async (identity: string) => {
+    const cur = getGrant(identity);
+    const ok = await applyGrant(identity, { ...cur, cam: false });
+    if (ok) {
+      signal('disable_camera', identity);
+      toast({ title: 'Camera revoked', description: identity });
     }
   };
 
@@ -99,16 +139,13 @@ export function TeacherControls() {
     });
   };
 
-  const muteParticipant = async (identity: string) => {
-    signal('mute_audio', identity);
-    await updatePermission(identity, { canPublish: false, sources: [] });
-    toast({ title: 'Participant muted' });
-  };
-
-  const disableCamera = async (identity: string) => {
-    signal('disable_camera', identity);
-    await updatePermission(identity, { canPublish: false, sources: [] });
-    toast({ title: 'Participant camera disabled' });
+  const revokeAll = async (identity: string) => {
+    const ok = await applyGrant(identity, { mic: false, cam: false });
+    if (ok) {
+      signal('mute_audio', identity);
+      signal('disable_camera', identity);
+      toast({ title: 'All publish permissions revoked', description: identity });
+    }
   };
 
   const removeParticipant = (identity: string) => {
@@ -175,32 +212,50 @@ export function TeacherControls() {
               No other participants
             </div>
           ) : (
-            remoteParticipants.map((p) => (
-              <div key={p.identity}>
-                <DropdownMenuLabel className="font-normal text-xs text-muted-foreground py-1">
-                  {p.name || p.identity}
-                </DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => enableMic(p.identity)} className="gap-2 text-xs">
-                  <Mic className="h-3.5 w-3.5" /> Enable Mic
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => enableCamera(p.identity)} className="gap-2 text-xs">
-                  <Video className="h-3.5 w-3.5" /> Enable Camera
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => muteParticipant(p.identity)} className="gap-2 text-xs">
-                  <MicOff className="h-3.5 w-3.5" /> Mute
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => disableCamera(p.identity)} className="gap-2 text-xs">
-                  <VideoOff className="h-3.5 w-3.5" /> Disable Camera
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => removeParticipant(p.identity)}
-                  className="gap-2 text-xs text-destructive focus:text-destructive"
-                >
-                  <UserX className="h-3.5 w-3.5" /> Remove
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-              </div>
-            ))
+            remoteParticipants.map((p) => {
+              const g = getGrant(p.identity);
+              return (
+                <div key={p.identity}>
+                  <DropdownMenuLabel className="font-normal text-xs text-muted-foreground py-1 flex items-center justify-between gap-2">
+                    <span className="truncate">{p.name || p.identity}</span>
+                    <span className="flex items-center gap-1 shrink-0">
+                      {g.mic && <Mic className="h-3 w-3 text-emerald-500" />}
+                      {g.cam && <Video className="h-3 w-3 text-emerald-500" />}
+                    </span>
+                  </DropdownMenuLabel>
+                  {g.mic ? (
+                    <DropdownMenuItem onClick={() => revokeMic(p.identity)} className="gap-2 text-xs">
+                      <MicOff className="h-3.5 w-3.5" /> Revoke Mic
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem onClick={() => grantMic(p.identity)} className="gap-2 text-xs">
+                      <Mic className="h-3.5 w-3.5" /> Grant Mic
+                    </DropdownMenuItem>
+                  )}
+                  {g.cam ? (
+                    <DropdownMenuItem onClick={() => revokeCamera(p.identity)} className="gap-2 text-xs">
+                      <VideoOff className="h-3.5 w-3.5" /> Revoke Camera
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem onClick={() => grantCamera(p.identity)} className="gap-2 text-xs">
+                      <Video className="h-3.5 w-3.5" /> Grant Camera
+                    </DropdownMenuItem>
+                  )}
+                  {(g.mic || g.cam) && (
+                    <DropdownMenuItem onClick={() => revokeAll(p.identity)} className="gap-2 text-xs">
+                      <Check className="h-3.5 w-3.5" /> Revoke All Publish
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem
+                    onClick={() => removeParticipant(p.identity)}
+                    className="gap-2 text-xs text-destructive focus:text-destructive"
+                  >
+                    <UserX className="h-3.5 w-3.5" /> Remove
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </div>
+              );
+            })
           )}
         </DropdownMenuContent>
       </DropdownMenu>
