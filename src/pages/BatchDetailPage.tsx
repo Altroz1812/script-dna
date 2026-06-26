@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import {
   ArrowLeft, Copy, ExternalLink, Users, BookOpen, Clock, Calendar,
-  CheckCircle2, Radio, Hourglass, XCircle, User as UserIcon, Mail, GraduationCap, Plus, UserPlus, Trash2, Award,
+  CheckCircle2, Radio, Hourglass, XCircle, User as UserIcon, Mail, GraduationCap, Plus, UserPlus, Trash2, Award, AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
@@ -128,6 +128,7 @@ export default function BatchDetailPage() {
         (s) => selectedForCert.has(s.student_id) && !issuedIds.has(s.student_id),
       );
       if (toIssue.length === 0) throw new Error('No new students selected');
+      const duration = formatCourseDuration(data.batch.courses);
       const rows = toIssue.map((s) => ({
         student_id: s.student_id,
         batch_id: data.batch.id,
@@ -135,6 +136,8 @@ export default function BatchDetailPage() {
         organization_id: data.batch.organization_id,
         student_name: s.display_name || s.email || 'Student',
         course_name: data.batch.courses?.name || 'Course',
+        course_duration: duration,
+        completion_date: new Date().toISOString().slice(0, 10),
         issued_by: profile?.id ?? null,
         status: 'issued',
       }));
@@ -148,6 +151,59 @@ export default function BatchDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['batch_certificates', batchId] });
     },
     onError: (e: any) => toast.error(e?.message || 'Failed to issue certificates'),
+  });
+
+  // ---- Mark Batch Complete / Needs Improvement (auto-cert) ----
+  const markStatusMut = useMutation({
+    mutationFn: async (newStatus: 'completed' | 'needs_improvement') => {
+      if (!data) throw new Error('Batch not loaded');
+      if (newStatus === 'completed') {
+        // 1. update batch status
+        const { error: e1 } = await (supabase as any)
+          .from('batches')
+          .update({ batch_status: 'completed', teacher_review_status: 'completed' })
+          .eq('id', data.batch.id);
+        if (e1) throw e1;
+
+        // 2. auto-issue certs for students who don't have one yet
+        const pending = data.students.filter((s) => !issuedIds.has(s.student_id));
+        if (pending.length > 0) {
+          const duration = formatCourseDuration(data.batch.courses);
+          const rows = pending.map((s) => ({
+            student_id: s.student_id,
+            batch_id: data.batch.id,
+            course_id: data.batch.course_id,
+            organization_id: data.batch.organization_id,
+            student_name: s.display_name || s.email || 'Student',
+            course_name: data.batch.courses?.name || 'Course',
+            course_duration: duration,
+            completion_date: new Date().toISOString().slice(0, 10),
+            issued_by: profile?.id ?? null,
+            status: 'issued',
+          }));
+          const { error: e2 } = await (supabase as any).from('certificates').insert(rows);
+          if (e2) throw e2;
+        }
+        return { status: 'completed' as const, issued: pending.length };
+      } else {
+        const { error } = await (supabase as any)
+          .from('batches')
+          .update({ teacher_review_status: 'needs_improvement' })
+          .eq('id', data.batch.id);
+        if (error) throw error;
+        return { status: 'needs_improvement' as const, issued: 0 };
+      }
+    },
+    onSuccess: (res) => {
+      if (res.status === 'completed') {
+        toast.success(`Batch marked completed. ${res.issued} certificate${res.issued === 1 ? '' : 's'} auto-issued.`);
+      } else {
+        toast.success('Batch marked as Needs Improvement. Certificates are on hold.');
+      }
+      queryClient.invalidateQueries({ queryKey: ['batch_detail', batchId] });
+      queryClient.invalidateQueries({ queryKey: ['batch_certificates', batchId] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to update status'),
   });
 
   const { data, isLoading } = useQuery<Detail>({
@@ -441,15 +497,56 @@ export default function BatchDetailPage() {
         const canIssue = isAdmin || isBatchTeacher;
         const allDone = progress.sessions_total > 0 && progress.sessions_completed === progress.sessions_total;
         if (!canIssue) return null;
+        const batchCompleted = batch.batch_status === 'completed';
+        const needsImprovement = batch.teacher_review_status === 'needs_improvement';
         return (
           <Card className={allDone ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-dashed'}>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
                 <Award className="h-4 w-4 text-emerald-500" />
                 Course Completion & Certificates
+                {batchCompleted && (
+                  <Badge variant="outline" className="ml-2 text-[10px] bg-emerald-500/15 text-emerald-500 border-emerald-500/30">
+                    Completed
+                  </Badge>
+                )}
+                {needsImprovement && !batchCompleted && (
+                  <Badge variant="outline" className="ml-2 text-[10px] bg-amber-500/15 text-amber-500 border-amber-500/30">
+                    Needs Improvement
+                  </Badge>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              {/* Quick course-status actions */}
+              {!batchCompleted && (
+                <div className="flex flex-wrap gap-2 pb-2 border-b border-border/40">
+                  <Button
+                    size="sm"
+                    disabled={!allDone || markStatusMut.isPending}
+                    onClick={() => markStatusMut.mutate('completed')}
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                    {markStatusMut.isPending ? 'Saving…' : 'Mark Course Completed (auto-issue certificates)'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={markStatusMut.isPending}
+                    onClick={() => markStatusMut.mutate('needs_improvement')}
+                  >
+                    <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />
+                    Mark Needs Improvement
+                  </Button>
+                  {!allDone && (
+                    <p className="text-[11px] text-muted-foreground w-full">
+                      Auto-completion requires every session to be marked completed
+                      ({progress.sessions_completed}/{progress.sessions_total} done).
+                    </p>
+                  )}
+                </div>
+              )}
+
               {!allDone ? (
                 <p className="text-xs text-muted-foreground">
                   Certificates can be issued once every session is marked completed
