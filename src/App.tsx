@@ -51,6 +51,7 @@ const SubscriptionPlansPage = lazy(() => import("@/pages/SubscriptionPlansPage")
 const CouponsPage = lazy(() => import("@/pages/CouponsPage"));
 const CurriculumPage = lazy(() => import("@/pages/CurriculumPage"));
 const SystemMonitoringPage = lazy(() => import("@/pages/SystemMonitoringPage"));
+const ClassroomSettingsPage = lazy(() => import("@/pages/ClassroomSettingsPage"));
 const PracticeAssignmentsPage = lazy(() => import("@/pages/PracticeAssignmentsPage"));
 const StudentSubmissionsPage = lazy(() => import("@/pages/StudentSubmissionsPage"));
 const StudentLessonViewer = lazy(() => import("@/pages/StudentLessonViewer"));
@@ -178,6 +179,16 @@ const App = () => (
                       <Route path="/notifications" element={<NotificationsPage />} />
                       <Route path="/organizations" element={<OrganizationsPage />} />
                       <Route path="/roles" element={<RolesPage />} />
+
+                      {/* Classroom settings: admin & superadmin */}
+                      <Route
+                        path="/classroom-settings"
+                        element={
+                          <ProtectedRoute allowedRoles={["superadmin", "admin"]}>
+                            <ClassroomSettingsPage />
+                          </ProtectedRoute>
+                        }
+                      />
 
                       {/* Settings: superadmin only */}
                       <Route

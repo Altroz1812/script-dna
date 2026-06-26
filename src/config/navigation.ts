@@ -83,6 +83,12 @@ export const navigationConfig: NavGroup[] = [
         roles: ["superadmin", "admin", "teacher", "student"],
       },
       {
+        title: "Classroom Settings",
+        url: "/classroom-settings",
+        icon: Settings,
+        roles: ["superadmin", "admin"],
+      },
+      {
         title: "Attendance",
         url: "/attendance",
         icon: ClipboardCheck,

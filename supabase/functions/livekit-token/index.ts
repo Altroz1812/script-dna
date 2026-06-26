@@ -11,6 +11,8 @@ const corsHeaders = {
 // in the request body (clamped to this ceiling).
 const ROOM_MAX_PARTICIPANTS_HARD_CAP = 500;
 const ROOM_MAX_PARTICIPANTS_DEFAULT = 400;
+const ACTIVE_SPEAKER_GATE_DEFAULT = 12;
+const ROLLING_WINDOW_DEFAULT = 6;
 const ROOM_EMPTY_TIMEOUT_SECS = 5 * 60;   // close empty room after 5 min
 const ROOM_DEPARTURE_TIMEOUT_SECS = 60;    // close after last leaver
 
@@ -242,6 +244,42 @@ serve(async (req) => {
       ? "moderator"
       : "viewer";
 
+    // Resolve per-room / per-org classroom settings. Room name is "batch-<8>".
+    let resolvedSettings = {
+      max_participants: ROOM_MAX_PARTICIPANTS_DEFAULT,
+      active_speaker_gate: ACTIVE_SPEAKER_GATE_DEFAULT,
+      rolling_window_size: ROLLING_WINDOW_DEFAULT,
+      non_speaker_video_enabled: false,
+    };
+    try {
+      const { data: batchRow } = await adminClient
+        .from("batches")
+        .select("id, organization_id")
+        .eq("meeting_room", roomName)
+        .maybeSingle();
+      if (batchRow?.organization_id) {
+        // Prefer per-batch override, fall back to org-level row.
+        const { data: settingsRows } = await adminClient
+          .from("classroom_settings")
+          .select("batch_id, max_participants, active_speaker_gate, rolling_window_size, non_speaker_video_enabled")
+          .eq("organization_id", batchRow.organization_id)
+          .or(`batch_id.eq.${batchRow.id},batch_id.is.null`);
+        if (Array.isArray(settingsRows) && settingsRows.length) {
+          const perBatch = settingsRows.find((r: any) => r.batch_id === batchRow.id);
+          const orgWide = settingsRows.find((r: any) => r.batch_id === null);
+          const chosen = perBatch ?? orgWide;
+          if (chosen) {
+            resolvedSettings = {
+              max_participants: chosen.max_participants,
+              active_speaker_gate: chosen.active_speaker_gate,
+              rolling_window_size: chosen.rolling_window_size,
+              non_speaker_video_enabled: !!chosen.non_speaker_video_enabled,
+            };
+          }
+        }
+      }
+    } catch (_e) { /* fall back to defaults */ }
+
     const token = await createLivekitToken(
       apiKey,
       apiSecret,
@@ -256,13 +294,25 @@ serve(async (req) => {
     // is fine since LiveKit also auto-creates on join — but doing it here
     // ensures max_participants is enforced before the client connects).
     const cap = Math.min(
-      Math.max(1, Number(maxParticipants) || ROOM_MAX_PARTICIPANTS_DEFAULT),
+      Math.max(1, Number(maxParticipants) || resolvedSettings.max_participants),
       ROOM_MAX_PARTICIPANTS_HARD_CAP,
     );
     await ensureRoom(httpUrl, apiKey, apiSecret, roomName, cap);
 
     return new Response(
-      JSON.stringify({ token, url: livekitUrl, role: appRole, bucket: roleBucket, maxParticipants: cap }),
+      JSON.stringify({
+        token,
+        url: livekitUrl,
+        role: appRole,
+        bucket: roleBucket,
+        maxParticipants: cap,
+        settings: {
+          activeSpeakerGate: resolvedSettings.active_speaker_gate,
+          rollingWindowSize: resolvedSettings.rolling_window_size,
+          nonSpeakerVideoEnabled: resolvedSettings.non_speaker_video_enabled,
+          maxParticipants: cap,
+        },
+      }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
