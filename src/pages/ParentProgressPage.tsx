@@ -15,6 +15,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { downloadCertificate } from '@/services/certificateService';
 import { Eye, Download } from 'lucide-react';
 
+type CourseStatus = { label: 'Completed' | 'Needs Improvement' | 'Not Completed'; className: string };
+function deriveCourseStatus(p: any): CourseStatus {
+  const s = String(p?.status || '').toLowerCase();
+  if (s === 'completed') return { label: 'Completed', className: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30' };
+  if (s === 'needs_improvement' || s === 'needs improvement') return { label: 'Needs Improvement', className: 'bg-amber-500/15 text-amber-600 border-amber-500/30' };
+  return { label: 'Not Completed', className: 'bg-muted text-muted-foreground border-border' };
+}
+
 export default function ParentProgressPage() {
   const { profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -143,10 +151,12 @@ export default function ParentProgressPage() {
                   <TableBody>
                     {progress.length === 0 ? (
                       <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No course data</TableCell></TableRow>
-                    ) : progress.map(p => (
+                    ) : progress.map(p => {
+                      const st = deriveCourseStatus(p);
+                      return (
                       <TableRow key={p.id}>
                         <TableCell className="font-medium">{(p as any).courses?.name || p.course_id}</TableCell>
-                        <TableCell><Badge variant={p.status === 'completed' ? 'default' : 'secondary'}>{p.status}</Badge></TableCell>
+                        <TableCell><Badge variant="outline" className={st.className}>{st.label}</Badge></TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <div className="w-20 h-2 rounded-full bg-muted overflow-hidden">
@@ -157,7 +167,8 @@ export default function ParentProgressPage() {
                         </TableCell>
                         <TableCell>{p.sessions_attended}/{p.total_sessions}</TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </CardContent></Card>
