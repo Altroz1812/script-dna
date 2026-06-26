@@ -1,10 +1,14 @@
+import { stableStringify } from './helpers.ts'
+
 // Per-instance micro-cache for read-only hot actions. Lives only while
 // the worker is warm; absorbs bursty navigation without serving stale
 // data for long.
 const DEFAULT_TTL_MS = 5_000
 
-// Longer TTL for expensive aggregations whose source rows update infrequently.
-const TTL_OVERRIDES: Record<string, number> = {
+// Single source of truth: action → TTL (ms). Presence in this map means
+// "cacheable"; absence means "always live". Previously this was split
+// across READ_CACHEABLE_ACTIONS + TTL_OVERRIDES and the two could drift.
+const CACHEABLE: Record<string, number> = {
   get_stats: 15_000,
   get_support_overview: 15_000,
   revenue_analytics: 15_000,
@@ -15,38 +19,32 @@ const TTL_OVERRIDES: Record<string, number> = {
   get_student_dashboard: 30_000,
   get_parent_dashboard: 30_000,
   metric_breakdown: 30_000,
+  list_courses: DEFAULT_TTL_MS,
+  list_course_modules: DEFAULT_TTL_MS,
+  list_teachers: DEFAULT_TTL_MS,
+  list_all_students: DEFAULT_TTL_MS,
+  list_students_with_batches: DEFAULT_TTL_MS,
+  list_batches: DEFAULT_TTL_MS,
+  list_batch_students: DEFAULT_TTL_MS,
+  list_organizations: DEFAULT_TTL_MS,
+  list_subscription_plans: DEFAULT_TTL_MS,
+  list_users: DEFAULT_TTL_MS,
+  list_payments: DEFAULT_TTL_MS,
+  list_schedules: DEFAULT_TTL_MS,
+  list_materials: DEFAULT_TTL_MS,
+  list_practice_assignments: DEFAULT_TTL_MS,
+  list_coupons: DEFAULT_TTL_MS,
+  list_parents: DEFAULT_TTL_MS,
+  list_notifications: DEFAULT_TTL_MS,
+  list_classroom_settings: DEFAULT_TTL_MS,
 }
 
-export const READ_CACHEABLE_ACTIONS = new Set<string>([
-  'get_stats',
-  'get_support_overview',
-  'get_teacher_dashboard',
-  'get_student_dashboard',
-  'get_parent_dashboard',
-  'list_courses',
-  'list_course_modules',
-  'list_teachers',
-  'list_all_students',
-  'list_students_with_batches',
-  'list_batches',
-  'list_batch_students',
-  'list_organizations',
-  'list_subscription_plans',
-  'list_users',
-  'list_payments',
-  'list_schedules',
-  'list_materials',
-  'list_practice_assignments',
-  'list_coupons',
-  'list_parents',
-  'list_notifications',
-  'list_classroom_settings',
-  'revenue_analytics',
-  'org_performance',
-  'student_trends',
-  'system_health',
-  'metric_breakdown',
-])
+export function isCacheable(action: string): boolean {
+  return action in CACHEABLE
+}
+
+// Back-compat export for any callers that still reference the set form.
+export const READ_CACHEABLE_ACTIONS = new Set<string>(Object.keys(CACHEABLE))
 
 // Map of action → list of read actions whose cache should be flushed
 // for the active org when that mutating action runs.
@@ -124,7 +122,8 @@ export function cacheKey(
   orgId: string | null,
   params: any,
 ): string {
-  return `${action}|${callerId ?? 'anon'}|${orgId ?? 'global'}|${JSON.stringify(params ?? {})}`
+  // stableStringify ensures {a:1,b:2} and {b:2,a:1} share a cache slot.
+  return `${action}|${callerId ?? 'anon'}|${orgId ?? 'global'}|${stableStringify(params ?? {})}`
 }
 
 export function readFromCache(key: string): any | undefined {
@@ -142,7 +141,7 @@ export function writeToCache(action: string, key: string, payload: any) {
     const first = readCache.keys().next().value
     if (first) readCache.delete(first)
   }
-  const ttl = TTL_OVERRIDES[action] ?? DEFAULT_TTL_MS
+  const ttl = CACHEABLE[action] ?? DEFAULT_TTL_MS
   readCache.set(key, { expiresAt: Date.now() + ttl, payload })
 }
 

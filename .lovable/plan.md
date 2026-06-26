@@ -1,90 +1,74 @@
-## Goal
-Move dashboard metric calculation **out of live queries** and **into precomputed rows** maintained by triggers. Every role (SuperAdmin, Admin, Teacher, Student, Parent, Support) reads a single row instead of running joins/aggregations on every dashboard load.
+## Current state — admin-query handler split
 
-## Current problem
-- `dashboard_stats` exists but is **global only** (1 row, SuperAdmin scope). Admins still hit `get_stats` which scans `profiles`, `user_roles`, `batches`, etc. per request.
-- Teacher dashboard fetches `batches + batch_students + live_classes + practice_assignments + student_submissions` on every load.
-- Student dashboard fetches `batch_students + live_classes + student_submissions + student_progress` on every load.
-- Parent dashboard fetches `parent_children + profiles + student_progress + payments + live_classes` on every load.
-- With 400+ concurrent logins these turn into thousands of join queries/min.
-
-## Solution overview
-Introduce **denormalized metrics tables** keyed by scope, updated by `AFTER INSERT/UPDATE/DELETE` triggers on the source tables. Frontend reads a single row via a thin RPC; no aggregation at query time.
+The monolithic switch is gone. `admin-query` is now:
 
 ```text
-                  source tables (batches, profiles, ...)
-                              │  AFTER triggers
-                              ▼
-   ┌──────────────────────────────────────────────────┐
-   │  org_dashboard_stats   (one row per organization)│
-   │  teacher_dashboard_stats (one row per teacher)   │
-   │  student_dashboard_stats (one row per student)   │
-   │  parent_dashboard_stats  (one row per parent)    │
-   │  dashboard_stats         (existing — global SA)  │
-   └──────────────────────────────────────────────────┘
-                              │ single-row SELECT
-                              ▼
-                       Dashboard.tsx / mobile homes
+admin-query/
+  index.ts              84 lines  — dispatcher only
+  registry.ts                   — ordered list of 20 handler modules
+  _shared/
+    context.ts          caller resolve + 30s caller cache
+    cache.ts            read cache + invalidation map
+    guards.ts           ORG_SCOPED_ACTIONS allow-list
+    cors.ts, supabase.ts, types.ts
+  handlers/             20 modules, 109 actions total
+    stats, users, organizations, leads, enrollments, schedules,
+    attendance, liveClasses, materials, payments, payroll,
+    notifications, courses, batches, subscriptions, coupons,
+    sessions, parents, assignments, classroomSettings
 ```
 
-## Schema (migration)
+So structurally the split is **complete**. What is still rough is the inside of each handler and the shared layer around them. Below is what I'd improve and why.
 
-1. `public.org_dashboard_stats` — PK `organization_id`
-   - members, students, teachers, courses, batches, leads, payments, active_live_classes, role_counts jsonb, updated_at
-2. `public.teacher_dashboard_stats` — PK `teacher_id`
-   - batch_count, student_count, upcoming_class_count, pending_submissions, updated_at
-3. `public.student_dashboard_stats` — PK `student_id`
-   - enrolled_courses, enrolled_batches, upcoming_class_count, recent_submission_count, avg_completion_pct, updated_at
-4. `public.parent_dashboard_stats` — PK `parent_id`
-   - children_count, avg_completion_pct, recent_payment_count, upcoming_class_count, updated_at
+## Proposed improvements
 
-Each gets: `GRANT` to `authenticated` + `service_role`, RLS so users see only their own row (org row via `user_has_org_access`), `service_role` full access.
+### 1. Replace the per-handler `switch` with an action map
+Today each handler runs `switch(action)` and walks every handler until one returns `handled: true` (O(20) per request). Replace with a single `Map<action, fn>` built once at module load. Dispatch becomes O(1) and unknown actions fail fast without scanning.
 
-## Recompute functions (SECURITY DEFINER)
-- `recompute_org_stats(org uuid)`
-- `recompute_teacher_stats(teacher uuid)`
-- `recompute_student_stats(student uuid)`
-- `recompute_parent_stats(parent uuid)`
+### 2. Lift the auto-generated "splitter" notice
+Several files still carry `// Auto-generated handler module. Do not hand-edit case bodies`. The splitter no longer exists. Drop the comment so future edits aren't discouraged, and convert each case body into a named function (`listBatches(ctx, params)`) for readability and unit testing.
 
-Each is an `INSERT … ON CONFLICT … DO UPDATE` so the row is created on first touch.
+### 3. Centralize the org-scope filter
+`if (ctx.targetOrgId) query = query.eq('organization_id', ctx.targetOrgId)` appears ~40 times. Add a helper `withOrg(ctx, query)` and a `requireOrg(ctx)` guard so handlers can't accidentally skip scoping.
 
-## Triggers (AFTER INSERT/UPDATE/DELETE, FOR EACH ROW)
-Triggers extract the affected scope ids from `NEW`/`OLD` and call the matching `recompute_*` function. Examples:
+### 4. Tighten the N+1 patterns in heavy handlers
+- `batches.list_batches` does 4 sequential round-trips (batches → students → profiles → live_classes). Parallelize the three follow-ups with `Promise.all` — they're independent.
+- `leads`, `enrollments`, `schedules` have similar shapes.
+- `stats.org_performance` runs 4 queries per org in a sequential `for` loop. Batch into one `in('organization_id', ids)` per dimension.
 
-| Source table | Triggers recompute |
-|---|---|
-| `batches` | org, teacher (old + new teacher_id) |
-| `batch_students` | teacher of batch, student, org |
-| `profiles` / `user_roles` / `organization_members` | org, global |
-| `live_classes` | teacher, students of batch, parents of those students, org |
-| `student_submissions` | teacher (via assignment), student |
-| `student_progress` | student, parents of student |
-| `payments` | org, parent (if linked), global |
-| `leads` | org, global |
-| `parent_children` | parent |
-| `courses` | org, global |
+### 5. Push hot aggregates onto the precomputed tables
+`system_health`, `revenue_analytics`, `student_trends`, `org_performance` still aggregate at query time. They should read from `org_dashboard_stats` / `teacher_dashboard_stats` (already maintained by triggers) and only fall back to live SQL for fields not yet precomputed (e.g. login health).
 
-Triggers are intentionally row-level + targeted (not full table scans like the current STATEMENT-level `recompute_dashboard_stats`).
+### 6. Cache layer correctness
+- `cacheKey` JSON-stringifies params without sorting keys — `{a:1,b:2}` and `{b:2,a:1}` cache separately. Sort keys before hashing.
+- `READ_CACHEABLE_ACTIONS` and `TTL_OVERRIDES` are two parallel lists; merge into one config object so adding a cacheable action can't drift.
+- `INVALIDATIONS` references some actions (`list_parent_children`) that no handler returns. Audit and prune.
 
-## Backfill
-At the end of the migration, run one-time loops to populate every existing org/teacher/student/parent row.
+### 7. Stronger validation at the boundary
+`index.ts` trusts `body.action` and `body.params` shape. Add a Zod-style schema per action (or at least required-field checks) so handlers can drop their defensive `params?.x` chains and return clean 400s.
 
-## Backend changes
-- `admin-query` handlers (`stats.ts`, `getSupportOverview`, dashboard handlers): replace aggregation SQL with single-row reads from the new tables (with cache layer already in place).
-- Add new handlers: `get_teacher_dashboard`, `get_student_dashboard`, `get_parent_dashboard` returning the precomputed row + small lists (upcoming classes, recent submissions) that still need live data but no aggregation.
+### 8. Error handling
+The dispatcher returns 200 with `{error}` to dodge the Supabase JS "non-2xx" wrapper. Keep that, but classify errors (`auth`, `validation`, `not_found`, `server`) and log server errors with action + caller id for traceability via `supabase--edge_function_logs`.
 
-## Frontend changes (presentation-only, no business-logic change)
-- `src/pages/Dashboard.tsx`: replace the per-role `useQuery` blocks (`student_dashboard`, `parent_dashboard`, `teacher_dashboard`, `support_dashboard`, `admin_stats`) with calls to the new precomputed RPCs.
-- `src/pages/mobile/{StudentHome,TeacherHome,ParentHome,AdminHome}.tsx`: same swap.
-- Keep React Query + localStorage cache (existing pattern). Bump `staleTime` to 5 min since underlying numbers are trigger-maintained and fresh.
+### 9. Observability
+Add lightweight timings: per-request `{action, ms, cache: HIT|MISS, orgId}` log line. Makes the next round of optimization data-driven instead of guesswork.
 
-## Out of scope
-- No UI/visual changes to dashboard cards.
-- No change to public action contract names already used by frontend; new actions added alongside.
-- Charts/trends (EnrollmentTrendsChart) stay as-is for this pass.
+### 10. Type safety
+`HandlerOutcome` uses `any` for `result`. Define per-action result types in `_shared/types.ts` so the frontend `adminService.ts` callsites can be typed without `as Promise<any>` everywhere.
 
-## Rollout
-1. Migration (tables + functions + triggers + backfill).
-2. Edge function handler updates.
-3. Frontend swap to new actions.
-4. Smoke check: load each role's dashboard, verify numbers match prior values; insert/delete a row in source tables and confirm the stats row updates.
+## Suggested rollout order
+
+1. Dispatcher map + named action functions + remove stale comments (low risk, big readability win).
+2. `withOrg` helper + audit ORG_SCOPED_ACTIONS coverage (security hardening).
+3. Parallelize N+1 in `batches`, `leads`, `org_performance` (perf).
+4. Move `system_health`, `revenue_analytics` to precomputed reads (perf).
+5. Cache key normalization + INVALIDATIONS audit (correctness).
+6. Per-action validation + structured error responses (robustness).
+7. Timing logs + typed results (DX).
+
+## Out of scope unless you ask
+
+- Splitting the function into multiple edge functions per domain (cold-start tradeoff isn't worth it at current size).
+- Moving to PostgREST RPCs (would require RLS rewrites we explicitly avoided per project memory).
+
+Tell me which of the 10 items you want me to take on — happy to start with 1–3 as a focused first pass, or do the whole list in sequence.

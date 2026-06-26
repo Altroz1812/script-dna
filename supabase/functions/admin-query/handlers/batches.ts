@@ -1,5 +1,3 @@
-// Auto-generated handler module. Do not hand-edit case bodies; edit the
-// originating logic and re-run the splitter if you need to regenerate.
 import type { HandlerCtx, HandlerOutcome } from '../_shared/types.ts'
 
 export async function handle(action: string, ctx: HandlerCtx, params: any): Promise<HandlerOutcome | Response> {
@@ -19,49 +17,45 @@ export async function handle(action: string, ctx: HandlerCtx, params: any): Prom
         const batchIds = batches.map((b: any) => b.id)
         const teacherIds = Array.from(new Set(batches.map((b: any) => b.teacher_id).filter(Boolean)))
 
-        // Enrolled counts per batch
+        // Fetch enrollment counts, teacher names, and session timelines in
+        // parallel — these three lookups are independent.
+        const [bsRes, profsRes, lcsRes] = await Promise.all([
+          batchIds.length
+            ? ctx.supabase.from('batch_students').select('batch_id').in('batch_id', batchIds)
+            : Promise.resolve({ data: [] as any[] }),
+          teacherIds.length
+            ? ctx.supabase.from('profiles').select('user_id, display_name, email').in('user_id', teacherIds)
+            : Promise.resolve({ data: [] as any[] }),
+          batchIds.length
+            ? ctx.supabase
+                .from('live_classes')
+                .select('id, batch_id, title, scheduled_at, duration_minutes, status')
+                .in('batch_id', batchIds)
+                .order('scheduled_at', { ascending: true })
+            : Promise.resolve({ data: [] as any[] }),
+        ])
+
         const counts: Record<string, number> = {}
-        if (batchIds.length) {
-          const { data: bs } = await ctx.supabase
-            .from('batch_students')
-            .select('batch_id')
-            .in('batch_id', batchIds)
-          for (const row of bs ?? []) {
-            counts[row.batch_id] = (counts[row.batch_id] ?? 0) + 1
-          }
+        for (const row of bsRes.data ?? []) {
+          counts[row.batch_id] = (counts[row.batch_id] ?? 0) + 1
         }
 
-        // Teacher names
         const teacherMap: Record<string, string> = {}
-        if (teacherIds.length) {
-          const { data: profs } = await ctx.supabase
-            .from('profiles')
-            .select('user_id, display_name, email')
-            .in('user_id', teacherIds)
-          for (const p of profs ?? []) {
-            teacherMap[p.user_id] = p.display_name || p.email || ''
-          }
+        for (const p of profsRes.data ?? []) {
+          teacherMap[p.user_id] = p.display_name || p.email || ''
         }
 
-        // Sessions per batch: total / completed / next upcoming
         const sessionStats: Record<string, { total: number; completed: number; next: any | null }> = {}
-        if (batchIds.length) {
-          const { data: lcs } = await ctx.supabase
-            .from('live_classes')
-            .select('id, batch_id, title, scheduled_at, duration_minutes, status')
-            .in('batch_id', batchIds)
-            .order('scheduled_at', { ascending: true })
-          const now = Date.now()
-          for (const id of batchIds) sessionStats[id] = { total: 0, completed: 0, next: null }
-          for (const s of lcs ?? []) {
-            const st = sessionStats[s.batch_id]
-            if (!st) continue
-            st.total++
-            if (s.status === 'completed') st.completed++
+        for (const id of batchIds) sessionStats[id] = { total: 0, completed: 0, next: null }
+        const now = Date.now()
+        for (const s of lcsRes.data ?? []) {
+          const st = sessionStats[s.batch_id]
+          if (!st) continue
+          st.total++
+          if (s.status === 'completed') st.completed++
             if (!st.next && s.status !== 'completed' && s.status !== 'cancelled' && new Date(s.scheduled_at).getTime() >= now) {
               st.next = { id: s.id, title: s.title, scheduled_at: s.scheduled_at, duration_minutes: s.duration_minutes, status: s.status }
             }
-          }
         }
 
         result = batches.map((b: any) => {

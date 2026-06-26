@@ -1,5 +1,3 @@
-// Auto-generated handler module. Do not hand-edit case bodies; edit the
-// originating logic and re-run the splitter if you need to regenerate.
 import type { HandlerCtx, HandlerOutcome } from '../_shared/types.ts'
 
 export async function handle(action: string, ctx: HandlerCtx, params: any): Promise<HandlerOutcome | Response> {
@@ -262,28 +260,42 @@ export async function handle(action: string, ctx: HandlerCtx, params: any): Prom
         if (ctx.targetOrgId) orgQuery = orgQuery.eq('id', ctx.targetOrgId)
         const { data: orgs } = await orgQuery
         const list = orgs ?? []
-        const out: any[] = []
-        for (const o of list) {
-          const [membersR, coursesR, batchesR, paymentsR] = await Promise.all([
-            ctx.supabase.from('organization_members').select('user_id', { count: 'exact', head: true }).eq('organization_id', o.id),
-            ctx.supabase.from('courses').select('id', { count: 'exact', head: true }).eq('organization_id', o.id),
-            ctx.supabase.from('batches').select('id', { count: 'exact', head: true }).eq('organization_id', o.id),
-            ctx.supabase.from('payments').select('amount, status').eq('organization_id', o.id),
-          ])
-          const revenue = (paymentsR.data ?? [])
-            .filter((p: any) => p.status === 'completed')
-            .reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0)
-          out.push({
-            id: o.id,
-            name: o.name,
-            is_active: o.is_active,
-            members: membersR.count ?? 0,
-            courses: coursesR.count ?? 0,
-            batches: batchesR.count ?? 0,
-            revenue,
-          })
+        const orgIds = list.map((o: any) => o.id)
+        if (orgIds.length === 0) { result = []; break }
+
+        // One round-trip per dimension instead of one per org. Counts are
+        // grouped client-side from the (cheap) id-only rows.
+        const [membersR, coursesR, batchesR, paymentsR] = await Promise.all([
+          ctx.supabase.from('organization_members').select('organization_id').in('organization_id', orgIds),
+          ctx.supabase.from('courses').select('organization_id').in('organization_id', orgIds),
+          ctx.supabase.from('batches').select('organization_id').in('organization_id', orgIds),
+          ctx.supabase.from('payments').select('organization_id, amount, status').in('organization_id', orgIds),
+        ])
+
+        const tally = (rows: any[] | null | undefined) => {
+          const m: Record<string, number> = {}
+          for (const r of rows ?? []) m[r.organization_id] = (m[r.organization_id] ?? 0) + 1
+          return m
         }
-        result = out
+        const memberCounts = tally(membersR.data)
+        const courseCounts = tally(coursesR.data)
+        const batchCounts = tally(batchesR.data)
+
+        const revenueByOrg: Record<string, number> = {}
+        for (const p of paymentsR.data ?? []) {
+          if (p.status !== 'completed') continue
+          revenueByOrg[p.organization_id] = (revenueByOrg[p.organization_id] ?? 0) + (Number(p.amount) || 0)
+        }
+
+        result = list.map((o: any) => ({
+          id: o.id,
+          name: o.name,
+          is_active: o.is_active,
+          members: memberCounts[o.id] ?? 0,
+          courses: courseCounts[o.id] ?? 0,
+          batches: batchCounts[o.id] ?? 0,
+          revenue: revenueByOrg[o.id] ?? 0,
+        }))
         break
       }
       case 'student_trends': {
