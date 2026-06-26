@@ -255,18 +255,16 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
       <div className="flex items-center justify-between px-4 py-2 bg-muted/50 border-b border-border shrink-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-foreground">Live Classroom</span>
-          {!online && (
-            <Badge variant="destructive" className="gap-1 text-[10px]">
-              <WifiOff className="h-3 w-3" /> Offline
-            </Badge>
-          )}
-          {online && reconnecting && (
-            <Badge variant="secondary" className="gap-1 text-[10px]">
-              <RotateCw className="h-3 w-3 animate-spin" /> Reconnecting…
-            </Badge>
-          )}
+          <ConnectionStatus
+            online={online}
+            waitingForTeacher={waitingForTeacher}
+            connectionState={connectionState}
+            livekitConnected={livekitConnected}
+            reconnecting={reconnecting}
+          />
         </div>
         <div className="flex items-center gap-1">
+
           <Button variant="ghost" size="icon" className="h-7 w-7 relative" onClick={() => { setChatOpen(o => !o); setUnread(0); }}>
             <MessageSquare className="h-4 w-4" />
             {unread > 0 && (
