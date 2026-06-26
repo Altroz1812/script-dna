@@ -269,7 +269,7 @@ export async function handle(action: string, ctx: HandlerCtx, params: any): Prom
           date: date || new Date().toISOString().slice(0, 10),
           notes: notes ?? null,
           recorded_at: new Date().toISOString(),
-          recorded_by: userId,
+          recorded_by: ctx.callerUserId,
         }
         const nextPayments = [...existing, entry]
         const totalDue = Number(meta.final_amount ?? 0)
