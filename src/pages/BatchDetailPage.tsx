@@ -45,6 +45,14 @@ function statusMeta(status: string, scheduledAt: string) {
   return { label: 'Scheduled', icon: Calendar, cls: 'bg-blue-500/15 text-blue-400 border-blue-500/30' };
 }
 
+function formatCourseDuration(course: any): string | null {
+  if (!course) return null;
+  const parts: string[] = [];
+  if (course.duration_days) parts.push(`${course.duration_days} day${course.duration_days === 1 ? '' : 's'}`);
+  if (course.total_hours) parts.push(`${course.total_hours} hrs`);
+  return parts.length ? parts.join(' • ') : null;
+}
+
 export default function BatchDetailPage() {
   const { batchId } = useParams<{ batchId: string }>();
   const navigate = useNavigate();
