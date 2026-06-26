@@ -319,4 +319,22 @@
     background-image: linear-gradient(hsl(var(--canvas-grid)) 1px, transparent 1px);
     background-size: 100% 40px;
   }
+
+  /* ---------- Mobile-first utilities ---------- */
+  .safe-top { padding-top: env(safe-area-inset-top); }
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  .safe-x {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  .tap-target { min-height: 2.75rem; min-width: 2.75rem; }
+  .hide-scrollbar::-webkit-scrollbar { display: none; }
+  .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .snap-x-mandatory { scroll-snap-type: x mandatory; }
+  .snap-start-always { scroll-snap-align: start; scroll-snap-stop: always; }
+
+  /* Prevent iOS zoom on input focus */
+  @media (max-width: 767px) {
+    input, select, textarea { font-size: 16px; }
+  }
 }
