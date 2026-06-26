@@ -1,48 +1,114 @@
-# Fix: Minimize leaves class instead of minimizing
+# Refactor `admin-query` into Modular Handlers
 
-## Problem
+The `supabase/functions/admin-query/index.ts` file is a 2,475-line monolith with ~100 action cases mixed together (users, orgs, leads, batches, courses, payments, payroll, schedules, attendance, live classes, certificates, assignments, analytics, etc.). Every request currently re-runs the full auth + role + memberships lookup and falls through a giant `switch`. This refactor splits it cleanly without changing any client contract.
 
-Clicking the Minimize button in a live class exits the class entirely. No minimized pill appears.
+## Goals
 
-## Root cause
+- **One file per page/domain** of handlers, easy to read and edit.
+- **Shared global resources** (Supabase client, caller context, micro-cache, helpers) — fetched once per request, reused across all handlers.
+- **Fewer DB round-trips** — batch caller identity, role, and org memberships into a single resolver; expand the read-cache; add 304-style ETag short-circuits for hot lists.
+- **Same public API** — action names, params, and response shape stay byte-for-byte compatible (client code in `src/services/*` and pages do not change).
 
-The project already has a global minimize system:
-- `ClassroomSessionProvider` (mounted in `src/App.tsx`)
-- `GlobalClassroomOverlay` (mounted in both desktop and mobile shells via `src/components/layout/AppLayout.tsx`) — renders the full-screen classroom when a session exists, and a minimized floating pill (with Expand / Leave buttons) when `minimized` is true.
+## New folder layout
 
-But `LiveClassesPage` and `MobileLiveClassesPage` ignore this system. They render their **own** local `<VideoClassroom>` and wire:
-- Desktop (`src/pages/LiveClassesPage.tsx` line 455): `onMinimize={handleCloseClass}` — minimize literally calls close, dropping the session.
-- Mobile (`src/pages/mobile/MobileLiveClassesPage.tsx`): `onMinimize={() => {}}` — minimize is a no-op (and there is no minimized UI either).
+```text
+supabase/functions/admin-query/
+  index.ts                  # entrypoint: parse → resolve context → dispatch
+  _shared/
+    cors.ts                 # CORS headers + responders (json, error, 403)
+    supabase.ts             # singleton service-role client (module-scope)
+    context.ts              # resolveCaller(): roles + memberships + targetOrgId
+    cache.ts                # micro-cache (TTL + LRU) + cache key builder
+    guards.ts               # ORG_SCOPED_ACTIONS, requireRole(), requireOrg()
+    orgScope.ts             # applyOrgFilter(query, orgId) helper
+    types.ts                # HandlerCtx, HandlerResult, ActionHandler
+  handlers/
+    stats.ts                # get_stats, revenue_analytics, org_performance,
+                            #   student_trends, system_health
+    users.ts                # list_users, create_user, update_user, delete_user,
+                            #   change_role, toggle_user_active,
+                            #   admin_reset_password, check_email_exists
+    organizations.ts        # list/create/delete_organization,
+                            #   toggle_org_active, update_org_branding,
+                            #   list/add/remove_org_member,
+                            #   set_user_organizations
+    leads.ts                # list/create/update/delete_lead,
+                            #   approve_lead, record_lead_payment,
+                            #   get_support_overview
+    courses.ts              # list/create/update/delete_course,
+                            #   list/create/update/delete_course_module,
+                            #   create/update/delete_lesson
+    batches.ts              # list/create/update/delete_batch,
+                            #   get_batch_detail,
+                            #   list/add/remove_batch_student,
+                            #   batch_student_count
+    schedules.ts            # list/create/update/delete_schedule,
+                            #   bulk_create_schedules,
+                            #   check_teacher_conflicts,
+                            #   check_student_conflicts,
+                            #   check_slot_conflicts
+    attendance.ts           # list_attendance, save_attendance
+    liveClasses.ts          # list/create/update/delete_live_class
+    materials.ts            # list/create/delete_material
+    assignments.ts          # list/create/update/delete_practice_assignment,
+                            #   list_student_submissions,
+                            #   review_student_submission
+    payments.ts             # list/create/update_payment
+    payroll.ts              # list/create/update_payroll
+    notifications.ts        # list/create/mark_read/delete_notification
+    subscriptions.ts        # list/create/update/delete_subscription_plan,
+                            #   list/assign/cancel_org_subscription
+    coupons.ts              # list/create/update/delete_coupon
+    enrollments.ts          # list_enrollments, list_students_with_batches,
+                            #   list_all_students, list_teachers
+    parents.ts              # list_parent_children, add/remove_parent_child,
+                            #   list_parents
+    sessions.ts             # list_active_sessions, list_session_history,
+                            #   list_activity_logs
+  registry.ts               # maps action string → handler function
+```
 
-Result: pressing Minimize either disconnects you (desktop) or does nothing (mobile).
+## Shared context & caching
 
-## Fix
+- `resolveCaller()` runs once per request and returns `{ userId, roles, isSuperadmin, isAdmin, isSupport, isTeacher, memberships, targetOrgId }`. Today this lookup happens at the top of the handler and is re-derived inside several cases — consolidating it removes the duplicate `user_roles` / `organization_members` queries inside batch/lead/course handlers.
+- `cache.ts` keeps the existing 5 s micro-cache but:
+  - widens the cacheable set to include `list_users`, `list_batch_students`, `list_payments`, `list_schedules`, `list_materials`, `list_practice_assignments`, `list_coupons`, `list_subscription_plans`, `list_course_modules`, `list_parents`;
+  - bumps TTL to 15 s for stats/analytics actions (`get_stats`, `revenue_analytics`, `org_performance`, `student_trends`, `system_health`);
+  - exposes `invalidate(action | tag, orgId)` and mutating handlers call it (e.g. `create_batch` invalidates `list_batches` for that org) so writes don't get stale reads after the TTL window.
+- Add a tiny `withETag(payload)` helper: hash the JSON, return `X-Cache-Tag`; if the client echoes `If-None-Match`, return `304` with empty body. Saves bandwidth for unchanged polled lists.
 
-Delegate joining to the global classroom session so the existing overlay + minimized pill take over.
+## Dispatcher
 
-### 1. `src/pages/LiveClassesPage.tsx`
-- Import `useClassroomSession`.
-- Remove local `activeJoinedClassId` state, the fixed `<VideoClassroom>` block (lines ~444–470), and the `currentLiveClass` derivation that drove it.
-- `handleJoinClass(cls)` calls `joinClass({ classId, roomName: edu-room-${id}, displayName, isTeacher, classStatus })` instead of setting local state.
-- Drop the "skip the currently joined class" filter in `categorizedClasses` (or keep it by reading `session?.classId` from the context) — minor; the card just hides itself while you're in the room.
-- Keep `EndClassAttendanceDialog` triggered by the existing End button in the global overlay header (no change needed there — the global overlay already exposes its own X/Minimize; the End-attendance dialog stays page-local and is opened from the live-class card's manage actions, unchanged).
+`index.ts` becomes ~60 lines:
 
-### 2. `src/pages/mobile/MobileLiveClassesPage.tsx`
-- Same change: import `useClassroomSession`, remove the local full-screen `<VideoClassroom>` block and `activeId` state, route the Join button to `joinClass(...)`.
-- This automatically gives mobile users a working minimized pill (rendered by `GlobalClassroomOverlay`, already mounted in `MobileAppShell` through `AppLayout`).
+```text
+1. CORS preflight
+2. Parse body { action, params, target_org_id }
+3. resolveCaller(req) → ctx
+4. guards.requireOrgScope(action, ctx)
+5. cache.tryServe(action, ctx, params)
+6. registry[action](ctx, params)
+7. cache.store + respond with JSON
+```
 
-### 3. Verify `GlobalClassroomOverlay` minimize works
-The overlay already implements minimize correctly: when `minimized` is true it hides the full-screen panel (invisible + pointer-events-none, keeping the LiveKit connection alive) and shows a floating pill with Expand and Leave. No changes needed there.
+`registry.ts` is a flat `Record<string, ActionHandler>` built by importing each handler module — no giant switch.
 
-## Files touched
+## Migration approach (zero-risk)
 
-- `src/pages/LiveClassesPage.tsx` — remove local VideoClassroom render, use `useClassroomSession().joinClass`.
-- `src/pages/mobile/MobileLiveClassesPage.tsx` — same.
+1. Add new files alongside the existing `index.ts`.
+2. Move handlers domain-by-domain; after each move, the dispatcher delegates that action to the new handler. Old switch cases are removed only after their replacement is wired.
+3. Each handler keeps the **exact** SQL, params, and response shape from the original. Diff-friendly: reviewers can match line-for-line.
+4. Final commit deletes the leftover switch and reduces `index.ts` to the dispatcher.
 
-No other files change. `GlobalClassroomOverlay`, `ClassroomSessionContext`, `VideoClassroom`, and the End-class dialog all stay as-is.
+## Out of scope
 
-## Verification
+- No changes to RLS, tables, or other edge functions.
+- No changes to frontend service files (`src/services/adminQuery.ts` etc.).
+- No new business logic — purely structural + caching.
 
-1. Desktop: Start/Join a live class → click Minimize → full-screen collapses, floating "Class in progress" pill appears bottom-right, you can navigate the app, click Expand to come back.
-2. Mobile: Same flow — Minimize collapses the room and shows the pill; tapping it reopens the room with the LiveKit session intact.
-3. Clicking X (Leave) in either the overlay header or pill ends the session as before.
+## Expected outcome
+
+- `index.ts` shrinks from 2,475 → ~60 lines; each handler file 80–250 lines.
+- 1 fewer DB query per request on average (caller context dedup).
+- Hot list pages (Users, Batches, Payments, Assignments) served from in-memory cache on rapid navigation; analytics pages cached for 15 s.
+- Cold-start unchanged; warm response latency drops noticeably on repeat reads.
