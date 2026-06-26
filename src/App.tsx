@@ -51,6 +51,7 @@ const SubscriptionPlansPage = lazy(() => import("@/pages/SubscriptionPlansPage")
 const CouponsPage = lazy(() => import("@/pages/CouponsPage"));
 const CurriculumPage = lazy(() => import("@/pages/CurriculumPage"));
 const SystemMonitoringPage = lazy(() => import("@/pages/SystemMonitoringPage"));
+const ClassroomSettingsPage = lazy(() => import("@/pages/ClassroomSettingsPage"));
 const PracticeAssignmentsPage = lazy(() => import("@/pages/PracticeAssignmentsPage"));
 const StudentSubmissionsPage = lazy(() => import("@/pages/StudentSubmissionsPage"));
 const StudentLessonViewer = lazy(() => import("@/pages/StudentLessonViewer"));
