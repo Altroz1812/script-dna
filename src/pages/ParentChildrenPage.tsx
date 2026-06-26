@@ -9,6 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { toast } from 'sonner';
 import { Users, BookOpen, TrendingUp, Eye } from 'lucide-react';
+import { useIsMobileApp } from '@/hooks/useIsMobileApp';
+import MobileParentChildrenPage from './mobile/MobileParentChildrenPage';
 
 interface ChildData {
   child_id: string;
@@ -18,6 +20,8 @@ interface ChildData {
 }
 
 export default function ParentChildrenPage() {
+  const __isMobile = useIsMobileApp();
+  if (__isMobile) return <MobileParentChildrenPage />;
   const { profile } = useAuth();
   const navigate = useNavigate();
   const [children, setChildren] = useState<ChildData[]>([]);
