@@ -5,7 +5,6 @@ import { batchService, scheduleService, type Batch } from '@/services/api/course
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -18,6 +17,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { PageHeader, ResponsiveDialog } from '@/components/mobile/ui';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const WORKING_DAYS_OPTIONS = [
@@ -302,26 +302,46 @@ export default function SchedulePage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-foreground">Schedule</h1>
-        <div className="flex gap-2">
-          <Select value={filterBatch} onValueChange={setFilterBatch}>
-            <SelectTrigger className="w-48"><SelectValue placeholder="Filter batch" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Batches</SelectItem>
-              {batches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Dialog open={manualOpen} onOpenChange={setManualOpen}>
-            <DialogTrigger asChild><Button variant="outline"><Plus className="mr-2 h-4 w-4" />Add Extra Session</Button></DialogTrigger>
-            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Add Extra / Reschedule Session</DialogTitle>
-                <p className="text-xs text-muted-foreground pt-1">
-                  For one-off sessions: extra class, substitute, or holiday reschedule. Uses the batch's permanent meeting link.
-                </p>
-              </DialogHeader>
-              <div className="space-y-4">
+      <PageHeader
+        title="Schedule"
+        primaryAction={(
+          <Button onClick={() => setOpen(true)} className="tap-target">
+            <Wand2 className="mr-2 h-4 w-4" />Generate
+          </Button>
+        )}
+        secondaryActions={(
+          <>
+            <Button variant="outline" onClick={() => setManualOpen(true)} className="tap-target">
+              <Plus className="mr-2 h-4 w-4" />Add Extra Session
+            </Button>
+          </>
+        )}
+      />
+      <div className="flex">
+        <Select value={filterBatch} onValueChange={setFilterBatch}>
+          <SelectTrigger className="w-full md:w-48"><SelectValue placeholder="Filter batch" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Batches</SelectItem>
+            {batches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      <ResponsiveDialog
+        open={manualOpen}
+        onOpenChange={setManualOpen}
+        title="Add Extra / Reschedule Session"
+        description="For one-off sessions: extra class, substitute, or holiday reschedule. Uses the batch's permanent meeting link."
+        desktopWidthClass="sm:max-w-lg"
+        footer={
+          <Button
+            onClick={() => manualMutation.mutate()}
+            disabled={manualMutation.isPending || !manualValid || manualConflicts.length > 0}
+          >
+            {manualMutation.isPending ? 'Creating...' : manualConflicts.length > 0 ? 'Resolve conflicts to continue' : 'Create Schedule Entry'}
+          </Button>
+        }
+      >
+        <div className="space-y-4">
                 <div>
                   <Label>Batch</Label>
                   <Select value={manualForm.batch_id} onValueChange={v => {
@@ -377,26 +397,28 @@ export default function SchedulePage() {
                 {manualConflicts.length > 0 && (
                   <ConflictPanel conflicts={manualConflicts} batches={batches} />
                 )}
-                <Button
-                  onClick={() => manualMutation.mutate()}
-                  disabled={manualMutation.isPending || !manualValid || manualConflicts.length > 0}
-                  className="w-full"
-                >
-                  {manualMutation.isPending ? 'Creating...' : manualConflicts.length > 0 ? 'Resolve conflicts to continue' : 'Create Schedule Entry'}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild><Button><Wand2 className="mr-2 h-4 w-4" />Generate Full Schedule</Button></DialogTrigger>
-            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Generate Full Course Schedule</DialogTitle>
-                <p className="text-xs text-muted-foreground pt-1">
-                  Creates the recurring session itinerary for a batch in one pass. Duplicate dates/times are skipped.
-                </p>
-              </DialogHeader>
-              <div className="space-y-4">
+        </div>
+      </ResponsiveDialog>
+      <ResponsiveDialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Generate Full Course Schedule"
+        description="Creates the recurring session itinerary for a batch in one pass. Duplicate dates/times are skipped."
+        desktopWidthClass="sm:max-w-lg"
+        footer={
+          <Button
+            onClick={() => bulkMutation.mutate()}
+            disabled={bulkMutation.isPending || generatedEntries.length === 0 || autoBlockers.length > 0 || autoConflicts.length > 0}
+          >
+            {bulkMutation.isPending
+              ? 'Creating...'
+              : autoConflicts.length > 0
+                ? `Resolve ${autoConflicts.length} conflict(s) to continue`
+                : `Generate ${generatedEntries.length} Schedule Entries`}
+          </Button>
+        }
+      >
+        <div className="space-y-4">
                 <div>
                   <Label>Batch</Label>
                   <Select value={autoForm.batch_id} onValueChange={v => setAutoForm(f => ({ ...f, batch_id: v }))}>
@@ -466,23 +488,8 @@ export default function SchedulePage() {
                     )}
                   </div>
                 )}
-
-                <Button
-                  onClick={() => bulkMutation.mutate()}
-                  disabled={bulkMutation.isPending || generatedEntries.length === 0 || autoBlockers.length > 0 || autoConflicts.length > 0}
-                  className="w-full"
-                >
-                  {bulkMutation.isPending
-                    ? 'Creating...'
-                    : autoConflicts.length > 0
-                      ? `Resolve ${autoConflicts.length} conflict(s) to continue`
-                      : `Generate ${generatedEntries.length} Schedule Entries`}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
         </div>
-      </div>
+      </ResponsiveDialog>
 
       {isLoading ? <TableSkeleton columns={6} rows={5} /> : (
         <ScheduleSections

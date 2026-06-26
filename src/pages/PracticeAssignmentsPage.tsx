@@ -9,11 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { PageHeader, ResponsiveDialog } from "@/components/mobile/ui";
 import {
   Plus,
   FileText,
@@ -491,26 +492,32 @@ export default function PracticeAssignmentsPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Practice Assignments</h1>
-          <p className="text-muted-foreground text-sm">
-            {isStudent ? "Complete and submit your practice assignments" : "Create and manage practice assignments"}
-          </p>
-        </div>
-        {canCreate && (
-          <Dialog open={open} onOpenChange={handleDialogClose}>
-            <DialogTrigger asChild>
-              <Button disabled={uploading}>
-                <Plus className="mr-2 h-4 w-4" />
-                New Assignment
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-h-[90vh] overflow-y-auto max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Create Practice Assignment</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
+      <PageHeader
+        title="Practice Assignments"
+        description={isStudent ? "Complete and submit your practice assignments" : "Create and manage practice assignments"}
+        primaryAction={canCreate ? (
+          <Button disabled={uploading} onClick={() => handleDialogClose(true)} className="tap-target">
+            <Plus className="mr-2 h-4 w-4" />
+            New Assignment
+          </Button>
+        ) : undefined}
+      />
+      {canCreate && (
+        <ResponsiveDialog
+          open={open}
+          onOpenChange={handleDialogClose}
+          title="Create Practice Assignment"
+          desktopWidthClass="sm:max-w-2xl"
+          footer={
+            <Button
+              onClick={handleCreate}
+              disabled={!form.title.trim() || !form.batch_id || uploading || batches.length === 0}
+            >
+              {uploading ? "Uploading file..." : "Create Assignment"}
+            </Button>
+          }
+        >
+          <div className="space-y-4">
                 <div>
                   <Label htmlFor="title">Title *</Label>
                   <Input
@@ -656,19 +663,9 @@ export default function PracticeAssignmentsPage() {
                   />
                   <p className="text-xs text-muted-foreground mt-1">Only HTTP/HTTPS URLs are allowed</p>
                 </div>
-
-                <Button
-                  onClick={handleCreate}
-                  className="w-full"
-                  disabled={!form.title.trim() || !form.batch_id || uploading || batches.length === 0}
-                >
-                  {uploading ? "Uploading file..." : "Create Assignment"}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        )}
-      </div>
+          </div>
+        </ResponsiveDialog>
+      )}
 
       {loading ? (
         <TableSkeleton columns={isStudent ? 6 : 6} rows={5} />

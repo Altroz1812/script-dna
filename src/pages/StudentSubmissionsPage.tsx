@@ -8,10 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Upload, MessageSquare, FileCheck, Camera } from 'lucide-react';
@@ -19,6 +16,7 @@ import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { useIsMobileApp } from '@/hooks/useIsMobileApp';
 import { useRBAC as __useRBAC2 } from '@/hooks/useRBAC';
 import MobileStudentSubmissionsPage from './mobile/MobileStudentSubmissionsPage';
+import { PageHeader, ResponsiveDialog, ResponsiveTable, type ResponsiveColumn } from '@/components/mobile/ui';
 
 export default function StudentSubmissionsPage() {
   const __isMobile = useIsMobileApp();
@@ -135,21 +133,27 @@ export default function StudentSubmissionsPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Submissions</h1>
-          <p className="text-muted-foreground text-sm">
-            {isTeacher ? 'Review student handwriting submissions' : 'Submit your practice work'}
-          </p>
-        </div>
-        {isStudent && (
-          <Dialog open={submitOpen} onOpenChange={setSubmitOpen}>
-            <DialogTrigger asChild>
-              <Button><Upload className="mr-2 h-4 w-4" />New Submission</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Submit Practice Work</DialogTitle></DialogHeader>
-              <div className="space-y-3">
+      <PageHeader
+        title="Submissions"
+        description={isTeacher ? 'Review student handwriting submissions' : 'Submit your practice work'}
+        primaryAction={isStudent ? (
+          <Button onClick={() => setSubmitOpen(true)} className="tap-target">
+            <Upload className="mr-2 h-4 w-4" />New Submission
+          </Button>
+        ) : undefined}
+      />
+      {isStudent && (
+        <ResponsiveDialog
+          open={submitOpen}
+          onOpenChange={setSubmitOpen}
+          title="Submit Practice Work"
+          footer={
+            <Button onClick={handleSubmit} disabled={!submitForm.assignment_id || uploading}>
+              {uploading ? 'Uploading...' : 'Submit'}
+            </Button>
+          }
+        >
+          <div className="space-y-3">
                 <div>
                   <Label>Assignment</Label>
                   <Select value={submitForm.assignment_id} onValueChange={v => setSubmitForm(f => ({ ...f, assignment_id: v }))}>
@@ -196,20 +200,20 @@ export default function StudentSubmissionsPage() {
                     <p className="text-xs text-muted-foreground mt-1">{submitForm.file.name}</p>
                   )}
                 </div>
-                <Button onClick={handleSubmit} className="w-full" disabled={!submitForm.assignment_id || uploading}>
-                  {uploading ? 'Uploading...' : 'Submit'}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        )}
-      </div>
+          </div>
+        </ResponsiveDialog>
+      )}
 
       {/* Teacher review dialog */}
-      <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Review Submission</DialogTitle></DialogHeader>
-          {selectedSubmission && (
+      <ResponsiveDialog
+        open={reviewOpen}
+        onOpenChange={setReviewOpen}
+        title="Review Submission"
+        footer={
+          <Button onClick={handleReview}>Save Review</Button>
+        }
+      >
+        {selectedSubmission && (
             <div className="space-y-3">
               <div className="rounded-md bg-muted p-3 text-sm">
                 <p className="font-medium">{selectedSubmission.practice_assignments?.title}</p>
@@ -219,48 +223,35 @@ export default function StudentSubmissionsPage() {
               </div>
               <div><Label>Score (optional)</Label><Input type="number" min="0" max="100" value={reviewForm.score} onChange={e => setReviewForm(f => ({ ...f, score: e.target.value }))} placeholder="0-100" /></div>
               <div><Label>Feedback</Label><Textarea value={reviewForm.feedback} onChange={e => setReviewForm(f => ({ ...f, feedback: e.target.value }))} placeholder="Great improvement on letter spacing..." /></div>
-              <Button onClick={handleReview} className="w-full">Save Review</Button>
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
+        )}
+      </ResponsiveDialog>
 
       {loading ? <TableSkeleton columns={4} rows={5} /> : (
-        <Card><CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Assignment</TableHead>
-                <TableHead>Batch</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Score</TableHead>
-                {isTeacher && <TableHead>Actions</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {submissions.length === 0 ? (
-                <TableRow><TableCell colSpan={isTeacher ? 5 : 4} className="text-center py-8 text-muted-foreground">
-                  <FileCheck className="mx-auto h-8 w-8 mb-2 opacity-50" />
-                  No submissions yet
-                </TableCell></TableRow>
-              ) : submissions.map(s => (
-                <TableRow key={s.id}>
-                  <TableCell className="font-medium">{s.practice_assignments?.title || '—'}</TableCell>
-                  <TableCell><Badge variant="secondary">{s.practice_assignments?.batches?.name || '—'}</Badge></TableCell>
-                  <TableCell><Badge variant="outline" className={statusColor(s.status)}>{s.status}</Badge></TableCell>
-                  <TableCell>{s.score != null ? `${s.score}/100` : '—'}</TableCell>
-                  {isTeacher && (
-                    <TableCell>
-                      <Button variant="ghost" size="sm" onClick={() => openReview(s)}>
-                        <MessageSquare className="h-4 w-4 mr-1" />{s.status === 'reviewed' ? 'Edit' : 'Review'}
-                      </Button>
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent></Card>
+        <ResponsiveTable
+          data={submissions}
+          rowKey={(s: any) => s.id}
+          emptyMessage={(
+            <div className="flex flex-col items-center gap-2 py-6 text-muted-foreground">
+              <FileCheck className="h-8 w-8 opacity-50" />
+              <span>No submissions yet</span>
+            </div>
+          )}
+          onRowClick={isTeacher ? (s: any) => openReview(s) : undefined}
+          columns={[
+            { key: 'title', header: 'Assignment', mobilePrimary: true, cell: (s: any) => s.practice_assignments?.title || '—' },
+            { key: 'batch', header: 'Batch', cell: (s: any) => <Badge variant="secondary">{s.practice_assignments?.batches?.name || '—'}</Badge> },
+            { key: 'status', header: 'Status', cell: (s: any) => <Badge variant="outline" className={statusColor(s.status)}>{s.status}</Badge> },
+            { key: 'score', header: 'Score', cell: (s: any) => s.score != null ? `${s.score}/100` : '—' },
+            ...(isTeacher ? [{
+              key: 'actions', header: 'Actions', cell: (s: any) => (
+                <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openReview(s); }} className="tap-target">
+                  <MessageSquare className="h-4 w-4 mr-1" />{s.status === 'reviewed' ? 'Edit' : 'Review'}
+                </Button>
+              )
+            } as ResponsiveColumn<any>] : []),
+          ]}
+        />
       )}
     </div>
   );
