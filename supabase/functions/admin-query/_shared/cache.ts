@@ -11,11 +11,17 @@ const TTL_OVERRIDES: Record<string, number> = {
   org_performance: 15_000,
   student_trends: 15_000,
   system_health: 15_000,
+  get_teacher_dashboard: 30_000,
+  get_student_dashboard: 30_000,
+  get_parent_dashboard: 30_000,
 }
 
 export const READ_CACHEABLE_ACTIONS = new Set<string>([
   'get_stats',
   'get_support_overview',
+  'get_teacher_dashboard',
+  'get_student_dashboard',
+  'get_parent_dashboard',
   'list_courses',
   'list_course_modules',
   'list_teachers',

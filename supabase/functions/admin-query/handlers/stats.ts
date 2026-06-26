@@ -7,37 +7,73 @@ export async function handle(action: string, ctx: HandlerCtx, params: any): Prom
   let handled = true
   switch (action) {
       case 'get_stats': {
-        const scope = <T extends any>(q: T): T => (ctx.targetOrgId ? (q as any).eq('organization_id', ctx.targetOrgId) : q)
-        const [profiles, courses, batches, orgs, leads, payments] = await Promise.all([
-          scope(ctx.supabase.from('profiles').select('id', { count: 'exact', head: true })),
-          scope(ctx.supabase.from('courses').select('id', { count: 'exact', head: true })),
-          scope(ctx.supabase.from('batches').select('id', { count: 'exact', head: true })),
-          ctx.supabase.from('organizations').select('id', { count: 'exact', head: true }),
-          scope(ctx.supabase.from('leads').select('id', { count: 'exact', head: true })),
-          scope(ctx.supabase.from('payments').select('id', { count: 'exact', head: true })),
-        ])
-        const roleCounts: Record<string, number> = {}
+        // Read from precomputed dashboard tables; no joins/aggregation on hot path.
         if (ctx.targetOrgId) {
-          const { data: members } = await ctx.supabase
-            .from('organization_members').select('user_id').eq('organization_id', ctx.targetOrgId)
-          const memberIds = (members ?? []).map((m: any) => m.user_id)
-          if (memberIds.length) {
-            const { data: roles } = await ctx.supabase
-              .from('user_roles').select('role').in('user_id', memberIds)
-            for (const r of roles ?? []) roleCounts[r.role] = (roleCounts[r.role] || 0) + 1
+          const { data: row } = await ctx.supabase
+            .from('org_dashboard_stats')
+            .select('*')
+            .eq('organization_id', ctx.targetOrgId)
+            .maybeSingle()
+          result = {
+            totalUsers: row?.total_members ?? 0,
+            totalCourses: row?.total_courses ?? 0,
+            totalBatches: row?.total_batches ?? 0,
+            totalOrgs: 1,
+            totalLeads: row?.total_leads ?? 0,
+            totalPayments: row?.total_payments ?? 0,
+            roleCounts: row?.role_counts ?? {},
           }
         } else {
-          const roles = await ctx.supabase.from('user_roles').select('role')
-          for (const r of roles.data ?? []) roleCounts[r.role] = (roleCounts[r.role] || 0) + 1
+          // SuperAdmin global view: use legacy dashboard_stats singleton row.
+          const { data: row } = await ctx.supabase
+            .from('dashboard_stats').select('*').eq('id', 1).maybeSingle()
+          result = {
+            totalUsers: row?.total_users ?? 0,
+            totalCourses: row?.total_courses ?? 0,
+            totalBatches: row?.total_batches ?? 0,
+            totalOrgs: row?.total_orgs ?? 0,
+            totalLeads: row?.total_leads ?? 0,
+            totalPayments: row?.total_payments ?? 0,
+            roleCounts: row?.role_counts ?? {},
+          }
         }
+        break
+      }
+      case 'get_teacher_dashboard': {
+        const teacherId = params?.teacher_id || ctx.callerUserId
+        const { data: row } = await ctx.supabase
+          .from('teacher_dashboard_stats').select('*').eq('teacher_id', teacherId).maybeSingle()
         result = {
-          totalUsers: profiles.count ?? 0,
-          totalCourses: courses.count ?? 0,
-          totalBatches: batches.count ?? 0,
-          totalOrgs: orgs.count ?? 0,
-          totalLeads: leads.count ?? 0,
-          totalPayments: payments.count ?? 0,
-          roleCounts,
+          batchCount: row?.batch_count ?? 0,
+          studentCount: row?.student_count ?? 0,
+          upcomingClassCount: row?.upcoming_class_count ?? 0,
+          pendingSubmissions: row?.pending_submissions ?? 0,
+        }
+        break
+      }
+      case 'get_student_dashboard': {
+        const studentId = params?.student_id || ctx.callerUserId
+        const { data: row } = await ctx.supabase
+          .from('student_dashboard_stats').select('*').eq('student_id', studentId).maybeSingle()
+        result = {
+          enrolledCourses: row?.enrolled_courses ?? 0,
+          enrolledBatches: row?.enrolled_batches ?? 0,
+          upcomingClassCount: row?.upcoming_class_count ?? 0,
+          recentSubmissionCount: row?.recent_submission_count ?? 0,
+          avgCompletionPct: row?.avg_completion_pct ?? 0,
+          certificateCount: row?.certificate_count ?? 0,
+        }
+        break
+      }
+      case 'get_parent_dashboard': {
+        const parentId = params?.parent_id || ctx.callerUserId
+        const { data: row } = await ctx.supabase
+          .from('parent_dashboard_stats').select('*').eq('parent_id', parentId).maybeSingle()
+        result = {
+          childrenCount: row?.children_count ?? 0,
+          avgCompletionPct: row?.avg_completion_pct ?? 0,
+          recentPaymentCount: row?.recent_payment_count ?? 0,
+          upcomingClassCount: row?.upcoming_class_count ?? 0,
         }
         break
       }
