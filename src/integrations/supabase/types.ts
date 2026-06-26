@@ -330,6 +330,60 @@ export type Database = {
           },
         ]
       }
+      classroom_settings: {
+        Row: {
+          active_speaker_gate: number
+          batch_id: string | null
+          created_at: string
+          id: string
+          max_participants: number
+          non_speaker_video_enabled: boolean
+          organization_id: string
+          rolling_window_size: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          active_speaker_gate?: number
+          batch_id?: string | null
+          created_at?: string
+          id?: string
+          max_participants?: number
+          non_speaker_video_enabled?: boolean
+          organization_id: string
+          rolling_window_size?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          active_speaker_gate?: number
+          batch_id?: string | null
+          created_at?: string
+          id?: string
+          max_participants?: number
+          non_speaker_video_enabled?: boolean
+          organization_id?: string
+          rolling_window_size?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "classroom_settings_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "classroom_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coupons: {
         Row: {
           code: string
