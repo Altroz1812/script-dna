@@ -1,114 +1,105 @@
-# Refactor `admin-query` into Modular Handlers
 
-The `supabase/functions/admin-query/index.ts` file is a 2,475-line monolith with ~100 action cases mixed together (users, orgs, leads, batches, courses, payments, payroll, schedules, attendance, live classes, certificates, assignments, analytics, etc.). Every request currently re-runs the full auth + role + memberships lookup and falls through a giant `switch`. This refactor splits it cleanly without changing any client contract.
+# Load Analysis: 400 Parallel Users
 
-## Goals
+Snapshot of where the app will bend (or break) at 400 concurrent logins, normal data access, and a live video class — based on current DB health, slow-query stats, edge-function code, and frontend polling.
 
-- **One file per page/domain** of handlers, easy to read and edit.
-- **Shared global resources** (Supabase client, caller context, micro-cache, helpers) — fetched once per request, reused across all handlers.
-- **Fewer DB round-trips** — batch caller identity, role, and org memberships into a single resolver; expand the read-cache; add 304-style ETag short-circuits for hot lists.
-- **Same public API** — action names, params, and response shape stay byte-for-byte compatible (client code in `src/services/*` and pages do not change).
+## 1. Current baseline (from live signals)
 
-## New folder layout
+- DB connections **14 / 60** used, PgBouncer pool **1 / 200**, memory **48 %**, disk **4 %**. Headroom exists, but the connection ceiling (60 direct / 200 pooled) is the hard wall at scale.
+- Rolled-back transactions: **6 960 since boot** — high, almost certainly from the `user_sessions` heartbeat UPDATE races and `record-login-attempt` retries.
+- Top hot queries by total time:
+  1. `user_sessions UPDATE last_seen_at` — 4 863 calls
+  2. `user_sessions SELECT open session` — 5 013 calls
+  3. `login_attempts INSERT` — 165 calls
+  4. `user_roles SELECT by user_id` — 3 601 calls
+  5. `organization_members + organizations` join — 212 calls
+  6. `live_classes + batches + courses` join — 107 calls
 
-```text
-supabase/functions/admin-query/
-  index.ts                  # entrypoint: parse → resolve context → dispatch
-  _shared/
-    cors.ts                 # CORS headers + responders (json, error, 403)
-    supabase.ts             # singleton service-role client (module-scope)
-    context.ts              # resolveCaller(): roles + memberships + targetOrgId
-    cache.ts                # micro-cache (TTL + LRU) + cache key builder
-    guards.ts               # ORG_SCOPED_ACTIONS, requireRole(), requireOrg()
-    orgScope.ts             # applyOrgFilter(query, orgId) helper
-    types.ts                # HandlerCtx, HandlerResult, ActionHandler
-  handlers/
-    stats.ts                # get_stats, revenue_analytics, org_performance,
-                            #   student_trends, system_health
-    users.ts                # list_users, create_user, update_user, delete_user,
-                            #   change_role, toggle_user_active,
-                            #   admin_reset_password, check_email_exists
-    organizations.ts        # list/create/delete_organization,
-                            #   toggle_org_active, update_org_branding,
-                            #   list/add/remove_org_member,
-                            #   set_user_organizations
-    leads.ts                # list/create/update/delete_lead,
-                            #   approve_lead, record_lead_payment,
-                            #   get_support_overview
-    courses.ts              # list/create/update/delete_course,
-                            #   list/create/update/delete_course_module,
-                            #   create/update/delete_lesson
-    batches.ts              # list/create/update/delete_batch,
-                            #   get_batch_detail,
-                            #   list/add/remove_batch_student,
-                            #   batch_student_count
-    schedules.ts            # list/create/update/delete_schedule,
-                            #   bulk_create_schedules,
-                            #   check_teacher_conflicts,
-                            #   check_student_conflicts,
-                            #   check_slot_conflicts
-    attendance.ts           # list_attendance, save_attendance
-    liveClasses.ts          # list/create/update/delete_live_class
-    materials.ts            # list/create/delete_material
-    assignments.ts          # list/create/update/delete_practice_assignment,
-                            #   list_student_submissions,
-                            #   review_student_submission
-    payments.ts             # list/create/update_payment
-    payroll.ts              # list/create/update_payroll
-    notifications.ts        # list/create/mark_read/delete_notification
-    subscriptions.ts        # list/create/update/delete_subscription_plan,
-                            #   list/assign/cancel_org_subscription
-    coupons.ts              # list/create/update/delete_coupon
-    enrollments.ts          # list_enrollments, list_students_with_batches,
-                            #   list_all_students, list_teachers
-    parents.ts              # list_parent_children, add/remove_parent_child,
-                            #   list_parents
-    sessions.ts             # list_active_sessions, list_session_history,
-                            #   list_activity_logs
-  registry.ts               # maps action string → handler function
-```
+## 2. Bottlenecks at 400 concurrent users
 
-## Shared context & caching
+### A. Login burst (T0 … T0+30 s)
 
-- `resolveCaller()` runs once per request and returns `{ userId, roles, isSuperadmin, isAdmin, isSupport, isTeacher, memberships, targetOrgId }`. Today this lookup happens at the top of the handler and is re-derived inside several cases — consolidating it removes the duplicate `user_roles` / `organization_members` queries inside batch/lead/course handlers.
-- `cache.ts` keeps the existing 5 s micro-cache but:
-  - widens the cacheable set to include `list_users`, `list_batch_students`, `list_payments`, `list_schedules`, `list_materials`, `list_practice_assignments`, `list_coupons`, `list_subscription_plans`, `list_course_modules`, `list_parents`;
-  - bumps TTL to 15 s for stats/analytics actions (`get_stats`, `revenue_analytics`, `org_performance`, `student_trends`, `system_health`);
-  - exposes `invalidate(action | tag, orgId)` and mutating handlers call it (e.g. `create_batch` invalidates `list_batches` for that org) so writes don't get stale reads after the TTL window.
-- Add a tiny `withETag(payload)` helper: hash the JSON, return `X-Cache-Tag`; if the client echoes `If-None-Match`, return `304` with empty body. Saves bandwidth for unchanged polled lists.
+Per login the client fires (parallel):
+- `POST /auth/v1/token` (GoTrue)
+- `GET profiles`, `GET user_roles`, `GET organization_members` (3 PostgREST round-trips)
+- `POST /functions/v1/record-login-attempt` → INSERT login_attempts + INSERT user_sessions
+- `POST /functions/v1/heartbeat` → getUser + SELECT + INSERT user_sessions
+- `GET notifications`, `GET live_classes`, `GET batches`, `GET practice_assignments`, `GET student_submissions`
 
-## Dispatcher
+≈ **10–12 requests × 400 users ≈ 4 000–4 800 requests in <10 s**.
 
-`index.ts` becomes ~60 lines:
+Risks:
+- GoTrue rate-limits and CPU spike.
+- PgBouncer pool saturation — edge functions open service-role clients per invocation (no keep-alive across cold starts).
+- Duplicate `user_sessions` rows (heartbeat + record-login-attempt both insert) → row contention, rollbacks.
+- `activity_logs` audit trigger amplifies every INSERT/UPDATE.
 
-```text
-1. CORS preflight
-2. Parse body { action, params, target_org_id }
-3. resolveCaller(req) → ctx
-4. guards.requireOrgScope(action, ctx)
-5. cache.tryServe(action, ctx, params)
-6. registry[action](ctx, params)
-7. cache.store + respond with JSON
-```
+### B. Steady-state data access
 
-`registry.ts` is a flat `Record<string, ActionHandler>` built by importing each handler module — no giant switch.
+- **Heartbeat every 60 s**: 400 users × 1/min = 6.7 rps continuous, each doing `auth.getUser` (network hop to GoTrue) + SELECT + UPDATE on `user_sessions`. Dominates the slow-query table.
+- Dashboard pages do N+1 nested PostgREST embeds (`live_classes → batches → courses`) which cost 6–10 ms each; 400 dashboards loading simultaneously = ≈ 2–4 s of DB time bursted.
+- RLS policies that call `has_role` / `user_in_org` execute on every row scan — fine now, expensive once `batches`/`live_classes` grow.
+- Realtime channels (`leads`, `attendance`, `live_classes`, `payments`) — 400 WebSockets to the Realtime server each subscribed to multiple tables.
 
-## Migration approach (zero-risk)
+### C. Video class (LiveKit)
 
-1. Add new files alongside the existing `index.ts`.
-2. Move handlers domain-by-domain; after each move, the dispatcher delegates that action to the new handler. Old switch cases are removed only after their replacement is wired.
-3. Each handler keeps the **exact** SQL, params, and response shape from the original. Diff-friendly: reviewers can match line-for-line.
-4. Final commit deletes the leftover switch and reduces `index.ts` to the dispatcher.
+- `livekit-token` does `auth.getUser` (PostgREST → GoTrue) + `SELECT user_roles` per join — 2 hops, ~50–80 ms each. 400 simultaneous joins → 800 quick requests.
+- LiveKit room: one room with 400 publishers/subscribers is **not supported on a single SFU node** without scaling out; default LiveKit Cloud caps and bandwidth (≈ 400 × 500 kbps = 200 Mbps downstream per subscriber × N) will collapse without simulcast tiering and forced "viewer" tracks.
+- Current code already enables simulcast + adaptiveStream + viewer-only publish — good — but no **max-participants guard**, no **dynacast**, no **active-speaker-only subscription**.
+- Reconnect storms: if LiveKit hiccups, all 400 clients re-request a token in the same second → edge function cold-start fan-out.
 
-## Out of scope
+### D. Connection ceiling
 
-- No changes to RLS, tables, or other edge functions.
-- No changes to frontend service files (`src/services/adminQuery.ts` etc.).
-- No new business logic — purely structural + caching.
+60 direct Postgres connections shared between PostgREST, edge functions (each `createClient` per invocation), Realtime, and triggers. At 400 concurrent edge-function executions you will see **"remaining connection slots are reserved"** errors well before DB CPU saturates.
 
-## Expected outcome
+## 3. Proposed fixes (ordered by impact)
 
-- `index.ts` shrinks from 2,475 → ~60 lines; each handler file 80–250 lines.
-- 1 fewer DB query per request on average (caller context dedup).
-- Hot list pages (Users, Batches, Payments, Assignments) served from in-memory cache on rapid navigation; analytics pages cached for 15 s.
-- Cold-start unchanged; warm response latency drops noticeably on repeat reads.
+### P0 — Will break at 400 without these
+
+1. **Add missing indexes** (single migration):
+   - `user_sessions (user_id) WHERE ended_at IS NULL` (partial)
+   - `user_sessions (user_id, started_at DESC)`
+   - `login_attempts (email, created_at DESC)`
+   - `user_roles (user_id)` (verify exists; query shows 3 601 calls)
+   - `notifications (user_id, created_at DESC)`
+   - `live_classes (status, scheduled_at)` and `live_classes (batch_id, scheduled_at)`
+2. **Throttle heartbeat**: bump interval from 60 s → 5 min, skip when tab hidden (`document.hidden`), debounce on focus. Cuts user_sessions writes ~5×.
+3. **Collapse login session writes**: remove duplicate `user_sessions` INSERT from `record-login-attempt`; let `heartbeat` own session lifecycle. Cuts rollbacks and contention.
+4. **Cache edge-function Supabase client** at module scope (already partly done in `admin-query/_shared`; replicate for `heartbeat`, `livekit-token`, `record-login-attempt`). Avoids reopening pooled connections per invocation.
+5. **Upgrade Lovable Cloud instance size** before the load test — the 60-connection / 200-pool ceiling is the binding constraint, not CPU. Document this in the runbook.
+
+### P1 — Reduce thundering herds
+
+6. **Stagger heartbeat & realtime reconnect**: add ±15 s jitter on first ping and on socket reconnect to flatten the spike.
+7. **Combine login bootstrap into one RPC**: new `get_bootstrap(user_id)` SECURITY DEFINER function returning `{profile, roles, orgs, unread_notifs}` in one round trip. Cuts 3–4 PostgREST hits per login.
+8. **Cache `user_roles` in JWT custom claims** via auth hook → drop the per-request `SELECT user_roles` in `livekit-token` and other guards. Cuts the #4 hot query entirely.
+9. **Disable `activity_logs` audit trigger** on hot-write tables (`user_sessions`, `notifications`, `attendance`) or move it to an async queue.
+
+### P2 — Video stability under 400-viewer load
+
+10. **Hard cap publishers**: server-side token issues `canPublish=false` to all but teacher; current code does this, but also set `maxParticipants` on the room create call.
+11. **Enable dynacast + activeSpeaker-only subscription** in `VideoClassroom` so subscribers only pull the speaking track.
+12. **Token reuse on reconnect**: cache token in `sessionStorage` until `exp - 60 s`; avoid re-invoking `livekit-token` on every reconnect.
+13. **Add backpressure on token endpoint**: in-memory per-IP/per-user rate limit (e.g., 5 req/min) inside the edge function.
+14. **Plan for SFU scale-out**: if single-room >100 active video tracks is real, move to LiveKit Cloud's distributed mesh tier or shard rooms by batch.
+
+### P3 — Observability
+
+15. Add structured logging (request id, user id, duration_ms) to `heartbeat`, `livekit-token`, `record-login-attempt`, `admin-query` so we can rerun this analysis from real load data instead of inference.
+16. Surface `pg_stat_statements` + `pg_stat_activity` snapshots on the SuperAdmin System Monitoring page.
+
+## 4. What I will NOT change in this pass
+
+- Auth provider, RLS model, multi-tenancy contract, public action contract of `admin-query`, UI/UX of any page. All fixes are infra / query / edge-function only.
+
+## 5. Recommended sequence
+
+1. Migration: indexes + drop duplicate session insert.
+2. Edge functions: shared client, heartbeat throttle, token cache, structured logs.
+3. Frontend: heartbeat interval/jitter, sessionStorage token cache, dashboard query consolidation.
+4. Video: dynacast + activeSpeaker subscription, room maxParticipants.
+5. Load test (k6 or Artillery script hitting login → dashboard → join class) → tune.
+
+---
+
+**Approve to implement P0+P1 (highest ROI, no UX risk) first**, or pick a different slice (e.g. video-only, login-only) and I'll narrow the build.
