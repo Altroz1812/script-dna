@@ -13,6 +13,14 @@ import { downloadCertificate } from '@/services/certificateService';
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
+type CourseStatus = { label: 'Completed' | 'Needs Improvement' | 'Not Completed'; className: string };
+function deriveCourseStatus(p: any): CourseStatus {
+  const s = String(p?.status || '').toLowerCase();
+  if (s === 'completed') return { label: 'Completed', className: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30' };
+  if (s === 'needs_improvement' || s === 'needs improvement') return { label: 'Needs Improvement', className: 'bg-amber-500/15 text-amber-600 border-amber-500/30' };
+  return { label: 'Not Completed', className: 'bg-muted text-muted-foreground border-border' };
+}
+
 export default function StudentProgressPage() {
   const __isMobile = useIsMobileApp();
   if (__isMobile) return <MobileStudentProgressPage />;
@@ -145,13 +153,15 @@ export default function StudentProgressPage() {
               </Card>
             ) : (
               <div className="grid gap-3 md:grid-cols-2">
-                {progress.map((p: any) => (
+                {progress.map((p: any) => {
+                  const st = deriveCourseStatus(p);
+                  return (
                   <Card key={p.id}>
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-base">{(p as any).courses?.name || 'Course'}</CardTitle>
-                        <Badge variant={p.status === 'completed' ? 'default' : 'secondary'} className="text-xs">
-                          {p.status}
+                        <Badge variant="outline" className={`text-xs ${st.className}`}>
+                          {st.label}
                         </Badge>
                       </div>
                       <CardDescription className="text-xs">
@@ -168,7 +178,8 @@ export default function StudentProgressPage() {
                       </div>
                     </CardContent>
                   </Card>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
