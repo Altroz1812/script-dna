@@ -1,7 +1,10 @@
-import type { getServiceClient } from './supabase.ts'
+import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from './cors.ts'
 
-export type ServiceClient = ReturnType<typeof getServiceClient>
+// Loose-typed service-role client. We don't generate `Database` types
+// inside the edge function, so `.from()` returns `any` rows — matching
+// the pre-refactor behavior.
+export type ServiceClient = SupabaseClient<any, 'public', any>
 
 export interface HandlerCtx {
   req: Request
