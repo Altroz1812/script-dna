@@ -1,5 +1,3 @@
-// Auto-generated handler module. Do not hand-edit case bodies; edit the
-// originating logic and re-run the splitter if you need to regenerate.
 import type { HandlerCtx, HandlerOutcome } from '../_shared/types.ts'
 
 export async function handle(action: string, ctx: HandlerCtx, params: any): Promise<HandlerOutcome | Response> {
