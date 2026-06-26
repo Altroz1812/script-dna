@@ -180,6 +180,16 @@ const App = () => (
                       <Route path="/organizations" element={<OrganizationsPage />} />
                       <Route path="/roles" element={<RolesPage />} />
 
+                      {/* Classroom settings: admin & superadmin */}
+                      <Route
+                        path="/classroom-settings"
+                        element={
+                          <ProtectedRoute allowedRoles={["superadmin", "admin"]}>
+                            <ClassroomSettingsPage />
+                          </ProtectedRoute>
+                        }
+                      />
+
                       {/* Settings: superadmin only */}
                       <Route
                         path="/settings"
