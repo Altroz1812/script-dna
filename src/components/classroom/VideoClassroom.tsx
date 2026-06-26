@@ -190,6 +190,7 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
     if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
     retryAttemptRef.current = 0;
     setReconnecting(false);
+    setLivekitConnected(true);
   }, []);
 
   const handleReconnecting = useCallback(() => setReconnecting(true), []);
