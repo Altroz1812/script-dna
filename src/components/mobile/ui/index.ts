@@ -8,7 +8,7 @@ export { MobilePage } from './MobilePage';
 export { FAB } from './FAB';
 export { EmptyState } from './EmptyState';
 export { ErrorState } from './ErrorState';
-export { Shimmer } from './Shimmer';
+export { ShimmerStat, ShimmerCard, ShimmerRow, ShimmerRing } from './Shimmer';
 export { PullToRefresh } from './PullToRefresh';
 export { TouchPress } from './TouchPress';
 export { OfflineBanner } from './OfflineBanner';
