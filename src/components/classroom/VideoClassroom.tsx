@@ -168,6 +168,31 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
     setJoinKey((k) => k + 1);
 
     try {
+      // Token cache (sessionStorage) — reuse until exp - 60s. Avoids
+      // hammering livekit-token on reconnect storms when 100s of clients
+      // are in the same room.
+      const cacheKey = `lk-tok:${roomName}:${displayName}`;
+      try {
+        const raw = sessionStorage.getItem(cacheKey);
+        if (raw) {
+          const cached = JSON.parse(raw) as { token: string; url: string; exp: number };
+          if (cached?.token && cached?.url && cached.exp - 60 > Math.floor(Date.now() / 1000)) {
+            setToken(cached.token);
+            setServerUrl(cached.url);
+            setConnectionState('ready');
+            if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
+            connectionTimeoutRef.current = setTimeout(() => {
+              setErrorType('unreachable');
+              setError('Connection timed out. The video server did not respond in time.');
+              setConnectionState('failed');
+              setToken(null);
+              setServerUrl(null);
+            }, 30_000);
+            return;
+          }
+        }
+      } catch { /* ignore cache errors */ }
+
       const { data, error: fnError } = await supabase.functions.invoke('livekit-token', {
         body: { roomName, participantName: displayName },
       });
@@ -183,6 +208,18 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
       setToken(data.token);
       setServerUrl(data.url);
       setConnectionState('ready');
+
+      // Cache the token until ~5 min before expiry (LiveKit tokens default 1h).
+      try {
+        const payloadB64 = String(data.token).split('.')[1] ?? '';
+        const padded = payloadB64 + '='.repeat((4 - payloadB64.length % 4) % 4);
+        const payload = JSON.parse(atob(padded.replace(/-/g, '+').replace(/_/g, '/')));
+        if (payload?.exp) {
+          sessionStorage.setItem(cacheKey, JSON.stringify({
+            token: data.token, url: data.url, exp: payload.exp,
+          }));
+        }
+      } catch { /* ignore */ }
 
       // Safety timeout — if LiveKitRoom doesn't connect within 30s, show error
       if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);

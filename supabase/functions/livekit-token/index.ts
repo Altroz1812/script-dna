@@ -7,6 +7,22 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+// Reused service-role client (auth + role lookup) across warm invocations.
+const adminClient = createClient(
+  Deno.env.get("SUPABASE_URL")!,
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  { auth: { persistSession: false, autoRefreshToken: false } },
+);
+
+// Small in-memory rate limiter (per-user) to absorb reconnect storms.
+const rateBucket = new Map<string, number[]>();
+function rateLimited(userId: string, max = 10, windowMs = 60_000): boolean {
+  const now = Date.now();
+  const arr = (rateBucket.get(userId) ?? []).filter((t) => now - t < windowMs);
+  if (arr.length >= max) { rateBucket.set(userId, arr); return true; }
+  arr.push(now); rateBucket.set(userId, arr); return false;
+}
+
 // Minimal LiveKit JWT generation without external SDK
 // LiveKit tokens are standard JWTs with specific claims
 
@@ -87,19 +103,18 @@ serve(async (req) => {
       });
     }
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+    const token = authHeader.replace(/^Bearer\s+/i, "");
+    const { data: { user }, error: authError } = await adminClient.auth.getUser(token);
     if (authError || !user) {
       return new Response(JSON.stringify({ error: "Invalid token" }), {
         status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (rateLimited(user.id)) {
+      return new Response(JSON.stringify({ error: "Too many token requests" }), {
+        status: 429,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -149,7 +164,7 @@ serve(async (req) => {
 
     // Derive role server-side (do NOT trust client).
     // A user may have multiple rows in user_roles; pick the highest-priority role.
-    const { data: roleRows } = await supabase
+    const { data: roleRows } = await adminClient
       .from("user_roles")
       .select("role")
       .eq("user_id", user.id);

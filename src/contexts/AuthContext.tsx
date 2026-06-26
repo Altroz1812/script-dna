@@ -67,15 +67,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // Heartbeat: ping every 60s while logged in so Active Users stays fresh.
+    // Heartbeat: ping every 5 min (with ±30s jitter) while the tab is visible.
+    // Skips while hidden and pings once on visibilitychange → 'visible'.
     let heartbeatTimer: number | null = null;
+    const HEARTBEAT_MS = 5 * 60_000;
+    const jitter = () => Math.floor((Math.random() - 0.5) * 60_000); // ±30s
+    const ping = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      supabase.functions.invoke("heartbeat", { body: {} }).catch(() => {});
+    };
     const startHeartbeat = () => {
       if (heartbeatTimer != null) return;
-      const ping = () => {
-        supabase.functions.invoke("heartbeat", { body: {} }).catch(() => {});
-      };
-      ping();
-      heartbeatTimer = window.setInterval(ping, 60_000);
+      // Initial ping after small random delay so 400 clients don't fire at T0.
+      window.setTimeout(ping, Math.floor(Math.random() * 5_000));
+      heartbeatTimer = window.setInterval(ping, HEARTBEAT_MS + jitter());
     };
     const stopHeartbeat = () => {
       if (heartbeatTimer != null) {
@@ -83,6 +88,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         heartbeatTimer = null;
       }
     };
+    const onVisibility = () => {
+      if (!document.hidden && heartbeatTimer != null) ping();
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisibility);
+    }
 
     // Set up listener FIRST. Only react to actual sign-in / sign-out events;
     // ignore TOKEN_REFRESHED / INITIAL_SESSION / USER_UPDATED so tab-focus
@@ -127,6 +138,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       subscription.unsubscribe();
       stopHeartbeat();
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisibility);
+      }
     };
   }, [loadProfile]);
 
