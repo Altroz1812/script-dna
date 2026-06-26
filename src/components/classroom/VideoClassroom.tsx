@@ -28,6 +28,84 @@ import { ClassroomChat } from './ClassroomChat';
 import { RoleAwareControls } from './RoleAwareControls';
 import { MicOff, ScreenShare, User as UserIcon } from 'lucide-react';
 
+// Threshold above which we switch to active-speaker-only video subscription
+// (audio always stays on, screen shares always on). Below this, all cameras
+// stay subscribed for normal classroom UX.
+const ACTIVE_SPEAKER_GATE = 12;
+// Cap of camera tracks we'll keep subscribed in large-room mode (teacher +
+// recent active speakers).
+const MAX_ACTIVE_VIDEO_SUBS = 6;
+
+/**
+ * In large rooms, keep audio + screen share for everyone, but auto-unsubscribe
+ * remote camera tracks for non-speakers. Dramatically cuts bandwidth & CPU.
+ */
+function ActiveSpeakerSubscriber() {
+  const room = useRoomContext();
+  useEffect(() => {
+    if (!room) return;
+    const recentSpeakers = new Set<string>(); // identities allowed to send video
+    const teacherIdentities = new Set<string>();
+
+    const isTeacherIdentity = (identity: string) => {
+      const p = room.remoteParticipants.get(identity);
+      if (!p) return false;
+      try {
+        const meta = p.metadata ? JSON.parse(p.metadata) : null;
+        const role = (meta?.role || '').toString();
+        return ['superadmin', 'admin', 'support', 'teacher'].includes(role);
+      } catch { return false; }
+    };
+
+    const apply = () => {
+      const total = room.remoteParticipants.size + 1;
+      const largeRoom = total > ACTIVE_SPEAKER_GATE;
+      room.remoteParticipants.forEach((p) => {
+        const isTeacher = teacherIdentities.has(p.identity) || isTeacherIdentity(p.identity);
+        if (isTeacher) teacherIdentities.add(p.identity);
+        const allowVideo = !largeRoom || isTeacher || recentSpeakers.has(p.identity);
+        p.trackPublications.forEach((pub) => {
+          if (pub.source === Track.Source.Camera) {
+            if (pub.isSubscribed !== allowVideo) {
+              try { pub.setSubscribed(allowVideo); } catch { /* ignore */ }
+            }
+          }
+          // Audio and screen-share: always subscribed
+          if (pub.source === Track.Source.Microphone || pub.source === Track.Source.ScreenShare) {
+            if (!pub.isSubscribed) {
+              try { pub.setSubscribed(true); } catch { /* ignore */ }
+            }
+          }
+        });
+      });
+    };
+
+    const onSpeakers = (speakers: Participant[]) => {
+      // Rolling window: keep last N speakers (plus teacher) subscribed.
+      speakers.forEach((s) => recentSpeakers.add(s.identity));
+      if (recentSpeakers.size > MAX_ACTIVE_VIDEO_SUBS) {
+        const arr = Array.from(recentSpeakers);
+        recentSpeakers.clear();
+        arr.slice(-MAX_ACTIVE_VIDEO_SUBS).forEach((id) => recentSpeakers.add(id));
+      }
+      apply();
+    };
+
+    room.on(RoomEvent.ActiveSpeakersChanged, onSpeakers);
+    room.on(RoomEvent.ParticipantConnected, apply);
+    room.on(RoomEvent.ParticipantDisconnected, apply);
+    room.on(RoomEvent.TrackPublished, apply);
+    apply();
+    return () => {
+      room.off(RoomEvent.ActiveSpeakersChanged, onSpeakers);
+      room.off(RoomEvent.ParticipantConnected, apply);
+      room.off(RoomEvent.ParticipantDisconnected, apply);
+      room.off(RoomEvent.TrackPublished, apply);
+    };
+  }, [room]);
+  return null;
+}
+
 interface VideoClassroomProps {
   roomName: string;
   displayName: string;
@@ -457,6 +535,7 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
               onDisconnected={handleLiveKitDisconnected}
             >
               <ReconnectWatcher onReconnecting={handleReconnecting} onReconnected={handleReconnected} />
+              <ActiveSpeakerSubscriber />
               <ClassroomStage isTeacher={!!isTeacher} onLeave={handleLeave} />
               <RoomAudioRenderer />
               <StudentDataListener />

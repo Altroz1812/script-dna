@@ -7,6 +7,65 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+// Hard cap on room participants. Override per-call by sending `maxParticipants`
+// in the request body (clamped to this ceiling).
+const ROOM_MAX_PARTICIPANTS_HARD_CAP = 500;
+const ROOM_MAX_PARTICIPANTS_DEFAULT = 400;
+const ROOM_EMPTY_TIMEOUT_SECS = 5 * 60;   // close empty room after 5 min
+const ROOM_DEPARTURE_TIMEOUT_SECS = 60;    // close after last leaver
+
+// Cache of rooms we've already CreateRoom'd this warm boot so we don't
+// hammer the LiveKit Twirp API on every token mint.
+const roomsEnsured = new Set<string>();
+
+// Short-lived service JWT for LiveKit RoomService (roomCreate=true).
+async function mintRoomServiceJwt(apiKey: string, apiSecret: string): Promise<string> {
+  const header = { alg: "HS256", typ: "JWT" };
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    iss: apiKey, sub: apiKey, iat: now, nbf: now, exp: now + 60,
+    jti: crypto.randomUUID(),
+    video: { roomCreate: true, roomAdmin: true },
+  };
+  const enc = new TextEncoder();
+  const b64url = (buf: ArrayBuffer | Uint8Array) =>
+    btoa(String.fromCharCode(...new Uint8Array(buf)))
+      .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const h = b64url(enc.encode(JSON.stringify(header)));
+  const p = b64url(enc.encode(JSON.stringify(payload)));
+  const data = `${h}.${p}`;
+  const key = await crypto.subtle.importKey(
+    "raw", enc.encode(apiSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(data));
+  return `${data}.${b64url(sig)}`;
+}
+
+// CreateRoom is idempotent: upserts the room with our limits. Best-effort.
+async function ensureRoom(
+  httpUrl: string, apiKey: string, apiSecret: string,
+  roomName: string, maxParticipants: number,
+): Promise<void> {
+  if (roomsEnsured.has(roomName)) return;
+  try {
+    const jwt = await mintRoomServiceJwt(apiKey, apiSecret);
+    const res = await fetch(`${httpUrl}/twirp/livekit.RoomService/CreateRoom`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${jwt}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: roomName,
+        empty_timeout: ROOM_EMPTY_TIMEOUT_SECS,
+        departure_timeout: ROOM_DEPARTURE_TIMEOUT_SECS,
+        max_participants: maxParticipants,
+      }),
+    });
+    if (res.ok) roomsEnsured.add(roomName);
+    // 409/etc are fine: room exists or is being created concurrently.
+  } catch (_e) {
+    /* non-fatal: token still works; LiveKit auto-creates on join */
+  }
+}
+
 // Reused service-role client (auth + role lookup) across warm invocations.
 const adminClient = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -119,7 +178,7 @@ serve(async (req) => {
       });
     }
 
-    const { roomName, participantName } = await req.json();
+    const { roomName, participantName, maxParticipants } = await req.json();
 
     if (!roomName || !participantName) {
       return new Response(
@@ -162,6 +221,9 @@ serve(async (req) => {
       );
     }
 
+    // HTTPS sibling of the wss URL for the Twirp RoomService API.
+    const httpUrl = "https://" + livekitUrl.slice("wss://".length);
+
     // Derive role server-side (do NOT trust client).
     // A user may have multiple rows in user_roles; pick the highest-priority role.
     const { data: roleRows } = await adminClient
@@ -190,8 +252,17 @@ serve(async (req) => {
       participantName
     );
 
+    // Upsert the room with the participant cap (best-effort, fire-and-forget
+    // is fine since LiveKit also auto-creates on join — but doing it here
+    // ensures max_participants is enforced before the client connects).
+    const cap = Math.min(
+      Math.max(1, Number(maxParticipants) || ROOM_MAX_PARTICIPANTS_DEFAULT),
+      ROOM_MAX_PARTICIPANTS_HARD_CAP,
+    );
+    await ensureRoom(httpUrl, apiKey, apiSecret, roomName, cap);
+
     return new Response(
-      JSON.stringify({ token, url: livekitUrl, role: appRole, bucket: roleBucket }),
+      JSON.stringify({ token, url: livekitUrl, role: appRole, bucket: roleBucket, maxParticipants: cap }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
