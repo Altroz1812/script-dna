@@ -51,16 +51,20 @@ export default function StudentProgressPage() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('certificates')
-        .select('id, student_name, course_name, issued_at, status')
+        .select('id, student_name, course_name, course_duration, completion_date, issued_at, status')
         .eq('student_id', profile!.id)
         .order('issued_at', { ascending: false });
       if (error) throw error;
-      return (data ?? []) as Array<{ id: string; student_name: string; course_name: string; issued_at: string; status: string }>;
+      return (data ?? []) as Array<{
+        id: string; student_name: string; course_name: string;
+        course_duration: string | null; completion_date: string | null;
+        issued_at: string; status: string;
+      }>;
     },
     enabled: !!profile,
   });
 
-  const [previewCert, setPreviewCert] = useState<{ name: string; course: string } | null>(null);
+  const [previewCert, setPreviewCert] = useState<{ name: string; course: string; duration: string | null; date: string | null } | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const reviewedSubs = submissions.filter((s: any) => s.status === 'reviewed' && s.score != null);
@@ -240,10 +244,17 @@ export default function StudentProgressPage() {
                       </div>
                     </CardHeader>
                     <CardContent className="flex gap-2">
+                      {(c.course_duration || c.completion_date) && (
+                        <div className="w-full text-[11px] text-muted-foreground mb-1">
+                          {c.course_duration && <span>{c.course_duration}</span>}
+                          {c.course_duration && c.completion_date && <span> · </span>}
+                          {c.completion_date && <span>Completed {new Date(c.completion_date).toLocaleDateString('en-IN')}</span>}
+                        </div>
+                      )}
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => setPreviewCert({ name: c.student_name, course: c.course_name })}
+                        onClick={() => setPreviewCert({ name: c.student_name, course: c.course_name, duration: c.course_duration, date: c.completion_date })}
                       >
                         <Eye className="h-3.5 w-3.5 mr-1.5" /> View
                       </Button>
@@ -253,7 +264,10 @@ export default function StudentProgressPage() {
                         onClick={async () => {
                           setDownloadingId(c.id);
                           try {
-                            await downloadCertificate(c.student_name, c.course_name);
+                            await downloadCertificate(c.student_name, c.course_name, {
+                              duration: c.course_duration,
+                              completionDate: c.completion_date,
+                            });
                           } catch (e: any) {
                             console.error(e);
                           } finally {
@@ -284,6 +298,10 @@ export default function StudentProgressPage() {
                   </div>
                   <div className="absolute left-[5%] right-[5%] top-[74%] text-[#555] font-serif italic text-base md:text-2xl">
                     {previewCert.course}
+                  </div>
+                  <div className="absolute left-[5%] right-[5%] top-[86%] text-[#333] font-serif text-[11px] md:text-sm">
+                    {previewCert.duration && <>Duration: {previewCert.duration}    •    </>}
+                    Date of Completion: {previewCert.date ? new Date(previewCert.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' }) : new Date().toLocaleDateString('en-IN')}
                   </div>
                 </div>
               )}
