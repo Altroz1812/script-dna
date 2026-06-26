@@ -14,6 +14,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { downloadCertificate } from '@/services/certificateService';
 import { Eye, Download } from 'lucide-react';
+import { useIsMobileApp } from '@/hooks/useIsMobileApp';
+import MobileParentProgressPage from './mobile/MobileParentProgressPage';
 
 type CourseStatus = { label: 'Completed' | 'Needs Improvement' | 'Not Completed'; className: string };
 function deriveCourseStatus(p: any): CourseStatus {
@@ -24,6 +26,8 @@ function deriveCourseStatus(p: any): CourseStatus {
 }
 
 export default function ParentProgressPage() {
+  const __isMobile = useIsMobileApp();
+  if (__isMobile) return <MobileParentProgressPage />;
   const { profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [children, setChildren] = useState<{ id: string; name: string }[]>([]);
