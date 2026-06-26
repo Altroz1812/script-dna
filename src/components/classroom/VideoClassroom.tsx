@@ -85,49 +85,49 @@ function ConnectionStatus({
 }) {
   if (!online) {
     return (
-      <Badge variant="destructive" className="gap-1 text-[10px]">
+      <Badge variant="destructive" className="gap-1 text-xs">
         <WifiOff className="h-3 w-3" /> Offline
       </Badge>
     );
   }
   if (waitingForTeacher) {
     return (
-      <Badge variant="outline" className="gap-1 text-[10px] border-amber-500 text-amber-600">
+      <Badge variant="outline" className="gap-1 text-xs border-amber-500 text-amber-600 animate-pulse">
         <Loader2 className="h-3 w-3 animate-spin" /> Waiting for teacher…
       </Badge>
     );
   }
   if (connectionState === 'failed') {
     return (
-      <Badge variant="destructive" className="gap-1 text-[10px]">
+      <Badge variant="destructive" className="gap-1 text-xs">
         <Unplug className="h-3 w-3" /> Disconnected
       </Badge>
     );
   }
   if (reconnecting) {
     return (
-      <Badge variant="outline" className="gap-1 text-[10px] border-amber-500 text-amber-600">
+      <Badge variant="outline" className="gap-1 text-xs border-amber-500 text-amber-600 animate-pulse">
         <RotateCw className="h-3 w-3 animate-spin" /> Reconnecting…
       </Badge>
     );
   }
   if (connectionState === 'fetching') {
     return (
-      <Badge variant="outline" className="gap-1 text-[10px] border-amber-500 text-amber-600">
+      <Badge variant="outline" className="gap-1 text-xs border-amber-500 text-amber-600 animate-pulse">
         <Loader2 className="h-3 w-3 animate-spin" /> Joining…
       </Badge>
     );
   }
   if (connectionState === 'ready' && !livekitConnected) {
     return (
-      <Badge variant="outline" className="gap-1 text-[10px] border-amber-500 text-amber-600">
+      <Badge variant="outline" className="gap-1 text-xs border-amber-500 text-amber-600 animate-pulse">
         <Loader2 className="h-3 w-3 animate-spin" /> Syncing…
       </Badge>
     );
   }
   if (livekitConnected) {
     return (
-      <Badge variant="outline" className="gap-1 text-[10px] border-emerald-500 text-emerald-600 bg-emerald-500/10">
+      <Badge variant="outline" className="gap-1 text-xs border-emerald-500 text-emerald-600 bg-emerald-500/10">
         <Radio className="h-3 w-3" /> Connected
       </Badge>
     );
