@@ -94,6 +94,7 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
     setError(null);
     setToken(null);
     setServerUrl(null);
+    setLivekitConnected(false);
     // Fresh join — clear any stale "intentional close" flag and bump the join
     // key so LiveKitRoom remounts cleanly even if the new token string happens
     // to match (prevents stale Room state across rejoins).
