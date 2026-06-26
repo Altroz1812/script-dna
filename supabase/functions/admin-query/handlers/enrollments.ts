@@ -152,7 +152,7 @@ export async function handle(action: string, ctx: HandlerCtx, params: any): Prom
           .select('student_id, batch_id, batches(name, organization_id, courses(name))')
           .in('student_id', ids)
         const enrollMap: Record<string, any[]> = {}
-        for (const e of enrollments ?? []) {
+        for (const e of (enrollments ?? []) as any[]) {
           // Restrict enrollments to the scoped org (admin's org, or SuperAdmin's picked org)
           if (applyOrgScope && callerOrgId && e.batches?.organization_id !== callerOrgId) continue
           if (!enrollMap[e.student_id]) enrollMap[e.student_id] = []
