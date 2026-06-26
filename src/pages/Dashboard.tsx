@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
@@ -11,6 +11,7 @@ import { AnimatedCounter } from "@/components/ui/animated-counter";
 import { MorphingBlob } from "@/components/ui/morphing-blob";
 import { DashboardCardsSkeleton } from "@/components/ui/loading-skeletons";
 import { EnrollmentTrendsChart } from "@/components/dashboard/EnrollmentTrendsChart";
+import { MetricDrillDownDialog, type MetricKey } from "@/components/dashboard/MetricDrillDownDialog";
 import {
   Users,
   BookOpen,
@@ -263,27 +264,24 @@ export default function Dashboard() {
 
   const cards = useMemo(() => {
     if (!stats) return [];
-    const base = [
-      {
-        label: isSuperadmin ? "Total Users" : "Org Members",
-        value: stats.totalUsers,
-        icon: Users,
-        span: "2x1" as const,
-      },
-      { label: "Students", value: stats.roleCounts?.student ?? 0, icon: GraduationCap, span: "1x1" as const },
-      { label: "Teachers", value: stats.roleCounts?.teacher ?? 0, icon: UserCheck, span: "1x1" as const },
-      { label: "Courses", value: stats.totalCourses, icon: BookOpen, span: "1x1" as const },
-      { label: "Batches", value: stats.totalBatches, icon: Layers, span: "1x1" as const },
+    const base: Array<{ label: string; value: number; icon: any; span: "1x1" | "2x1"; metric: MetricKey; path: string }> = [
+      { label: isSuperadmin ? "Total Users" : "Org Members", value: stats.totalUsers, icon: Users, span: "2x1", metric: "users", path: "/users" },
+      { label: "Students", value: stats.roleCounts?.student ?? 0, icon: GraduationCap, span: "1x1", metric: "students", path: "/students" },
+      { label: "Teachers", value: stats.roleCounts?.teacher ?? 0, icon: UserCheck, span: "1x1", metric: "teachers", path: "/users" },
+      { label: "Courses", value: stats.totalCourses, icon: BookOpen, span: "1x1", metric: "courses", path: "/courses" },
+      { label: "Batches", value: stats.totalBatches, icon: Layers, span: "1x1", metric: "batches", path: "/batches" },
     ];
     if (isSuperadmin) {
       base.push(
-        { label: "Organizations", value: stats.totalOrgs, icon: Building2, span: "1x1" as const },
-        { label: "Leads", value: stats.totalLeads, icon: UserPlus, span: "1x1" as const },
-        { label: "Payments", value: stats.totalPayments, icon: CreditCard, span: "2x1" as const },
+        { label: "Organizations", value: stats.totalOrgs, icon: Building2, span: "1x1", metric: "organizations", path: "/select-organization" },
+        { label: "Leads", value: stats.totalLeads, icon: UserPlus, span: "1x1", metric: "leads", path: "/leads" },
+        { label: "Payments", value: stats.totalPayments, icon: CreditCard, span: "2x1", metric: "payments", path: "/payments" },
       );
     }
     return base;
   }, [stats, isSuperadmin]);
+
+  const [drillCard, setDrillCard] = useState<null | { metric: MetricKey; label: string; value: number; path: string }>(null);
 
   // Mobile shell — must come AFTER all hooks to preserve hook order
   // (early returns before hooks cause React error #300).
@@ -904,7 +902,11 @@ export default function Dashboard() {
               <motion.div key={c.label} variants={itemVariants}>
                 <TiltCard span={c.span} glowColor={GLOW_COLORS[i % GLOW_COLORS.length]} className="h-full">
                   <div
-                    className={`relative h-full p-5 bg-gradient-to-br ${GRADIENT_PAIRS[i % GRADIENT_PAIRS.length]} flex flex-col justify-between`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setDrillCard({ metric: c.metric, label: c.label, value: c.value, path: c.path })}
+                    onKeyDown={(e) => { if (e.key === 'Enter') setDrillCard({ metric: c.metric, label: c.label, value: c.value, path: c.path }); }}
+                    className={`relative h-full p-5 bg-gradient-to-br ${GRADIENT_PAIRS[i % GRADIENT_PAIRS.length]} flex flex-col justify-between cursor-pointer`}
                   >
                     <div
                       className="absolute inset-0 rounded-2xl opacity-30 pointer-events-none"
@@ -942,6 +944,16 @@ export default function Dashboard() {
             ))}
           </motion.div>
         )}
+
+        <MetricDrillDownDialog
+          open={!!drillCard}
+          onOpenChange={(o) => { if (!o) setDrillCard(null); }}
+          metric={drillCard?.metric ?? null}
+          label={drillCard?.label ?? ""}
+          total={drillCard?.value ?? 0}
+          targetOrgId={effectiveOrgId}
+          navigatePath={drillCard?.path}
+        />
 
         {!isLoading && <EnrollmentTrendsChart />}
 

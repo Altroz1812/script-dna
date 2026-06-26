@@ -146,6 +146,84 @@ export async function handle(action: string, ctx: HandlerCtx, params: any): Prom
         }
         break
       }
+      case 'metric_breakdown': {
+        // Cheap per-window counts for drill-down. Uses head:true count requests
+        // (no row payload) plus a single created_at filter — touches indexes only.
+        const metric: string = String(params?.metric || '')
+        const orgFilter = (q: any) => (ctx.targetOrgId ? q.eq('organization_id', ctx.targetOrgId) : q)
+
+        const now = new Date()
+        const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0)
+        const start7 = new Date(now.getTime() - 7 * 86400_000)
+        const start30 = new Date(now.getTime() - 30 * 86400_000)
+        const start90 = new Date(now.getTime() - 90 * 86400_000)
+
+        // Resolve the source table + optional role filter for the requested metric.
+        const sources: Record<string, { table: string; scopeOrg: boolean; extra?: (q: any) => any }> = {
+          users:         { table: 'profiles',             scopeOrg: true },
+          students:      { table: 'profiles',             scopeOrg: true,  extra: (q) => q.eq('role', 'student') },
+          teachers:      { table: 'profiles',             scopeOrg: true,  extra: (q) => q.eq('role', 'teacher') },
+          courses:       { table: 'courses',              scopeOrg: true },
+          batches:       { table: 'batches',              scopeOrg: true },
+          organizations: { table: 'organizations',        scopeOrg: false },
+          leads:         { table: 'leads',                scopeOrg: true },
+          payments:      { table: 'payments',             scopeOrg: true },
+        }
+        const src = sources[metric]
+        if (!src) { result = { error: 'unknown_metric', metric, windows: [] }; break }
+
+        const build = (since?: Date) => {
+          let q: any = ctx.supabase.from(src.table).select('id', { count: 'exact', head: true })
+          if (src.scopeOrg) q = orgFilter(q)
+          if (src.extra) q = src.extra(q)
+          if (since) q = q.gte('created_at', since.toISOString())
+          return q
+        }
+
+        const [allRes, todayRes, w7Res, w30Res, w90Res] = await Promise.all([
+          build(),
+          build(startOfToday),
+          build(start7),
+          build(start30),
+          build(start90),
+        ])
+
+        const windows = [
+          { key: 'today',  label: 'Today',     count: todayRes.count ?? 0 },
+          { key: '7d',     label: 'Last 7 days',  count: w7Res.count ?? 0 },
+          { key: '30d',    label: 'Last 30 days', count: w30Res.count ?? 0 },
+          { key: '90d',    label: 'Last 90 days', count: w90Res.count ?? 0 },
+          { key: 'all',    label: 'All time',     count: allRes.count ?? 0 },
+        ]
+
+        // Optional: payments → also surface revenue per window (sum amount where paid/completed).
+        let extras: any = null
+        if (metric === 'payments') {
+          const sumIn = async (since?: Date) => {
+            let q: any = ctx.supabase.from('payments').select('amount, status, created_at')
+            q = orgFilter(q)
+            if (since) q = q.gte('created_at', since.toISOString())
+            const { data } = await q
+            const rows = (data ?? []).filter((p: any) => p.status === 'paid' || p.status === 'completed')
+            return rows.reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0)
+          }
+          const [rAll, rT, r7, r30, r90] = await Promise.all([
+            sumIn(), sumIn(startOfToday), sumIn(start7), sumIn(start30), sumIn(start90),
+          ])
+          extras = { revenue: { today: rT, w7: r7, w30: r30, w90: r90, all: rAll } }
+        }
+
+        // Role split for users/students/teachers helps the drill-down show composition.
+        if (metric === 'users') {
+          const { data: roles } = await ctx.supabase.from('user_roles').select('role, user_id')
+          const roleCounts: Record<string, number> = {}
+          for (const r of roles ?? []) roleCounts[r.role] = (roleCounts[r.role] || 0) + 1
+          extras = { ...(extras || {}), roleCounts }
+        }
+
+        result = { metric, windows, extras }
+        break
+      }
       case 'revenue_analytics': {
         const orgFilter = (q: any) => (ctx.targetOrgId ? q.eq('organization_id', ctx.targetOrgId) : q)
         const since = new Date()
