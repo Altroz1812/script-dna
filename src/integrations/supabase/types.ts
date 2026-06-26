@@ -1025,6 +1025,56 @@ export type Database = {
         }
         Relationships: []
       }
+      org_dashboard_stats: {
+        Row: {
+          active_live_classes: number
+          organization_id: string
+          role_counts: Json
+          total_batches: number
+          total_courses: number
+          total_leads: number
+          total_members: number
+          total_payments: number
+          total_students: number
+          total_teachers: number
+          updated_at: string
+        }
+        Insert: {
+          active_live_classes?: number
+          organization_id: string
+          role_counts?: Json
+          total_batches?: number
+          total_courses?: number
+          total_leads?: number
+          total_members?: number
+          total_payments?: number
+          total_students?: number
+          total_teachers?: number
+          updated_at?: string
+        }
+        Update: {
+          active_live_classes?: number
+          organization_id?: string
+          role_counts?: Json
+          total_batches?: number
+          total_courses?: number
+          total_leads?: number
+          total_members?: number
+          total_payments?: number
+          total_students?: number
+          total_teachers?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_dashboard_stats_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_subscriptions: {
         Row: {
           created_at: string
@@ -1153,6 +1203,33 @@ export type Database = {
           created_at?: string
           id?: string
           parent_id?: string
+        }
+        Relationships: []
+      }
+      parent_dashboard_stats: {
+        Row: {
+          avg_completion_pct: number
+          children_count: number
+          parent_id: string
+          recent_payment_count: number
+          upcoming_class_count: number
+          updated_at: string
+        }
+        Insert: {
+          avg_completion_pct?: number
+          children_count?: number
+          parent_id: string
+          recent_payment_count?: number
+          upcoming_class_count?: number
+          updated_at?: string
+        }
+        Update: {
+          avg_completion_pct?: number
+          children_count?: number
+          parent_id?: string
+          recent_payment_count?: number
+          upcoming_class_count?: number
+          updated_at?: string
         }
         Relationships: []
       }
@@ -1465,6 +1542,39 @@ export type Database = {
           },
         ]
       }
+      student_dashboard_stats: {
+        Row: {
+          avg_completion_pct: number
+          certificate_count: number
+          enrolled_batches: number
+          enrolled_courses: number
+          recent_submission_count: number
+          student_id: string
+          upcoming_class_count: number
+          updated_at: string
+        }
+        Insert: {
+          avg_completion_pct?: number
+          certificate_count?: number
+          enrolled_batches?: number
+          enrolled_courses?: number
+          recent_submission_count?: number
+          student_id: string
+          upcoming_class_count?: number
+          updated_at?: string
+        }
+        Update: {
+          avg_completion_pct?: number
+          certificate_count?: number
+          enrolled_batches?: number
+          enrolled_courses?: number
+          recent_submission_count?: number
+          student_id?: string
+          upcoming_class_count?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       student_progress: {
         Row: {
           batch_id: string | null
@@ -1617,6 +1727,33 @@ export type Database = {
         }
         Relationships: []
       }
+      teacher_dashboard_stats: {
+        Row: {
+          batch_count: number
+          pending_submissions: number
+          student_count: number
+          teacher_id: string
+          upcoming_class_count: number
+          updated_at: string
+        }
+        Insert: {
+          batch_count?: number
+          pending_submissions?: number
+          student_count?: number
+          teacher_id: string
+          upcoming_class_count?: number
+          updated_at?: string
+        }
+        Update: {
+          batch_count?: number
+          pending_submissions?: number
+          student_count?: number
+          teacher_id?: string
+          upcoming_class_count?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       uploaded_fonts: {
         Row: {
           created_at: string
@@ -1709,6 +1846,16 @@ export type Database = {
         Returns: boolean
       }
       recompute_dashboard_stats: { Args: never; Returns: undefined }
+      recompute_org_stats: { Args: { _org: string }; Returns: undefined }
+      recompute_parent_stats: { Args: { _parent: string }; Returns: undefined }
+      recompute_student_stats: {
+        Args: { _student: string }
+        Returns: undefined
+      }
+      recompute_teacher_stats: {
+        Args: { _teacher: string }
+        Returns: undefined
+      }
       student_in_batch: {
         Args: { _batch_id: string; _student_id: string }
         Returns: boolean
