@@ -37,7 +37,7 @@ const DEFAULTS = {
 };
 
 export default function ClassroomSettingsPage() {
-  const { isAdmin, isSuperAdmin, loading: rbacLoading } = useRBAC();
+  const { isAdmin, isSuperAdmin } = useRBAC();
   const orgId = readActiveOrgFromStorage();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -74,9 +74,9 @@ export default function ClassroomSettingsPage() {
   };
 
   useEffect(() => {
-    if (!rbacLoading) load();
+    load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rbacLoading, orgId]);
+  }, [orgId]);
 
   const orgRow = useMemo(() => rows.find((r) => r.batch_id === null), [rows]);
   const batchRows = useMemo(() => rows.filter((r) => r.batch_id), [rows]);
@@ -132,9 +132,6 @@ export default function ClassroomSettingsPage() {
     }
   };
 
-  if (rbacLoading) {
-    return <div className="p-8 flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>;
-  }
   if (!canManage) {
     return <div className="p-8 text-muted-foreground">You don't have permission to manage classroom settings.</div>;
   }
