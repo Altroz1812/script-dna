@@ -11,7 +11,6 @@ import { useIsMobileApp } from '@/hooks/useIsMobileApp';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import {
@@ -21,6 +20,7 @@ import {
 import { toast } from 'sonner';
 import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
 import { Checkbox } from '@/components/ui/checkbox';
+import { ResponsiveDialog } from '@/components/mobile/ui';
 
 type Detail = {
   batch: any;
@@ -614,22 +614,13 @@ export default function BatchDetailPage() {
       })()}
 
       {/* Assign Teacher Dialog */}
-      <Dialog open={teacherDialogOpen} onOpenChange={setTeacherDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{teacher ? 'Change Teacher' : 'Assign Teacher'}</DialogTitle>
-          </DialogHeader>
-          <Select value={selectedTeacher} onValueChange={setSelectedTeacher}>
-            <SelectTrigger><SelectValue placeholder="Select teacher" /></SelectTrigger>
-            <SelectContent>
-              {teacherOptions.map((t) => (
-                <SelectItem key={t.user_id} value={t.user_id}>
-                  {t.display_name || t.email || t.user_id}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <DialogFooter className="gap-2">
+      <ResponsiveDialog
+        open={teacherDialogOpen}
+        onOpenChange={setTeacherDialogOpen}
+        title={teacher ? 'Change Teacher' : 'Assign Teacher'}
+        desktopWidthClass="sm:max-w-md"
+        footer={
+          <>
             {teacher && (
               <Button variant="ghost" onClick={() => { setSelectedTeacher(''); assignTeacherMut.mutate(); }}>
                 Unassign
@@ -639,16 +630,36 @@ export default function BatchDetailPage() {
             <Button disabled={!selectedTeacher || assignTeacherMut.isPending} onClick={() => assignTeacherMut.mutate()}>
               {assignTeacherMut.isPending ? 'Saving…' : 'Save'}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </>
+        }
+      >
+        <Select value={selectedTeacher} onValueChange={setSelectedTeacher}>
+            <SelectTrigger><SelectValue placeholder="Select teacher" /></SelectTrigger>
+            <SelectContent>
+              {teacherOptions.map((t) => (
+                <SelectItem key={t.user_id} value={t.user_id}>
+                  {t.display_name || t.email || t.user_id}
+                </SelectItem>
+              ))}
+            </SelectContent>
+        </Select>
+      </ResponsiveDialog>
 
       {/* Add Student Dialog */}
-      <Dialog open={studentDialogOpen} onOpenChange={setStudentDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add Student</DialogTitle>
-          </DialogHeader>
+      <ResponsiveDialog
+        open={studentDialogOpen}
+        onOpenChange={setStudentDialogOpen}
+        title="Add Student"
+        desktopWidthClass="sm:max-w-md"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setStudentDialogOpen(false)}>Close</Button>
+            <Button disabled={!selectedStudent || addStudentMut.isPending} onClick={() => addStudentMut.mutate()}>
+              {addStudentMut.isPending ? 'Adding…' : 'Add Student'}
+            </Button>
+          </>
+        }
+      >
           <Input placeholder="Search by name or email" value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} />
           <div className="max-h-72 overflow-y-auto space-y-1">
             {studentOptions
@@ -672,14 +683,7 @@ export default function BatchDetailPage() {
               <p className="text-xs text-muted-foreground text-center py-4">Loading students…</p>
             )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setStudentDialogOpen(false)}>Close</Button>
-            <Button disabled={!selectedStudent || addStudentMut.isPending} onClick={() => addStudentMut.mutate()}>
-              {addStudentMut.isPending ? 'Adding…' : 'Add Student'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </ResponsiveDialog>
     </div>
   );
 }
