@@ -14,6 +14,7 @@ const TTL_OVERRIDES: Record<string, number> = {
   get_teacher_dashboard: 30_000,
   get_student_dashboard: 30_000,
   get_parent_dashboard: 30_000,
+  metric_breakdown: 30_000,
 }
 
 export const READ_CACHEABLE_ACTIONS = new Set<string>([
@@ -44,6 +45,7 @@ export const READ_CACHEABLE_ACTIONS = new Set<string>([
   'org_performance',
   'student_trends',
   'system_health',
+  'metric_breakdown',
 ])
 
 // Map of action → list of read actions whose cache should be flushed
