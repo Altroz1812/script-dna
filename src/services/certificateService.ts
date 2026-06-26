@@ -3,7 +3,22 @@
  * @param studentName - The name of the student.
  * @param companyName - The name of the company/institute.
  */
-export async function downloadCertificate(studentName: string, companyName: string): Promise<void> {
+export interface CertificateOptions {
+  duration?: string | null;
+  completionDate?: string | Date | null;
+}
+
+function formatDate(d: string | Date | null | undefined): string {
+  if (!d) return new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+  const date = typeof d === 'string' ? new Date(d) : d;
+  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+}
+
+export async function downloadCertificate(
+  studentName: string,
+  companyName: string,
+  options: CertificateOptions = {},
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     
@@ -35,6 +50,14 @@ export async function downloadCertificate(studentName: string, companyName: stri
       ctx.font = `italic ${Math.round(img.width * 0.028)}px "Times New Roman", serif`;
       ctx.fillStyle = '#555555';
       ctx.fillText(companyName, img.width * 0.05, img.height * 0.78);
+
+      // Render duration + completion date footer line
+      const parts: string[] = [];
+      if (options.duration) parts.push(`Duration: ${options.duration}`);
+      parts.push(`Date of Completion: ${formatDate(options.completionDate ?? null)}`);
+      ctx.font = `${Math.round(img.width * 0.016)}px "Times New Roman", serif`;
+      ctx.fillStyle = '#333333';
+      ctx.fillText(parts.join('    •    '), img.width * 0.05, img.height * 0.88);
 
       // Export file format pipeline
       canvas.toBlob((blob) => {
