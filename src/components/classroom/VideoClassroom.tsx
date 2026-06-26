@@ -225,6 +225,11 @@ function ConnectionStatus({
 export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, classId, onClose, onMinimize, onClassStarted }: VideoClassroomProps) {
   const [token, setToken] = useState<string | null>(null);
   const [serverUrl, setServerUrl] = useState<string | null>(null);
+  const [roomSettings, setRoomSettings] = useState<ActiveSpeakerSettings>({
+    activeSpeakerGate: ACTIVE_SPEAKER_GATE_DEFAULT,
+    rollingWindowSize: MAX_ACTIVE_VIDEO_SUBS_DEFAULT,
+    nonSpeakerVideoEnabled: false,
+  });
   const [error, setError] = useState<string | null>(null);
   const [errorType, setErrorType] = useState<'unreachable' | 'config' | 'generic'>('generic');
   const [connectionState, setConnectionState] = useState<ConnectionState>('idle');
@@ -294,6 +299,13 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
 
       setToken(data.token);
       setServerUrl(data.url);
+      if (data.settings) {
+        setRoomSettings({
+          activeSpeakerGate: Number(data.settings.activeSpeakerGate) || ACTIVE_SPEAKER_GATE_DEFAULT,
+          rollingWindowSize: Number(data.settings.rollingWindowSize) || MAX_ACTIVE_VIDEO_SUBS_DEFAULT,
+          nonSpeakerVideoEnabled: !!data.settings.nonSpeakerVideoEnabled,
+        });
+      }
       setConnectionState('ready');
 
       // Cache the token until ~5 min before expiry (LiveKit tokens default 1h).
@@ -544,7 +556,7 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
               onDisconnected={handleLiveKitDisconnected}
             >
               <ReconnectWatcher onReconnecting={handleReconnecting} onReconnected={handleReconnected} />
-              <ActiveSpeakerSubscriber />
+              <ActiveSpeakerSubscriber settings={roomSettings} />
               <ClassroomStage isTeacher={!!isTeacher} onLeave={handleLeave} />
               <RoomAudioRenderer />
               <StudentDataListener />
