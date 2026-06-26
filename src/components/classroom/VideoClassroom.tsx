@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { X, Minimize2, Loader2, MessageSquare, WifiOff, AlertTriangle, RotateCw } from 'lucide-react';
+import { X, Minimize2, Loader2, MessageSquare, WifiOff, AlertTriangle, RotateCw, CheckCircle2, Unplug, Radio } from 'lucide-react';
+
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
@@ -69,6 +70,71 @@ const ROOM_OPTIONS: RoomOptions = {
   disconnectOnPageLeave: true,
 };
 
+function ConnectionStatus({
+  online,
+  waitingForTeacher,
+  connectionState,
+  livekitConnected,
+  reconnecting,
+}: {
+  online: boolean;
+  waitingForTeacher: boolean;
+  connectionState: ConnectionState;
+  livekitConnected: boolean;
+  reconnecting: boolean;
+}) {
+  if (!online) {
+    return (
+      <Badge variant="destructive" className="gap-1 text-xs">
+        <WifiOff className="h-3 w-3" /> Offline
+      </Badge>
+    );
+  }
+  if (waitingForTeacher) {
+    return (
+      <Badge variant="outline" className="gap-1 text-xs border-amber-500 text-amber-600 animate-pulse">
+        <Loader2 className="h-3 w-3 animate-spin" /> Waiting for teacher…
+      </Badge>
+    );
+  }
+  if (connectionState === 'failed') {
+    return (
+      <Badge variant="destructive" className="gap-1 text-xs">
+        <Unplug className="h-3 w-3" /> Disconnected
+      </Badge>
+    );
+  }
+  if (reconnecting) {
+    return (
+      <Badge variant="outline" className="gap-1 text-xs border-amber-500 text-amber-600 animate-pulse">
+        <RotateCw className="h-3 w-3 animate-spin" /> Reconnecting…
+      </Badge>
+    );
+  }
+  if (connectionState === 'fetching') {
+    return (
+      <Badge variant="outline" className="gap-1 text-xs border-amber-500 text-amber-600 animate-pulse">
+        <Loader2 className="h-3 w-3 animate-spin" /> Joining…
+      </Badge>
+    );
+  }
+  if (connectionState === 'ready' && !livekitConnected) {
+    return (
+      <Badge variant="outline" className="gap-1 text-xs border-amber-500 text-amber-600 animate-pulse">
+        <Loader2 className="h-3 w-3 animate-spin" /> Syncing…
+      </Badge>
+    );
+  }
+  if (livekitConnected) {
+    return (
+      <Badge variant="outline" className="gap-1 text-xs border-emerald-500 text-emerald-600 bg-emerald-500/10">
+        <Radio className="h-3 w-3" /> Connected
+      </Badge>
+    );
+  }
+  return null;
+}
+
 export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, classId, onClose, onMinimize, onClassStarted }: VideoClassroomProps) {
   const [token, setToken] = useState<string | null>(null);
   const [serverUrl, setServerUrl] = useState<string | null>(null);
@@ -79,6 +145,7 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
   const [unread, setUnread] = useState(0);
   const [waitingForTeacher, setWaitingForTeacher] = useState(!isTeacher && classStatus === 'scheduled');
   const [reconnecting, setReconnecting] = useState(false);
+  const [livekitConnected, setLivekitConnected] = useState(false);
   const [online, setOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
   const intentionalCloseRef = useRef(false);
   const retryAttemptRef = useRef(0);
@@ -92,6 +159,7 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
     setError(null);
     setToken(null);
     setServerUrl(null);
+    setLivekitConnected(false);
     // Fresh join — clear any stale "intentional close" flag and bump the join
     // key so LiveKitRoom remounts cleanly even if the new token string happens
     // to match (prevents stale Room state across rejoins).
@@ -187,6 +255,7 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
     if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
     retryAttemptRef.current = 0;
     setReconnecting(false);
+    setLivekitConnected(true);
   }, []);
 
   const handleReconnecting = useCallback(() => setReconnecting(true), []);
@@ -202,6 +271,7 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
 
   const handleLiveKitDisconnected = useCallback((reason?: DisconnectReason) => {
     if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
+    setLivekitConnected(false);
     // User-initiated leave → close.
     if (intentionalCloseRef.current || reason === DisconnectReason.CLIENT_INITIATED) {
       onClose();
@@ -250,18 +320,16 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
       <div className="flex items-center justify-between px-4 py-2 bg-muted/50 border-b border-border shrink-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-foreground">Live Classroom</span>
-          {!online && (
-            <Badge variant="destructive" className="gap-1 text-[10px]">
-              <WifiOff className="h-3 w-3" /> Offline
-            </Badge>
-          )}
-          {online && reconnecting && (
-            <Badge variant="secondary" className="gap-1 text-[10px]">
-              <RotateCw className="h-3 w-3 animate-spin" /> Reconnecting…
-            </Badge>
-          )}
+          <ConnectionStatus
+            online={online}
+            waitingForTeacher={waitingForTeacher}
+            connectionState={connectionState}
+            livekitConnected={livekitConnected}
+            reconnecting={reconnecting}
+          />
         </div>
         <div className="flex items-center gap-1">
+
           <Button variant="ghost" size="icon" className="h-7 w-7 relative" onClick={() => { setChatOpen(o => !o); setUnread(0); }}>
             <MessageSquare className="h-4 w-4" />
             {unread > 0 && (
