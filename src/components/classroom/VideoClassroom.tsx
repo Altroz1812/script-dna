@@ -28,20 +28,25 @@ import { ClassroomChat } from './ClassroomChat';
 import { RoleAwareControls } from './RoleAwareControls';
 import { MicOff, ScreenShare, User as UserIcon } from 'lucide-react';
 
-// Threshold above which we switch to active-speaker-only video subscription
-// (audio always stays on, screen shares always on). Below this, all cameras
-// stay subscribed for normal classroom UX.
-const ACTIVE_SPEAKER_GATE = 12;
-// Cap of camera tracks we'll keep subscribed in large-room mode (teacher +
-// recent active speakers).
-const MAX_ACTIVE_VIDEO_SUBS = 6;
+// Defaults — overridden per-room/per-org via livekit-token response settings.
+const ACTIVE_SPEAKER_GATE_DEFAULT = 12;
+const MAX_ACTIVE_VIDEO_SUBS_DEFAULT = 6;
+
+export interface ActiveSpeakerSettings {
+  activeSpeakerGate: number;
+  rollingWindowSize: number;
+  nonSpeakerVideoEnabled: boolean;
+}
 
 /**
  * In large rooms, keep audio + screen share for everyone, but auto-unsubscribe
  * remote camera tracks for non-speakers. Dramatically cuts bandwidth & CPU.
  */
-function ActiveSpeakerSubscriber() {
+function ActiveSpeakerSubscriber({ settings }: { settings: ActiveSpeakerSettings }) {
   const room = useRoomContext();
+  const gate = Math.max(2, settings.activeSpeakerGate || ACTIVE_SPEAKER_GATE_DEFAULT);
+  const windowSize = Math.max(1, settings.rollingWindowSize || MAX_ACTIVE_VIDEO_SUBS_DEFAULT);
+  const nonSpeakerVideo = !!settings.nonSpeakerVideoEnabled;
   useEffect(() => {
     if (!room) return;
     const recentSpeakers = new Set<string>(); // identities allowed to send video
@@ -59,11 +64,15 @@ function ActiveSpeakerSubscriber() {
 
     const apply = () => {
       const total = room.remoteParticipants.size + 1;
-      const largeRoom = total > ACTIVE_SPEAKER_GATE;
+      const largeRoom = total > gate;
       room.remoteParticipants.forEach((p) => {
         const isTeacher = teacherIdentities.has(p.identity) || isTeacherIdentity(p.identity);
         if (isTeacher) teacherIdentities.add(p.identity);
-        const allowVideo = !largeRoom || isTeacher || recentSpeakers.has(p.identity);
+        const allowVideo =
+          !largeRoom ||
+          nonSpeakerVideo ||
+          isTeacher ||
+          recentSpeakers.has(p.identity);
         p.trackPublications.forEach((pub) => {
           if (pub.source === Track.Source.Camera) {
             if (pub.isSubscribed !== allowVideo) {
@@ -83,10 +92,10 @@ function ActiveSpeakerSubscriber() {
     const onSpeakers = (speakers: Participant[]) => {
       // Rolling window: keep last N speakers (plus teacher) subscribed.
       speakers.forEach((s) => recentSpeakers.add(s.identity));
-      if (recentSpeakers.size > MAX_ACTIVE_VIDEO_SUBS) {
+      if (recentSpeakers.size > windowSize) {
         const arr = Array.from(recentSpeakers);
         recentSpeakers.clear();
-        arr.slice(-MAX_ACTIVE_VIDEO_SUBS).forEach((id) => recentSpeakers.add(id));
+        arr.slice(-windowSize).forEach((id) => recentSpeakers.add(id));
       }
       apply();
     };
@@ -102,7 +111,7 @@ function ActiveSpeakerSubscriber() {
       room.off(RoomEvent.ParticipantDisconnected, apply);
       room.off(RoomEvent.TrackPublished, apply);
     };
-  }, [room]);
+  }, [room, gate, windowSize, nonSpeakerVideo]);
   return null;
 }
 
