@@ -206,6 +206,7 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
 
   const handleLiveKitDisconnected = useCallback((reason?: DisconnectReason) => {
     if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
+    setLivekitConnected(false);
     // User-initiated leave → close.
     if (intentionalCloseRef.current || reason === DisconnectReason.CLIENT_INITIATED) {
       onClose();
