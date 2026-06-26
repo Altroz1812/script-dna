@@ -203,6 +203,8 @@ export type Database = {
       certificates: {
         Row: {
           batch_id: string
+          completion_date: string | null
+          course_duration: string | null
           course_id: string
           course_name: string
           created_at: string
@@ -216,6 +218,8 @@ export type Database = {
         }
         Insert: {
           batch_id: string
+          completion_date?: string | null
+          course_duration?: string | null
           course_id: string
           course_name: string
           created_at?: string
@@ -229,6 +233,8 @@ export type Database = {
         }
         Update: {
           batch_id?: string
+          completion_date?: string | null
+          course_duration?: string | null
           course_id?: string
           course_name?: string
           created_at?: string

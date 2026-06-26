@@ -10,6 +10,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TableSkeleton } from '@/components/ui/loading-skeletons';
 import { toast } from 'sonner';
 import { TrendingUp, BookOpen, ClipboardCheck, Video, Award } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { downloadCertificate } from '@/services/certificateService';
+import { Eye, Download } from 'lucide-react';
 
 export default function ParentProgressPage() {
   const { profile } = useAuth();
@@ -20,6 +24,9 @@ export default function ParentProgressPage() {
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [attendance, setAttendance] = useState<any[]>([]);
   const [upcomingClasses, setUpcomingClasses] = useState<any[]>([]);
+  const [certificates, setCertificates] = useState<any[]>([]);
+  const [previewCert, setPreviewCert] = useState<{ name: string; course: string; duration: string | null; date: string | null } | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Load children list
@@ -53,16 +60,18 @@ export default function ParentProgressPage() {
   const loadChildData = async (childId: string) => {
     setLoading(true);
     try {
-      const [progRes, subRes, attRes, classRes] = await Promise.all([
+      const [progRes, subRes, attRes, classRes, certRes] = await Promise.all([
         supabase.from('student_progress').select('*, courses(name)').eq('student_id', childId),
         supabase.from('student_submissions').select('*, practice_assignments(title, batch_id)').eq('student_id', childId).order('created_at', { ascending: false }).limit(20),
         supabase.from('attendance').select('*, batches(name)').eq('student_id', childId).order('date', { ascending: false }).limit(30),
         supabase.from('live_classes').select('id, title, scheduled_at, status, batches(name)').in('status', ['scheduled', 'live']).order('scheduled_at', { ascending: true }).limit(10),
+        (supabase as any).from('certificates').select('id, student_name, course_name, course_duration, completion_date, issued_at, status').eq('student_id', childId).order('issued_at', { ascending: false }),
       ]);
       setProgress(progRes.data || []);
       setSubmissions(subRes.data || []);
       setAttendance(attRes.data || []);
       setUpcomingClasses(classRes.data || []);
+      setCertificates(certRes.data || []);
     } catch (e: any) {
       toast.error(e.message);
     } finally {
@@ -219,31 +228,74 @@ export default function ParentProgressPage() {
             </TabsContent>
 
             <TabsContent value="certificates">
-              <Card>
-                <CardContent className="py-8 text-center">
-                  {completedCourses.length === 0 ? (
-                    <>
-                      <Award className="mx-auto h-10 w-10 text-muted-foreground/50 mb-3" />
-                      <p className="text-muted-foreground">No completed courses yet.</p>
-                      <p className="text-xs text-muted-foreground mt-1">Certificates will be available once a course is completed.</p>
-                    </>
-                  ) : (
-                    <div className="space-y-3">
-                      <Award className="mx-auto h-10 w-10 text-primary mb-3" />
-                      <p className="text-sm text-muted-foreground mb-4">{completedCourses.length} course(s) completed</p>
-                      {completedCourses.map(c => (
-                        <div key={c.id} className="flex items-center justify-between p-3 border rounded-lg">
-                          <div className="text-left">
-                            <p className="font-medium text-foreground">{(c as any).courses?.name}</p>
-                            <p className="text-xs text-muted-foreground">Completed {c.completed_at ? new Date(c.completed_at).toLocaleDateString() : ''}</p>
+              {certificates.length === 0 ? (
+                <Card>
+                  <CardContent className="py-8 text-center">
+                    <Award className="mx-auto h-10 w-10 text-muted-foreground/50 mb-3" />
+                    <p className="text-muted-foreground">No certificates issued yet.</p>
+                    <p className="text-xs text-muted-foreground mt-1">Certificates appear here once the teacher marks the course completed.</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {certificates.map((c) => (
+                    <Card key={c.id} className="border-emerald-500/30 bg-emerald-500/5">
+                      <CardHeader className="pb-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <CardTitle className="text-base">{c.course_name}</CardTitle>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {c.course_duration && <>{c.course_duration} · </>}
+                              Completed {new Date(c.completion_date || c.issued_at).toLocaleDateString('en-IN')}
+                            </p>
                           </div>
-                          <Badge variant="outline">Coming Soon</Badge>
+                          <Badge variant="outline" className="bg-emerald-500/15 text-emerald-500 border-emerald-500/30 text-[10px]">
+                            <Award className="h-3 w-3 mr-1" /> Certified
+                          </Badge>
                         </div>
-                      ))}
+                      </CardHeader>
+                      <CardContent className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => setPreviewCert({ name: c.student_name, course: c.course_name, duration: c.course_duration, date: c.completion_date })}>
+                          <Eye className="h-3.5 w-3.5 mr-1.5" /> View
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={downloadingId === c.id}
+                          onClick={async () => {
+                            setDownloadingId(c.id);
+                            try {
+                              await downloadCertificate(c.student_name, c.course_name, { duration: c.course_duration, completionDate: c.completion_date });
+                            } catch (e: any) { console.error(e); } finally { setDownloadingId(null); }
+                          }}
+                        >
+                          <Download className="h-3.5 w-3.5 mr-1.5" />
+                          {downloadingId === c.id ? 'Generating…' : 'Download'}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+              <Dialog open={!!previewCert} onOpenChange={(o) => !o && setPreviewCert(null)}>
+                <DialogContent className="max-w-3xl">
+                  <DialogHeader><DialogTitle>Certificate Preview</DialogTitle></DialogHeader>
+                  {previewCert && (
+                    <div className="relative w-full">
+                      <img src="/certificate.jpeg" alt="Certificate" className="w-full h-auto" />
+                      <div className="absolute left-[5%] right-[5%] top-[55%] text-[#2c3e50] font-serif font-bold uppercase text-xl md:text-3xl">
+                        {previewCert.name}
+                      </div>
+                      <div className="absolute left-[5%] right-[5%] top-[74%] text-[#555] font-serif italic text-base md:text-2xl">
+                        {previewCert.course}
+                      </div>
+                      <div className="absolute left-[5%] right-[5%] top-[86%] text-[#333] font-serif text-[11px] md:text-sm">
+                        {previewCert.duration && <>Duration: {previewCert.duration}    •    </>}
+                        Date of Completion: {previewCert.date ? new Date(previewCert.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' }) : new Date().toLocaleDateString('en-IN')}
+                      </div>
                     </div>
                   )}
-                </CardContent>
-              </Card>
+                </DialogContent>
+              </Dialog>
             </TabsContent>
           </Tabs>
         </>
