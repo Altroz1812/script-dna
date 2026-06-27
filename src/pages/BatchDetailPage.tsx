@@ -585,63 +585,130 @@ export default function BatchDetailPage() {
                 </div>
               )}
 
-              {!allDone ? (
-                <p className="text-xs text-muted-foreground">
-                  Certificates can be issued once every session is marked completed
-                  ({progress.sessions_completed}/{progress.sessions_total} done).
-                </p>
-              ) : students.length === 0 ? (
+              {students.length === 0 ? (
                 <p className="text-xs text-muted-foreground">No students enrolled.</p>
               ) : (
                 <>
                   <p className="text-xs text-muted-foreground">
-                    Select students who have successfully completed the course. A certificate will be issued for each.
+                    Mark each student as <b>Completed</b> (auto-issues certificate) or <b>Needs Improvement</b>{' '}
+                    (admin approval required for free / paid extension).
                   </p>
                   <ul className="divide-y divide-border/40 rounded-md border border-border/50">
                     {students.map((s) => {
                       const issued = issuedIds.has(s.student_id);
-                      const checked = issued || selectedForCert.has(s.student_id);
+                      const cur = getStatus(s);
                       return (
-                        <li key={s.student_id} className="flex items-center gap-3 p-2.5">
-                          <Checkbox
-                            checked={checked}
-                            disabled={issued}
-                            onCheckedChange={() => !issued && toggleCertStudent(s.student_id)}
-                          />
-                          <div className="flex-1 min-w-0">
+                        <li key={s.student_id} className="flex items-center gap-3 p-2.5 flex-wrap">
+                          <div className="flex-1 min-w-[150px]">
                             <div className="text-sm font-medium truncate">{s.display_name || '—'}</div>
-                            <div className="text-[11px] text-muted-foreground truncate">{s.email}</div>
+                            <div className="text-[11px] text-muted-foreground truncate">
+                              {s.email} · {Math.round(s.completion_pct ?? 0)}%
+                            </div>
                           </div>
                           {issued ? (
                             <Badge variant="outline" className="text-[10px] bg-emerald-500/15 text-emerald-500 border-emerald-500/30">
-                              <Award className="h-3 w-3 mr-1" /> Issued
+                              <Award className="h-3 w-3 mr-1" /> Certified
                             </Badge>
                           ) : (
-                            <span className="text-[10px] text-muted-foreground">Pending</span>
+                            <Select
+                              value={cur}
+                              onValueChange={(v) =>
+                                setStatusEdits((p) => ({ ...p, [s.student_id]: v as any }))
+                              }
+                            >
+                              <SelectTrigger className="h-8 w-[180px] text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="pending">Pending</SelectItem>
+                                <SelectItem value="completed">Completed</SelectItem>
+                                <SelectItem value="needs_improvement">Needs Improvement</SelectItem>
+                              </SelectContent>
+                            </Select>
                           )}
                         </li>
                       );
                     })}
                   </ul>
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
                     <p className="text-[11px] text-muted-foreground">
-                      {certificates.length}/{students.length} students already certified
+                      {certificates.length}/{students.length} certified
                     </p>
-                    <Button
-                      size="sm"
-                      disabled={selectedForCert.size === 0 || issueCertsMut.isPending}
-                      onClick={() => issueCertsMut.mutate()}
-                    >
-                      <Award className="h-3.5 w-3.5 mr-1.5" />
-                      {issueCertsMut.isPending ? 'Issuing…' : `Issue ${selectedForCert.size || ''} Certificate${selectedForCert.size === 1 ? '' : 's'}`}
-                    </Button>
+                    <div className="flex gap-2">
+                      {students.some((s) => getStatus(s) === 'needs_improvement') && (
+                        <Button size="sm" variant="outline" onClick={() => setExtOpen(true)}>
+                          <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />
+                          Request Extension
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        disabled={Object.keys(statusEdits).length === 0 || saveCompletionMut.isPending}
+                        onClick={() => saveCompletionMut.mutate()}
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                        {saveCompletionMut.isPending ? 'Saving…' : 'Save & Issue Certificates'}
+                      </Button>
+                    </div>
                   </div>
+                  {!allDone && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Note: {progress.sessions_completed}/{progress.sessions_total} sessions completed.
+                    </p>
+                  )}
                 </>
               )}
             </CardContent>
           </Card>
         );
       })()}
+
+      {/* Extension Request Dialog */}
+      <ResponsiveDialog
+        open={extOpen}
+        onOpenChange={setExtOpen}
+        title="Request Additional Classes"
+        description="For students marked Needs Improvement. Admin approval required."
+        desktopWidthClass="sm:max-w-md"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setExtOpen(false)}>Cancel</Button>
+            <Button disabled={createExtensionMut.isPending} onClick={() => createExtensionMut.mutate()}>
+              {createExtensionMut.isPending ? 'Submitting…' : 'Submit for Approval'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <Label className="text-xs">Students needing extension</Label>
+            <div className="mt-1 text-sm">
+              {data.students.filter((s) => getStatus(s) === 'needs_improvement').map((s) => s.display_name || s.email).join(', ') || '—'}
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs">Extension Type</Label>
+            <RadioGroup value={extMode} onValueChange={(v) => setExtMode(v as 'free' | 'paid')} className="flex gap-4 mt-2">
+              <label className="flex items-center gap-2 text-sm"><RadioGroupItem value="free" /> Free</label>
+              <label className="flex items-center gap-2 text-sm"><RadioGroupItem value="paid" /> Paid</label>
+            </RadioGroup>
+          </div>
+          <div>
+            <Label className="text-xs">Number of additional classes</Label>
+            <Input type="number" min={1} value={extClasses} onChange={(e) => setExtClasses(parseInt(e.target.value) || 0)} />
+          </div>
+          {extMode === 'paid' && (
+            <div>
+              <Label className="text-xs">Fee per class (₹)</Label>
+              <Input type="number" min={0} value={extFee} onChange={(e) => setExtFee(parseFloat(e.target.value) || 0)} />
+            </div>
+          )}
+          <div>
+            <Label className="text-xs">Reason / notes</Label>
+            <Textarea value={extReason} onChange={(e) => setExtReason(e.target.value)} placeholder="Why do these students need additional classes?" />
+          </div>
+        </div>
+      </ResponsiveDialog>
 
       {/* Assign Teacher Dialog */}
       <ResponsiveDialog
