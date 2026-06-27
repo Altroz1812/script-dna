@@ -212,7 +212,7 @@ export async function handle(action: string, ctx: HandlerCtx, params: any): Prom
         // Enrolled students + progress
         const { data: enrollRows } = await ctx.supabase
           .from('batch_students')
-          .select('student_id, enrolled_at')
+          .select('student_id, enrolled_at, completion_status, completion_notes, completion_marked_at')
           .eq('batch_id', id)
         const studentIds = (enrollRows ?? []).map((r: any) => r.student_id)
         let studentProfiles: any[] = []
@@ -236,6 +236,9 @@ export async function handle(action: string, ctx: HandlerCtx, params: any): Prom
           email: profMap[r.student_id]?.email || null,
           avatar_url: profMap[r.student_id]?.avatar_url || null,
           completion_pct: progMap[r.student_id]?.completion_pct ?? 0,
+          completion_status: r.completion_status || 'pending',
+          completion_notes: r.completion_notes || null,
+          completion_marked_at: r.completion_marked_at || null,
         }))
 
         // Sessions (live_classes) ordered by date
