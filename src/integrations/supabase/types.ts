@@ -52,6 +52,7 @@ export type Database = {
           batch_id: string
           created_at: string
           date: string
+          deleted_at: string | null
           id: string
           organization_id: string | null
           schedule_id: string | null
@@ -62,6 +63,7 @@ export type Database = {
           batch_id: string
           created_at?: string
           date: string
+          deleted_at?: string | null
           id?: string
           organization_id?: string | null
           schedule_id?: string | null
@@ -72,6 +74,7 @@ export type Database = {
           batch_id?: string
           created_at?: string
           date?: string
+          deleted_at?: string | null
           id?: string
           organization_id?: string | null
           schedule_id?: string | null
@@ -98,18 +101,21 @@ export type Database = {
       batch_students: {
         Row: {
           batch_id: string
+          deleted_at: string | null
           enrolled_at: string
           id: string
           student_id: string
         }
         Insert: {
           batch_id: string
+          deleted_at?: string | null
           enrolled_at?: string
           id?: string
           student_id: string
         }
         Update: {
           batch_id?: string
+          deleted_at?: string | null
           enrolled_at?: string
           id?: string
           student_id?: string
@@ -139,6 +145,9 @@ export type Database = {
           certificate_hold: boolean
           course_id: string
           created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
+          deleted_cause: string | null
           id: string
           max_students: number
           meeting_link_expires_at: string | null
@@ -156,6 +165,9 @@ export type Database = {
           certificate_hold?: boolean
           course_id: string
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_cause?: string | null
           id?: string
           max_students?: number
           meeting_link_expires_at?: string | null
@@ -173,6 +185,9 @@ export type Database = {
           certificate_hold?: boolean
           course_id?: string
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_cause?: string | null
           id?: string
           max_students?: number
           meeting_link_expires_at?: string | null
@@ -208,6 +223,7 @@ export type Database = {
           course_id: string
           course_name: string
           created_at: string
+          deleted_at: string | null
           id: string
           issued_at: string
           issued_by: string | null
@@ -223,6 +239,7 @@ export type Database = {
           course_id: string
           course_name: string
           created_at?: string
+          deleted_at?: string | null
           id?: string
           issued_at?: string
           issued_by?: string | null
@@ -238,6 +255,7 @@ export type Database = {
           course_id?: string
           course_name?: string
           created_at?: string
+          deleted_at?: string | null
           id?: string
           issued_at?: string
           issued_by?: string | null
@@ -283,6 +301,7 @@ export type Database = {
           approved_by: string | null
           batch_id: string
           created_at: string
+          deleted_at: string | null
           id: string
           num_classes: number | null
           reason: string | null
@@ -297,6 +316,7 @@ export type Database = {
           approved_by?: string | null
           batch_id: string
           created_at?: string
+          deleted_at?: string | null
           id?: string
           num_classes?: number | null
           reason?: string | null
@@ -311,6 +331,7 @@ export type Database = {
           approved_by?: string | null
           batch_id?: string
           created_at?: string
+          deleted_at?: string | null
           id?: string
           num_classes?: number | null
           reason?: string | null
@@ -436,6 +457,7 @@ export type Database = {
         Row: {
           course_id: string
           created_at: string
+          deleted_at: string | null
           description: string | null
           id: string
           sort_order: number
@@ -445,6 +467,7 @@ export type Database = {
         Insert: {
           course_id: string
           created_at?: string
+          deleted_at?: string | null
           description?: string | null
           id?: string
           sort_order?: number
@@ -454,6 +477,7 @@ export type Database = {
         Update: {
           course_id?: string
           created_at?: string
+          deleted_at?: string | null
           description?: string | null
           id?: string
           sort_order?: number
@@ -476,6 +500,8 @@ export type Database = {
           created_at: string
           created_by: string
           daily_hours: number | null
+          deleted_at: string | null
+          deleted_by: string | null
           delivery_mode: string
           description: string | null
           duration_days: number | null
@@ -495,6 +521,8 @@ export type Database = {
           created_at?: string
           created_by: string
           daily_hours?: number | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           delivery_mode?: string
           description?: string | null
           duration_days?: number | null
@@ -514,6 +542,8 @@ export type Database = {
           created_at?: string
           created_by?: string
           daily_hours?: number | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           delivery_mode?: string
           description?: string | null
           duration_days?: number | null
@@ -707,6 +737,7 @@ export type Database = {
         Row: {
           content: string | null
           created_at: string
+          deleted_at: string | null
           duration_minutes: number | null
           file_url: string | null
           id: string
@@ -719,6 +750,7 @@ export type Database = {
         Insert: {
           content?: string | null
           created_at?: string
+          deleted_at?: string | null
           duration_minutes?: number | null
           file_url?: string | null
           id?: string
@@ -731,6 +763,7 @@ export type Database = {
         Update: {
           content?: string | null
           created_at?: string
+          deleted_at?: string | null
           duration_minutes?: number | null
           file_url?: string | null
           id?: string
@@ -754,6 +787,7 @@ export type Database = {
         Row: {
           batch_id: string
           created_at: string
+          deleted_at: string | null
           duration_minutes: number
           id: string
           meeting_url: string | null
@@ -768,6 +802,7 @@ export type Database = {
         Insert: {
           batch_id: string
           created_at?: string
+          deleted_at?: string | null
           duration_minutes?: number
           id?: string
           meeting_url?: string | null
@@ -782,6 +817,7 @@ export type Database = {
         Update: {
           batch_id?: string
           created_at?: string
+          deleted_at?: string | null
           duration_minutes?: number
           id?: string
           meeting_url?: string | null
@@ -847,6 +883,7 @@ export type Database = {
         Row: {
           course_id: string
           created_at: string
+          deleted_at: string | null
           description: string | null
           file_url: string | null
           id: string
@@ -859,6 +896,7 @@ export type Database = {
         Insert: {
           course_id: string
           created_at?: string
+          deleted_at?: string | null
           description?: string | null
           file_url?: string | null
           id?: string
@@ -871,6 +909,7 @@ export type Database = {
         Update: {
           course_id?: string
           created_at?: string
+          deleted_at?: string | null
           description?: string | null
           file_url?: string | null
           id?: string
@@ -1349,6 +1388,7 @@ export type Database = {
           batch_id: string
           course_id: string | null
           created_at: string
+          deleted_at: string | null
           description: string | null
           due_date: string | null
           file_url: string | null
@@ -1362,6 +1402,7 @@ export type Database = {
           batch_id: string
           course_id?: string | null
           created_at?: string
+          deleted_at?: string | null
           description?: string | null
           due_date?: string | null
           file_url?: string | null
@@ -1375,6 +1416,7 @@ export type Database = {
           batch_id?: string
           course_id?: string | null
           created_at?: string
+          deleted_at?: string | null
           description?: string | null
           due_date?: string | null
           file_url?: string | null
@@ -1454,6 +1496,7 @@ export type Database = {
           created_at: string
           date: string | null
           day_of_week: number
+          deleted_at: string | null
           end_time: string
           id: string
           organization_id: string | null
@@ -1467,6 +1510,7 @@ export type Database = {
           created_at?: string
           date?: string | null
           day_of_week: number
+          deleted_at?: string | null
           end_time: string
           id?: string
           organization_id?: string | null
@@ -1480,6 +1524,7 @@ export type Database = {
           created_at?: string
           date?: string | null
           day_of_week?: number
+          deleted_at?: string | null
           end_time?: string
           id?: string
           organization_id?: string | null
@@ -1581,6 +1626,7 @@ export type Database = {
           completed_at: string | null
           completion_pct: number
           course_id: string
+          deleted_at: string | null
           id: string
           organization_id: string | null
           sessions_attended: number
@@ -1595,6 +1641,7 @@ export type Database = {
           completed_at?: string | null
           completion_pct?: number
           course_id: string
+          deleted_at?: string | null
           id?: string
           organization_id?: string | null
           sessions_attended?: number
@@ -1609,6 +1656,7 @@ export type Database = {
           completed_at?: string | null
           completion_pct?: number
           course_id?: string
+          deleted_at?: string | null
           id?: string
           organization_id?: string | null
           sessions_attended?: number
