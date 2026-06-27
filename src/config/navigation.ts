@@ -129,7 +129,7 @@ export const navigationConfig: NavGroup[] = [
     items: [
       { title: "Organizations", url: "/organizations", icon: Shield, roles: ["superadmin"], globalOnly: true },
       { title: "Users", url: "/users", icon: Users, roles: ["superadmin", "admin"] },
-      { title: "Roles & Permissions", url: "/roles", icon: Shield, roles: ["superadmin"], globalOnly: true },
+      { title: "Roles & Permissions", url: "/roles", icon: Shield, roles: ["superadmin"] },
       {
         title: "Certificates",
         url: "/certificates",
