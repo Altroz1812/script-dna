@@ -19,8 +19,10 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
-import { Checkbox } from '@/components/ui/checkbox';
 import { ResponsiveDialog } from '@/components/mobile/ui';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 type Detail = {
   batch: any;
