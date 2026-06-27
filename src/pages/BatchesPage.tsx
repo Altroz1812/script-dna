@@ -745,6 +745,16 @@ export default function BatchesPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <CascadeDeleteDialog
+        target={deleteTarget ? { kind: 'batch', id: deleteTarget.id, name: deleteTarget.name } : null}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          deleteMutation.mutate(deleteTarget.id, { onSettled: () => setDeleteTarget(null) });
+        }}
+        isDeleting={deleteMutation.isPending}
+      />
     </div>
   );
 }
