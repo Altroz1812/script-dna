@@ -58,7 +58,8 @@ export function CascadeDeleteDialog({ target, onCancel, onConfirm, isDeleting }:
             <AlertTriangle className="h-5 w-5" /> Delete {target?.kind} "{target?.name}"?
           </AlertDialogTitle>
           <AlertDialogDescription>
-            This action is permanent. The following linked records will also be removed:
+            This will move the {target?.kind} and the linked records below into the Recycle Bin.
+            An admin can restore them within 7 days from the Recycle Bin.
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -105,7 +106,7 @@ export function CascadeDeleteDialog({ target, onCancel, onConfirm, isDeleting }:
             onClick={onConfirm}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
-            {isDeleting ? 'Deleting…' : `Delete ${target?.kind} & ${total} linked item${total === 1 ? '' : 's'}`}
+            {isDeleting ? 'Moving to Recycle Bin…' : `Move ${target?.kind} & ${total} linked item${total === 1 ? '' : 's'} to Recycle Bin`}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

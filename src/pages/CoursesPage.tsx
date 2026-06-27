@@ -22,6 +22,8 @@ import { CourseForm } from '@/components/courses/CourseForm';
 import { useIsMobileApp } from '@/hooks/useIsMobileApp';
 import MobileCoursesPage from './mobile/MobileCoursesPage';
 import { CascadeDeleteDialog } from '@/components/common/CascadeDeleteDialog';
+import { RecycleBinDialog } from '@/components/common/RecycleBinDialog';
+import { History } from 'lucide-react';
 
 export default function CoursesPage() {
   const __isMobile = useIsMobileApp();
@@ -39,6 +41,7 @@ export default function CoursesPage() {
   const [selectedCenter, setSelectedCenter] = useState<string>('all');
   const [activeTab, setActiveTab] = useState('all');
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [recycleOpen, setRecycleOpen] = useState(false);
 
   const { data: courses = [], isLoading } = useQuery<Course[]>({
     queryKey: ['courses', isStudent, activeOrgId],
@@ -342,6 +345,10 @@ export default function CoursesPage() {
           </p>
         </div>
         {isAdmin && (
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setRecycleOpen(true)}>
+              <History className="mr-2 h-4 w-4" /> Recycle Bin
+            </Button>
           <Dialog open={createOpen} onOpenChange={(v) => { setCreateOpen(v); if (!v) setCreateFieldErrors({}); }}>
             <DialogTrigger asChild>
               <Button><Plus className="mr-2 h-4 w-4" /> New Course</Button>
@@ -356,6 +363,7 @@ export default function CoursesPage() {
               />
             </DialogContent>
           </Dialog>
+          </div>
         )}
       </div>
 
@@ -428,6 +436,7 @@ export default function CoursesPage() {
         }}
         isDeleting={deleteMutation.isPending}
       />
+      <RecycleBinDialog open={recycleOpen} onOpenChange={setRecycleOpen} kind="course" />
     </div>
   );
 }

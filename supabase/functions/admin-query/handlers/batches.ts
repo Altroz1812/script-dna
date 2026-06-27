@@ -5,7 +5,7 @@ export async function handle(action: string, ctx: HandlerCtx, params: any): Prom
   let handled = true
   switch (action) {
       case 'list_batches': {
-        let query = ctx.supabase.from('batches').select('*, courses(name, duration_days, daily_hours, total_hours, delivery_mode)')
+        let query = ctx.supabase.from('batches').select('*, courses(name, duration_days, daily_hours, total_hours, delivery_mode)').is('deleted_at', null)
         if (params?.course_id) query = query.eq('course_id', params.course_id)
         if (ctx.targetOrgId) query = query.eq('organization_id', ctx.targetOrgId)
         // Teachers (without admin/support/superadmin) only see batches they own.
@@ -97,8 +97,60 @@ export async function handle(action: string, ctx: HandlerCtx, params: any): Prom
         break
       }
       case 'delete_batch': {
+        // Soft delete batch and its directly-linked records
+        const now = new Date().toISOString()
+        const batchId = params.id
+        if (!batchId) throw new Error('batch id required')
+        await Promise.all([
+          ctx.supabase.from('batch_students').update({ deleted_at: now }).eq('batch_id', batchId).is('deleted_at', null),
+          ctx.supabase.from('schedules').update({ deleted_at: now }).eq('batch_id', batchId).is('deleted_at', null),
+          ctx.supabase.from('live_classes').update({ deleted_at: now }).eq('batch_id', batchId).is('deleted_at', null),
+          ctx.supabase.from('attendance').update({ deleted_at: now }).eq('batch_id', batchId).is('deleted_at', null),
+          ctx.supabase.from('practice_assignments').update({ deleted_at: now }).eq('batch_id', batchId).is('deleted_at', null),
+          ctx.supabase.from('certificates').update({ deleted_at: now }).eq('batch_id', batchId).is('deleted_at', null),
+          ctx.supabase.from('class_extension_requests').update({ deleted_at: now }).eq('batch_id', batchId).is('deleted_at', null),
+        ])
+        const { error } = await ctx.supabase.from('batches')
+          .update({ deleted_at: now, deleted_by: ctx.callerUserId ?? null, deleted_cause: 'batch' })
+          .eq('id', batchId)
+        if (error) throw error
+        result = { success: true, soft_deleted: true }
+        break
+      }
+      case 'restore_batch': {
+        const batchId = params.id
+        if (!batchId) throw new Error('batch id required')
+        const { data: b } = await ctx.supabase.from('batches').select('id, deleted_at, course_id').eq('id', batchId).maybeSingle()
+        if (!b) throw new Error('Batch not found')
+        if (!b.deleted_at) { result = { success: true, already_active: true }; break }
+        // Block restore if parent course is soft-deleted
+        if (b.course_id) {
+          const { data: c } = await ctx.supabase.from('courses').select('deleted_at').eq('id', b.course_id).maybeSingle()
+          if (c?.deleted_at) throw new Error('Restore the parent course first')
+        }
+        await Promise.all([
+          ctx.supabase.from('batches').update({ deleted_at: null, deleted_by: null, deleted_cause: null }).eq('id', batchId),
+          ctx.supabase.from('batch_students').update({ deleted_at: null }).eq('batch_id', batchId),
+          ctx.supabase.from('schedules').update({ deleted_at: null }).eq('batch_id', batchId),
+          ctx.supabase.from('live_classes').update({ deleted_at: null }).eq('batch_id', batchId),
+          ctx.supabase.from('attendance').update({ deleted_at: null }).eq('batch_id', batchId),
+          ctx.supabase.from('practice_assignments').update({ deleted_at: null }).eq('batch_id', batchId),
+          ctx.supabase.from('certificates').update({ deleted_at: null }).eq('batch_id', batchId),
+          ctx.supabase.from('class_extension_requests').update({ deleted_at: null }).eq('batch_id', batchId),
+        ])
+        result = { success: true }
+        break
+      }
+      case 'list_deleted_batches': {
+        let q: any = ctx.supabase.from('batches').select('*, courses(name)').not('deleted_at', 'is', null).order('deleted_at', { ascending: false })
+        if (ctx.targetOrgId) q = q.eq('organization_id', ctx.targetOrgId)
+        const { data } = await q
+        result = data ?? []
+        break
+      }
+      case 'purge_batch': {
         await ctx.supabase.from('batch_students').delete().eq('batch_id', params.id)
-        const { error } = await ctx.supabase.from('batches').delete().eq('id', params.id)
+        const { error } = await ctx.supabase.from('batches').delete().eq('id', params.id).not('deleted_at', 'is', null)
         if (error) throw error
         result = { success: true }
         break
