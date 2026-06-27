@@ -101,6 +101,10 @@ export type Database = {
       batch_students: {
         Row: {
           batch_id: string
+          completion_marked_at: string | null
+          completion_marked_by: string | null
+          completion_notes: string | null
+          completion_status: string
           deleted_at: string | null
           enrolled_at: string
           id: string
@@ -108,6 +112,10 @@ export type Database = {
         }
         Insert: {
           batch_id: string
+          completion_marked_at?: string | null
+          completion_marked_by?: string | null
+          completion_notes?: string | null
+          completion_status?: string
           deleted_at?: string | null
           enrolled_at?: string
           id?: string
@@ -115,6 +123,10 @@ export type Database = {
         }
         Update: {
           batch_id?: string
+          completion_marked_at?: string | null
+          completion_marked_by?: string | null
+          completion_notes?: string | null
+          completion_status?: string
           deleted_at?: string | null
           enrolled_at?: string
           id?: string
@@ -297,48 +309,63 @@ export type Database = {
       }
       class_extension_requests: {
         Row: {
+          amount: number | null
           approved_at: string | null
           approved_by: string | null
           batch_id: string
           created_at: string
           deleted_at: string | null
+          extension_mode: string
+          fee_per_class: number | null
           id: string
           num_classes: number | null
+          organization_id: string | null
           reason: string | null
           rejected_reason: string | null
           request_type: string
           requested_by: string
           status: string
+          student_ids: string[]
           updated_at: string
         }
         Insert: {
+          amount?: number | null
           approved_at?: string | null
           approved_by?: string | null
           batch_id: string
           created_at?: string
           deleted_at?: string | null
+          extension_mode?: string
+          fee_per_class?: number | null
           id?: string
           num_classes?: number | null
+          organization_id?: string | null
           reason?: string | null
           rejected_reason?: string | null
           request_type?: string
           requested_by: string
           status?: string
+          student_ids?: string[]
           updated_at?: string
         }
         Update: {
+          amount?: number | null
           approved_at?: string | null
           approved_by?: string | null
           batch_id?: string
           created_at?: string
           deleted_at?: string | null
+          extension_mode?: string
+          fee_per_class?: number | null
           id?: string
           num_classes?: number | null
+          organization_id?: string | null
           reason?: string | null
           rejected_reason?: string | null
           request_type?: string
           requested_by?: string
           status?: string
+          student_ids?: string[]
           updated_at?: string
         }
         Relationships: [
