@@ -19,13 +19,22 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
-import { Checkbox } from '@/components/ui/checkbox';
 import { ResponsiveDialog } from '@/components/mobile/ui';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 type Detail = {
   batch: any;
   teacher: any;
-  students: Array<{ student_id: string; display_name: string | null; email: string | null; completion_pct: number }>;
+  students: Array<{
+    student_id: string;
+    display_name: string | null;
+    email: string | null;
+    completion_pct: number;
+    completion_status?: 'pending' | 'completed' | 'needs_improvement';
+    completion_notes?: string | null;
+  }>;
   student_count: number;
   sessions: Array<{ id: string; title: string; scheduled_at: string; duration_minutes: number; status: string; meeting_url: string | null }>;
   progress: {
@@ -120,45 +129,64 @@ export default function BatchDetailPage() {
     },
   });
   const issuedIds = useMemo(() => new Set(certificates.map((c) => c.student_id)), [certificates]);
-  const [selectedForCert, setSelectedForCert] = useState<Set<string>>(new Set());
-  const toggleCertStudent = (id: string) => {
-    setSelectedForCert((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
 
-  const issueCertsMut = useMutation({
+  // Per-student completion status (local edits before save)
+  const [statusEdits, setStatusEdits] = useState<Record<string, 'pending' | 'completed' | 'needs_improvement'>>({});
+  const getStatus = (s: any): 'pending' | 'completed' | 'needs_improvement' =>
+    statusEdits[s.student_id] ?? s.completion_status ?? 'pending';
+
+  const saveCompletionMut = useMutation({
     mutationFn: async () => {
       if (!data) throw new Error('Batch not loaded');
-      const toIssue = data.students.filter(
-        (s) => selectedForCert.has(s.student_id) && !issuedIds.has(s.student_id),
-      );
-      if (toIssue.length === 0) throw new Error('No new students selected');
-      const duration = formatCourseDuration(data.batch.courses);
-      const rows = toIssue.map((s) => ({
-        student_id: s.student_id,
-        batch_id: data.batch.id,
-        course_id: data.batch.course_id,
-        organization_id: data.batch.organization_id,
-        student_name: s.display_name || s.email || 'Student',
-        course_name: data.batch.courses?.name || 'Course',
-        course_duration: duration,
-        completion_date: new Date().toISOString().slice(0, 10),
-        issued_by: profile?.id ?? null,
-        status: 'issued',
-      }));
-      const { error } = await (supabase as any).from('certificates').insert(rows);
-      if (error) throw error;
-      return rows.length;
+      const items = data.students
+        .filter((s) => statusEdits[s.student_id] && statusEdits[s.student_id] !== s.completion_status)
+        .map((s) => ({ student_id: s.student_id, status: statusEdits[s.student_id] }));
+      if (!items.length) throw new Error('No changes to save');
+      return adminQuery('set_student_completion', { batch_id: batchId, items });
     },
-    onSuccess: (n) => {
-      toast.success(`${n} certificate${n === 1 ? '' : 's'} issued`);
-      setSelectedForCert(new Set());
+    onSuccess: (res: any) => {
+      toast.success(
+        res?.issued > 0
+          ? `Saved. ${res.issued} certificate${res.issued === 1 ? '' : 's'} auto-issued.`
+          : 'Completion status saved',
+      );
+      setStatusEdits({});
+      queryClient.invalidateQueries({ queryKey: ['batch_detail', batchId] });
       queryClient.invalidateQueries({ queryKey: ['batch_certificates', batchId] });
     },
-    onError: (e: any) => toast.error(e?.message || 'Failed to issue certificates'),
+    onError: (e: any) => toast.error(e?.message || 'Failed to save'),
+  });
+
+  // Extension request dialog
+  const [extOpen, setExtOpen] = useState(false);
+  const [extMode, setExtMode] = useState<'free' | 'paid'>('free');
+  const [extClasses, setExtClasses] = useState<number>(2);
+  const [extFee, setExtFee] = useState<number>(0);
+  const [extReason, setExtReason] = useState('');
+
+  const createExtensionMut = useMutation({
+    mutationFn: async () => {
+      if (!data) throw new Error('Batch not loaded');
+      const needsImpIds = data.students
+        .filter((s) => getStatus(s) === 'needs_improvement')
+        .map((s) => s.student_id);
+      if (!needsImpIds.length) throw new Error('Mark at least one student as "Needs Improvement" first');
+      if (!extClasses || extClasses < 1) throw new Error('Enter number of extra classes');
+      return adminQuery('create_extension_request', {
+        batch_id: batchId,
+        student_ids: needsImpIds,
+        num_classes: extClasses,
+        extension_mode: extMode,
+        fee_per_class: extMode === 'paid' ? extFee : null,
+        reason: extReason,
+      });
+    },
+    onSuccess: () => {
+      toast.success('Extension request sent to admin for approval');
+      setExtOpen(false);
+      setExtReason('');
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to submit request'),
   });
 
   // ---- Mark Batch Complete / Needs Improvement (auto-cert) ----
@@ -235,7 +263,7 @@ export default function BatchDetailPage() {
         teacher = t || null;
       }
       const { data: bs } = await supabase
-        .from('batch_students').select('student_id, enrolled_at').eq('batch_id', batchId!);
+        .from('batch_students').select('student_id, enrolled_at, completion_status, completion_notes').eq('batch_id', batchId!);
       const sIds = (bs ?? []).map((r: any) => r.student_id);
       let profs: any[] = [];
       let progs: any[] = [];
@@ -253,6 +281,8 @@ export default function BatchDetailPage() {
         display_name: pm[r.student_id]?.display_name || null,
         email: pm[r.student_id]?.email || null,
         completion_pct: gm[r.student_id]?.completion_pct ?? 0,
+        completion_status: r.completion_status || 'pending',
+        completion_notes: r.completion_notes || null,
       }));
       const { data: sessions } = await supabase
         .from('live_classes')
@@ -555,63 +585,130 @@ export default function BatchDetailPage() {
                 </div>
               )}
 
-              {!allDone ? (
-                <p className="text-xs text-muted-foreground">
-                  Certificates can be issued once every session is marked completed
-                  ({progress.sessions_completed}/{progress.sessions_total} done).
-                </p>
-              ) : students.length === 0 ? (
+              {students.length === 0 ? (
                 <p className="text-xs text-muted-foreground">No students enrolled.</p>
               ) : (
                 <>
                   <p className="text-xs text-muted-foreground">
-                    Select students who have successfully completed the course. A certificate will be issued for each.
+                    Mark each student as <b>Completed</b> (auto-issues certificate) or <b>Needs Improvement</b>{' '}
+                    (admin approval required for free / paid extension).
                   </p>
                   <ul className="divide-y divide-border/40 rounded-md border border-border/50">
                     {students.map((s) => {
                       const issued = issuedIds.has(s.student_id);
-                      const checked = issued || selectedForCert.has(s.student_id);
+                      const cur = getStatus(s);
                       return (
-                        <li key={s.student_id} className="flex items-center gap-3 p-2.5">
-                          <Checkbox
-                            checked={checked}
-                            disabled={issued}
-                            onCheckedChange={() => !issued && toggleCertStudent(s.student_id)}
-                          />
-                          <div className="flex-1 min-w-0">
+                        <li key={s.student_id} className="flex items-center gap-3 p-2.5 flex-wrap">
+                          <div className="flex-1 min-w-[150px]">
                             <div className="text-sm font-medium truncate">{s.display_name || '—'}</div>
-                            <div className="text-[11px] text-muted-foreground truncate">{s.email}</div>
+                            <div className="text-[11px] text-muted-foreground truncate">
+                              {s.email} · {Math.round(s.completion_pct ?? 0)}%
+                            </div>
                           </div>
                           {issued ? (
                             <Badge variant="outline" className="text-[10px] bg-emerald-500/15 text-emerald-500 border-emerald-500/30">
-                              <Award className="h-3 w-3 mr-1" /> Issued
+                              <Award className="h-3 w-3 mr-1" /> Certified
                             </Badge>
                           ) : (
-                            <span className="text-[10px] text-muted-foreground">Pending</span>
+                            <Select
+                              value={cur}
+                              onValueChange={(v) =>
+                                setStatusEdits((p) => ({ ...p, [s.student_id]: v as any }))
+                              }
+                            >
+                              <SelectTrigger className="h-8 w-[180px] text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="pending">Pending</SelectItem>
+                                <SelectItem value="completed">Completed</SelectItem>
+                                <SelectItem value="needs_improvement">Needs Improvement</SelectItem>
+                              </SelectContent>
+                            </Select>
                           )}
                         </li>
                       );
                     })}
                   </ul>
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
                     <p className="text-[11px] text-muted-foreground">
-                      {certificates.length}/{students.length} students already certified
+                      {certificates.length}/{students.length} certified
                     </p>
-                    <Button
-                      size="sm"
-                      disabled={selectedForCert.size === 0 || issueCertsMut.isPending}
-                      onClick={() => issueCertsMut.mutate()}
-                    >
-                      <Award className="h-3.5 w-3.5 mr-1.5" />
-                      {issueCertsMut.isPending ? 'Issuing…' : `Issue ${selectedForCert.size || ''} Certificate${selectedForCert.size === 1 ? '' : 's'}`}
-                    </Button>
+                    <div className="flex gap-2">
+                      {students.some((s) => getStatus(s) === 'needs_improvement') && (
+                        <Button size="sm" variant="outline" onClick={() => setExtOpen(true)}>
+                          <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />
+                          Request Extension
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        disabled={Object.keys(statusEdits).length === 0 || saveCompletionMut.isPending}
+                        onClick={() => saveCompletionMut.mutate()}
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                        {saveCompletionMut.isPending ? 'Saving…' : 'Save & Issue Certificates'}
+                      </Button>
+                    </div>
                   </div>
+                  {!allDone && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Note: {progress.sessions_completed}/{progress.sessions_total} sessions completed.
+                    </p>
+                  )}
                 </>
               )}
             </CardContent>
           </Card>
         );
       })()}
+
+      {/* Extension Request Dialog */}
+      <ResponsiveDialog
+        open={extOpen}
+        onOpenChange={setExtOpen}
+        title="Request Additional Classes"
+        description="For students marked Needs Improvement. Admin approval required."
+        desktopWidthClass="sm:max-w-md"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setExtOpen(false)}>Cancel</Button>
+            <Button disabled={createExtensionMut.isPending} onClick={() => createExtensionMut.mutate()}>
+              {createExtensionMut.isPending ? 'Submitting…' : 'Submit for Approval'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <Label className="text-xs">Students needing extension</Label>
+            <div className="mt-1 text-sm">
+              {data.students.filter((s) => getStatus(s) === 'needs_improvement').map((s) => s.display_name || s.email).join(', ') || '—'}
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs">Extension Type</Label>
+            <RadioGroup value={extMode} onValueChange={(v) => setExtMode(v as 'free' | 'paid')} className="flex gap-4 mt-2">
+              <label className="flex items-center gap-2 text-sm"><RadioGroupItem value="free" /> Free</label>
+              <label className="flex items-center gap-2 text-sm"><RadioGroupItem value="paid" /> Paid</label>
+            </RadioGroup>
+          </div>
+          <div>
+            <Label className="text-xs">Number of additional classes</Label>
+            <Input type="number" min={1} value={extClasses} onChange={(e) => setExtClasses(parseInt(e.target.value) || 0)} />
+          </div>
+          {extMode === 'paid' && (
+            <div>
+              <Label className="text-xs">Fee per class (₹)</Label>
+              <Input type="number" min={0} value={extFee} onChange={(e) => setExtFee(parseFloat(e.target.value) || 0)} />
+            </div>
+          )}
+          <div>
+            <Label className="text-xs">Reason / notes</Label>
+            <Textarea value={extReason} onChange={(e) => setExtReason(e.target.value)} placeholder="Why do these students need additional classes?" />
+          </div>
+        </div>
+      </ResponsiveDialog>
 
       {/* Assign Teacher Dialog */}
       <ResponsiveDialog

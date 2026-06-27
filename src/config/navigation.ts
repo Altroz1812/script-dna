@@ -22,6 +22,7 @@ import {
   ShoppingBag,
   FileCheck,
   TrendingUp,
+  AlertTriangle,
   type LucideIcon,
 } from "lucide-react";
 import type { AppRole } from "@/types/roles";
@@ -135,6 +136,12 @@ export const navigationConfig: NavGroup[] = [
         url: "/certificates",
         icon: FileCheck,
         roles: ["superadmin", "admin"],
+      },
+      {
+        title: "Extension Requests",
+        url: "/extension-requests",
+        icon: AlertTriangle,
+        roles: ["superadmin", "admin", "teacher"],
       },
       {
         title: "Students",

@@ -63,6 +63,7 @@ const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
 const SelectOrganizationPage = lazy(() => import("@/pages/SelectOrganizationPage"));
 const PracticeCanvasPage = lazy(() => import("@/pages/PracticeCanvasPage"));
 const CertificatesManagementPage = lazy(() => import("@/pages/CertificatesManagementPage"));
+const ExtensionRequestsPage = lazy(() => import("@/pages/ExtensionRequestsPage"));
 
 const RouteFallback = () => (
   <div className="flex items-center justify-center min-h-[50vh]">
@@ -228,6 +229,14 @@ const App = () => (
                         }
                       />
                       <Route path="/profile" element={<ProfilePage />} />
+                      <Route
+                        path="/extension-requests"
+                        element={
+                          <ProtectedRoute allowedRoles={["superadmin", "admin", "teacher"]}>
+                            <ExtensionRequestsPage />
+                          </ProtectedRoute>
+                        }
+                      />
                       <Route path="/activity-logs" element={<ActivityLogsPage />} />
                       <Route path="/subscriptions" element={<SubscriptionPlansPage />} />
                       <Route path="/coupons" element={<CouponsPage />} />

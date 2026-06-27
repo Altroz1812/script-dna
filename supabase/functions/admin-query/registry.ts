@@ -19,6 +19,7 @@ import { handle as sessions } from './handlers/sessions.ts'
 import { handle as parents } from './handlers/parents.ts'
 import { handle as assignments } from './handlers/assignments.ts'
 import { handle as classroomSettings } from './handlers/classroomSettings.ts'
+import { handle as extensions } from './handlers/extensions.ts'
 
 // Ordered list of domain handlers. Dispatcher walks the list and stops at
 // the first one that owns the action. Lookup is O(handlers) ~ 19, which
@@ -44,4 +45,5 @@ export const HANDLERS: ActionHandler[] = [
   parents,
   assignments,
   classroomSettings,
+  extensions,
 ]
