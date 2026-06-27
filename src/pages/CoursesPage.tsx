@@ -21,6 +21,7 @@ import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
 import { CourseForm } from '@/components/courses/CourseForm';
 import { useIsMobileApp } from '@/hooks/useIsMobileApp';
 import MobileCoursesPage from './mobile/MobileCoursesPage';
+import { CascadeDeleteDialog } from '@/components/common/CascadeDeleteDialog';
 
 export default function CoursesPage() {
   const __isMobile = useIsMobileApp();
@@ -37,6 +38,7 @@ export default function CoursesPage() {
   const [editFieldErrors, setEditFieldErrors] = useState<Partial<Record<keyof CreateCourseParams, string>>>({});
   const [selectedCenter, setSelectedCenter] = useState<string>('all');
   const [activeTab, setActiveTab] = useState('all');
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   const { data: courses = [], isLoading } = useQuery<Course[]>({
     queryKey: ['courses', isStudent, activeOrgId],
@@ -218,7 +220,7 @@ export default function CoursesPage() {
                 <Button variant="ghost" size="icon" onClick={() => setEditCourse(c)}>
                   <Pencil className="h-4 w-4 text-muted-foreground" />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(c.id)}>
+                <Button variant="ghost" size="icon" onClick={() => setDeleteTarget({ id: c.id, name: c.name })}>
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
               </div>
@@ -416,6 +418,16 @@ export default function CoursesPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <CascadeDeleteDialog
+        target={deleteTarget ? { kind: 'course', id: deleteTarget.id, name: deleteTarget.name } : null}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          deleteMutation.mutate(deleteTarget.id, { onSettled: () => setDeleteTarget(null) });
+        }}
+        isDeleting={deleteMutation.isPending}
+      />
     </div>
   );
 }
