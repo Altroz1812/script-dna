@@ -450,6 +450,20 @@ export default function SelectOrganizationPage() {
                 type="url"
                 maxLength={500}
               />
+              <div className="mt-2 flex items-center gap-3">
+                <Input
+                  id="org-logo-file-2"
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  onChange={(e) => handleLogoFile(e.target.files?.[0], setNewOrgLogo, setUploadingLogo)}
+                  className="flex-1"
+                />
+                {uploadingLogo && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                {newOrgLogo?.startsWith('data:image') && (
+                  <img src={newOrgLogo} alt="Logo preview" className="h-10 w-10 rounded object-cover border" />
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Upload PNG/JPEG (max 500 KB) or paste a URL above.</p>
             </div>
             <div>
               <Label htmlFor="org-address-2">Address <span className="text-destructive">*</span></Label>
