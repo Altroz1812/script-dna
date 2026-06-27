@@ -436,6 +436,7 @@ export default function CoursesPage() {
         }}
         isDeleting={deleteMutation.isPending}
       />
+      <RecycleBinDialog open={recycleOpen} onOpenChange={setRecycleOpen} kind="course" />
     </div>
   );
 }
