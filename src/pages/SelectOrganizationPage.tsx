@@ -515,6 +515,19 @@ export default function SelectOrganizationPage() {
             <div>
               <Label>Logo URL</Label>
               <Input value={editLogo} onChange={(e) => setEditLogo(e.target.value)} placeholder="https://…" />
+              <div className="mt-2 flex items-center gap-3">
+                <Input
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  onChange={(e) => handleLogoFile(e.target.files?.[0], setEditLogo, setUploadingEditLogo)}
+                  className="flex-1"
+                />
+                {uploadingEditLogo && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                {editLogo && (
+                  <img src={editLogo} alt="Logo preview" className="h-10 w-10 rounded object-cover border" />
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Upload PNG/JPEG (max 500 KB) or paste a URL above.</p>
             </div>
             <div>
               <Label>Address <span className="text-destructive">*</span></Label>
