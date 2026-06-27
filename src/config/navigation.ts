@@ -137,6 +137,12 @@ export const navigationConfig: NavGroup[] = [
         roles: ["superadmin", "admin"],
       },
       {
+        title: "Extension Requests",
+        url: "/extension-requests",
+        icon: AlertTriangle,
+        roles: ["superadmin", "admin", "teacher"],
+      },
+      {
         title: "Students",
         url: "/students",
         icon: GraduationCap,
