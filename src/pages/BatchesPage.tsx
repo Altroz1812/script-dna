@@ -481,6 +481,7 @@ export default function BatchesPage() {
               </div>
             </DialogContent>
           </Dialog>
+          </div>
         )}
       </div>
 
