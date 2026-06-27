@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Building2, Globe2, Loader2, ArrowRight, Users, Plus, Pencil, Trash2, UserPlus, UserMinus } from 'lucide-react';
+import { Building2, Globe2, Loader2, ArrowRight, Users, Plus, Pencil, Trash2, UserPlus, UserMinus, X } from 'lucide-react';
 import { adminQuery } from '@/services/api/adminService';
 import { useActiveOrg } from '@/contexts/ActiveOrgContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -459,11 +459,27 @@ export default function SelectOrganizationPage() {
                   className="flex-1"
                 />
                 {uploadingLogo && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-                {newOrgLogo?.startsWith('data:image') && (
-                  <img src={newOrgLogo} alt="Logo preview" className="h-10 w-10 rounded object-cover border" />
+                {newOrgLogo && (
+                  <>
+                    <img src={newOrgLogo} alt="Logo preview" className="h-10 w-10 rounded object-cover border" />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      title="Remove logo"
+                      onClick={() => {
+                        setNewOrgLogo('');
+                        const el = document.getElementById('org-logo-file-2') as HTMLInputElement | null;
+                        if (el) el.value = '';
+                      }}
+                    >
+                      <X className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground mt-1">Upload PNG/JPEG (max 500 KB) or paste a URL above.</p>
+              <p className="text-xs text-muted-foreground mt-1">Upload PNG/JPEG (max 500 KB) or paste a URL above. Leave empty to use the default icon.</p>
             </div>
             <div>
               <Label htmlFor="org-address-2">Address <span className="text-destructive">*</span></Label>
@@ -524,10 +540,26 @@ export default function SelectOrganizationPage() {
                 />
                 {uploadingEditLogo && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
                 {editLogo && (
-                  <img src={editLogo} alt="Logo preview" className="h-10 w-10 rounded object-cover border" />
+                  <>
+                    <img src={editLogo} alt="Logo preview" className="h-10 w-10 rounded object-cover border" />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      title="Remove logo"
+                      onClick={(e) => {
+                        setEditLogo('');
+                        const input = (e.currentTarget.parentElement?.querySelector('input[type=file]') as HTMLInputElement | null);
+                        if (input) input.value = '';
+                      }}
+                    >
+                      <X className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground mt-1">Upload PNG/JPEG (max 500 KB) or paste a URL above.</p>
+              <p className="text-xs text-muted-foreground mt-1">Upload PNG/JPEG (max 500 KB) or paste a URL above. Remove to fall back to the default icon.</p>
             </div>
             <div>
               <Label>Address <span className="text-destructive">*</span></Label>
