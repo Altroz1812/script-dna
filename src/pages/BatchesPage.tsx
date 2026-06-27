@@ -762,6 +762,7 @@ export default function BatchesPage() {
         }}
         isDeleting={deleteMutation.isPending}
       />
+      <RecycleBinDialog open={recycleOpen} onOpenChange={setRecycleOpen} kind="batch" />
     </div>
   );
 }
