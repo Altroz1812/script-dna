@@ -25,7 +25,14 @@ import { ResponsiveDialog } from '@/components/mobile/ui';
 type Detail = {
   batch: any;
   teacher: any;
-  students: Array<{ student_id: string; display_name: string | null; email: string | null; completion_pct: number }>;
+  students: Array<{
+    student_id: string;
+    display_name: string | null;
+    email: string | null;
+    completion_pct: number;
+    completion_status?: 'pending' | 'completed' | 'needs_improvement';
+    completion_notes?: string | null;
+  }>;
   student_count: number;
   sessions: Array<{ id: string; title: string; scheduled_at: string; duration_minutes: number; status: string; meeting_url: string | null }>;
   progress: {
@@ -235,7 +242,7 @@ export default function BatchDetailPage() {
         teacher = t || null;
       }
       const { data: bs } = await supabase
-        .from('batch_students').select('student_id, enrolled_at').eq('batch_id', batchId!);
+        .from('batch_students').select('student_id, enrolled_at, completion_status, completion_notes').eq('batch_id', batchId!);
       const sIds = (bs ?? []).map((r: any) => r.student_id);
       let profs: any[] = [];
       let progs: any[] = [];
@@ -253,6 +260,8 @@ export default function BatchDetailPage() {
         display_name: pm[r.student_id]?.display_name || null,
         email: pm[r.student_id]?.email || null,
         completion_pct: gm[r.student_id]?.completion_pct ?? 0,
+        completion_status: r.completion_status || 'pending',
+        completion_notes: r.completion_notes || null,
       }));
       const { data: sessions } = await supabase
         .from('live_classes')
