@@ -34,6 +34,8 @@ export default function SelectOrganizationPage() {
   const [newOrgPoc, setNewOrgPoc] = useState('');
   const [newOrgEmail, setNewOrgEmail] = useState('');
   const [creating, setCreating] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingEditLogo, setUploadingEditLogo] = useState(false);
 
   // Edit branding
   const [editOrg, setEditOrg] = useState<any>(null);
@@ -85,6 +87,36 @@ export default function SelectOrganizationPage() {
 
   const slugify = (s: string) =>
     s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+  const readFileAsDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+
+  const handleLogoFile = async (file: File | undefined, setter: (v: string) => void, setBusy: (v: boolean) => void) => {
+    if (!file) return;
+    if (!['image/png', 'image/jpeg'].includes(file.type)) {
+      toast.error('Logo must be a PNG or JPEG image');
+      return;
+    }
+    if (file.size > 500 * 1024) {
+      toast.error('Logo must be smaller than 500 KB');
+      return;
+    }
+    setBusy(true);
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      setter(dataUrl);
+      toast.success('Logo ready');
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to read file');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const handleCreate = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -418,6 +450,20 @@ export default function SelectOrganizationPage() {
                 type="url"
                 maxLength={500}
               />
+              <div className="mt-2 flex items-center gap-3">
+                <Input
+                  id="org-logo-file-2"
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  onChange={(e) => handleLogoFile(e.target.files?.[0], setNewOrgLogo, setUploadingLogo)}
+                  className="flex-1"
+                />
+                {uploadingLogo && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                {newOrgLogo?.startsWith('data:image') && (
+                  <img src={newOrgLogo} alt="Logo preview" className="h-10 w-10 rounded object-cover border" />
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Upload PNG/JPEG (max 500 KB) or paste a URL above.</p>
             </div>
             <div>
               <Label htmlFor="org-address-2">Address <span className="text-destructive">*</span></Label>
@@ -469,6 +515,19 @@ export default function SelectOrganizationPage() {
             <div>
               <Label>Logo URL</Label>
               <Input value={editLogo} onChange={(e) => setEditLogo(e.target.value)} placeholder="https://…" />
+              <div className="mt-2 flex items-center gap-3">
+                <Input
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  onChange={(e) => handleLogoFile(e.target.files?.[0], setEditLogo, setUploadingEditLogo)}
+                  className="flex-1"
+                />
+                {uploadingEditLogo && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                {editLogo && (
+                  <img src={editLogo} alt="Logo preview" className="h-10 w-10 rounded object-cover border" />
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Upload PNG/JPEG (max 500 KB) or paste a URL above.</p>
             </div>
             <div>
               <Label>Address <span className="text-destructive">*</span></Label>
