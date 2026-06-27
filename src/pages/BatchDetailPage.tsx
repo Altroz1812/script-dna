@@ -129,45 +129,64 @@ export default function BatchDetailPage() {
     },
   });
   const issuedIds = useMemo(() => new Set(certificates.map((c) => c.student_id)), [certificates]);
-  const [selectedForCert, setSelectedForCert] = useState<Set<string>>(new Set());
-  const toggleCertStudent = (id: string) => {
-    setSelectedForCert((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
 
-  const issueCertsMut = useMutation({
+  // Per-student completion status (local edits before save)
+  const [statusEdits, setStatusEdits] = useState<Record<string, 'pending' | 'completed' | 'needs_improvement'>>({});
+  const getStatus = (s: any): 'pending' | 'completed' | 'needs_improvement' =>
+    statusEdits[s.student_id] ?? s.completion_status ?? 'pending';
+
+  const saveCompletionMut = useMutation({
     mutationFn: async () => {
       if (!data) throw new Error('Batch not loaded');
-      const toIssue = data.students.filter(
-        (s) => selectedForCert.has(s.student_id) && !issuedIds.has(s.student_id),
-      );
-      if (toIssue.length === 0) throw new Error('No new students selected');
-      const duration = formatCourseDuration(data.batch.courses);
-      const rows = toIssue.map((s) => ({
-        student_id: s.student_id,
-        batch_id: data.batch.id,
-        course_id: data.batch.course_id,
-        organization_id: data.batch.organization_id,
-        student_name: s.display_name || s.email || 'Student',
-        course_name: data.batch.courses?.name || 'Course',
-        course_duration: duration,
-        completion_date: new Date().toISOString().slice(0, 10),
-        issued_by: profile?.id ?? null,
-        status: 'issued',
-      }));
-      const { error } = await (supabase as any).from('certificates').insert(rows);
-      if (error) throw error;
-      return rows.length;
+      const items = data.students
+        .filter((s) => statusEdits[s.student_id] && statusEdits[s.student_id] !== s.completion_status)
+        .map((s) => ({ student_id: s.student_id, status: statusEdits[s.student_id] }));
+      if (!items.length) throw new Error('No changes to save');
+      return adminQuery('set_student_completion', { batch_id: batchId, items });
     },
-    onSuccess: (n) => {
-      toast.success(`${n} certificate${n === 1 ? '' : 's'} issued`);
-      setSelectedForCert(new Set());
+    onSuccess: (res: any) => {
+      toast.success(
+        res?.issued > 0
+          ? `Saved. ${res.issued} certificate${res.issued === 1 ? '' : 's'} auto-issued.`
+          : 'Completion status saved',
+      );
+      setStatusEdits({});
+      queryClient.invalidateQueries({ queryKey: ['batch_detail', batchId] });
       queryClient.invalidateQueries({ queryKey: ['batch_certificates', batchId] });
     },
-    onError: (e: any) => toast.error(e?.message || 'Failed to issue certificates'),
+    onError: (e: any) => toast.error(e?.message || 'Failed to save'),
+  });
+
+  // Extension request dialog
+  const [extOpen, setExtOpen] = useState(false);
+  const [extMode, setExtMode] = useState<'free' | 'paid'>('free');
+  const [extClasses, setExtClasses] = useState<number>(2);
+  const [extFee, setExtFee] = useState<number>(0);
+  const [extReason, setExtReason] = useState('');
+
+  const createExtensionMut = useMutation({
+    mutationFn: async () => {
+      if (!data) throw new Error('Batch not loaded');
+      const needsImpIds = data.students
+        .filter((s) => getStatus(s) === 'needs_improvement')
+        .map((s) => s.student_id);
+      if (!needsImpIds.length) throw new Error('Mark at least one student as "Needs Improvement" first');
+      if (!extClasses || extClasses < 1) throw new Error('Enter number of extra classes');
+      return adminQuery('create_extension_request', {
+        batch_id: batchId,
+        student_ids: needsImpIds,
+        num_classes: extClasses,
+        extension_mode: extMode,
+        fee_per_class: extMode === 'paid' ? extFee : null,
+        reason: extReason,
+      });
+    },
+    onSuccess: () => {
+      toast.success('Extension request sent to admin for approval');
+      setExtOpen(false);
+      setExtReason('');
+    },
+    onError: (e: any) => toast.error(e?.message || 'Failed to submit request'),
   });
 
   // ---- Mark Batch Complete / Needs Improvement (auto-cert) ----
