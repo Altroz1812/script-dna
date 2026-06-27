@@ -44,6 +44,29 @@ export async function handle(action: string, ctx: HandlerCtx, params: any): Prom
         result = { success: true }
         break
       }
+      case 'course_delete_impact': {
+        const courseId = params.id
+        if (!courseId) throw new Error('course id required')
+        const [batches, modules, lessons, materials, assignments, certificates, progress] = await Promise.all([
+          ctx.supabase.from('batches').select('id', { count: 'exact', head: true }).eq('course_id', courseId),
+          ctx.supabase.from('course_modules').select('id', { count: 'exact', head: true }).eq('course_id', courseId),
+          ctx.supabase.from('lessons').select('id, module_id, course_modules!inner(course_id)', { count: 'exact', head: true }).eq('course_modules.course_id', courseId),
+          ctx.supabase.from('materials').select('id', { count: 'exact', head: true }).eq('course_id', courseId),
+          ctx.supabase.from('practice_assignments').select('id', { count: 'exact', head: true }).eq('course_id', courseId),
+          ctx.supabase.from('certificates').select('id', { count: 'exact', head: true }).eq('course_id', courseId),
+          ctx.supabase.from('student_progress').select('id', { count: 'exact', head: true }).eq('course_id', courseId),
+        ])
+        result = {
+          batches: batches.count ?? 0,
+          modules: modules.count ?? 0,
+          lessons: lessons.count ?? 0,
+          materials: materials.count ?? 0,
+          assignments: assignments.count ?? 0,
+          certificates: certificates.count ?? 0,
+          student_progress: progress.count ?? 0,
+        }
+        break
+      }
       case 'list_course_modules': {
         if (!ctx.callerIsSuperadmin && ctx.targetOrgId && params.course_id) {
           const { data: c } = await ctx.supabase.from('courses').select('organization_id').eq('id', params.course_id).maybeSingle()
