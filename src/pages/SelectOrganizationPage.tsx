@@ -34,6 +34,8 @@ export default function SelectOrganizationPage() {
   const [newOrgPoc, setNewOrgPoc] = useState('');
   const [newOrgEmail, setNewOrgEmail] = useState('');
   const [creating, setCreating] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingEditLogo, setUploadingEditLogo] = useState(false);
 
   // Edit branding
   const [editOrg, setEditOrg] = useState<any>(null);
@@ -85,6 +87,36 @@ export default function SelectOrganizationPage() {
 
   const slugify = (s: string) =>
     s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+  const readFileAsDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+
+  const handleLogoFile = async (file: File | undefined, setter: (v: string) => void, setBusy: (v: boolean) => void) => {
+    if (!file) return;
+    if (!['image/png', 'image/jpeg'].includes(file.type)) {
+      toast.error('Logo must be a PNG or JPEG image');
+      return;
+    }
+    if (file.size > 500 * 1024) {
+      toast.error('Logo must be smaller than 500 KB');
+      return;
+    }
+    setBusy(true);
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      setter(dataUrl);
+      toast.success('Logo ready');
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to read file');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const handleCreate = async (e?: React.FormEvent) => {
     e?.preventDefault();
