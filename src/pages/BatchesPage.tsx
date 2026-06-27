@@ -19,6 +19,7 @@ import { useNavigate } from 'react-router-dom';
 import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
 import { useIsMobileApp } from '@/hooks/useIsMobileApp';
 import MobileBatchesPage from './mobile/MobileBatchesPage';
+import { CascadeDeleteDialog } from '@/components/common/CascadeDeleteDialog';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -91,6 +92,7 @@ export default function BatchesPage() {
   const [studentCount, setStudentCount] = useState(0);
   const [studentConflicts, setStudentConflicts] = useState<ConflictInfo[]>([]);
   const [checkingStudent, setCheckingStudent] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   const { data: courses = [] } = useQuery<Course[]>({
     queryKey: ['courses', activeOrgId],
@@ -525,7 +527,7 @@ export default function BatchesPage() {
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditDialog(b)}>
                             <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => deleteMutation.mutate(b.id)}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDeleteTarget({ id: b.id, name: b.name })}>
                             <Trash2 className="h-3.5 w-3.5 text-destructive" />
                           </Button>
                         </>
@@ -743,6 +745,16 @@ export default function BatchesPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <CascadeDeleteDialog
+        target={deleteTarget ? { kind: 'batch', id: deleteTarget.id, name: deleteTarget.name } : null}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          deleteMutation.mutate(deleteTarget.id, { onSettled: () => setDeleteTarget(null) });
+        }}
+        isDeleting={deleteMutation.isPending}
+      />
     </div>
   );
 }

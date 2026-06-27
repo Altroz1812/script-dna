@@ -103,6 +103,29 @@ export async function handle(action: string, ctx: HandlerCtx, params: any): Prom
         result = { success: true }
         break
       }
+      case 'batch_delete_impact': {
+        const batchId = params.id
+        if (!batchId) throw new Error('batch id required')
+        const [students, schedules, liveClasses, attendance, assignments, certificates, extensions] = await Promise.all([
+          ctx.supabase.from('batch_students').select('id', { count: 'exact', head: true }).eq('batch_id', batchId),
+          ctx.supabase.from('schedules').select('id', { count: 'exact', head: true }).eq('batch_id', batchId),
+          ctx.supabase.from('live_classes').select('id', { count: 'exact', head: true }).eq('batch_id', batchId),
+          ctx.supabase.from('attendance').select('id', { count: 'exact', head: true }).eq('batch_id', batchId),
+          ctx.supabase.from('practice_assignments').select('id', { count: 'exact', head: true }).eq('batch_id', batchId),
+          ctx.supabase.from('certificates').select('id', { count: 'exact', head: true }).eq('batch_id', batchId),
+          ctx.supabase.from('class_extension_requests').select('id', { count: 'exact', head: true }).eq('batch_id', batchId),
+        ])
+        result = {
+          students: students.count ?? 0,
+          schedules: schedules.count ?? 0,
+          live_classes: liveClasses.count ?? 0,
+          attendance: attendance.count ?? 0,
+          assignments: assignments.count ?? 0,
+          certificates: certificates.count ?? 0,
+          extension_requests: extensions.count ?? 0,
+        }
+        break
+      }
       case 'get_batch_detail': {
         const { id } = params
         if (!id) throw new Error('batch id required')
