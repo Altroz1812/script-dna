@@ -20,6 +20,7 @@ import { CardGridSkeleton } from '@/components/ui/loading-skeletons';
 import { useIsMobileApp } from '@/hooks/useIsMobileApp';
 import MobileBatchesPage from './mobile/MobileBatchesPage';
 import { CascadeDeleteDialog } from '@/components/common/CascadeDeleteDialog';
+import { RecycleBinDialog } from '@/components/common/RecycleBinDialog';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -93,6 +94,7 @@ export default function BatchesPage() {
   const [studentConflicts, setStudentConflicts] = useState<ConflictInfo[]>([]);
   const [checkingStudent, setCheckingStudent] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [recycleOpen, setRecycleOpen] = useState(false);
 
   const { data: courses = [] } = useQuery<Course[]>({
     queryKey: ['courses', activeOrgId],
@@ -390,6 +392,10 @@ export default function BatchesPage() {
           </p>
         </div>
         {isAdmin && (
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setRecycleOpen(true)}>
+              <Layers className="mr-2 h-4 w-4" /> Recycle Bin
+            </Button>
           <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogTrigger asChild>
               <Button><Plus className="mr-2 h-4 w-4" /> New Batch</Button>
