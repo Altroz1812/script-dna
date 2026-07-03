@@ -456,7 +456,7 @@ function DesktopLiveClassesPage() {
             <VideoClassroom
               roomName={`edu-room-${currentLiveClass.id}`}
               displayName={profile?.displayName || profile?.email || 'User'}
-              isTeacher={isTeacher}
+              isTeacher={canManage}
               classStatus={currentLiveClass.status}
               classId={currentLiveClass.id}
               onClose={handleCloseClass}

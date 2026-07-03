@@ -159,7 +159,7 @@ export default function MobileLiveClassesPage() {
             <VideoClassroom
               roomName={`edu-room-${activeClass.id}`}
               displayName={profile?.displayName || profile?.email || 'User'}
-              isTeacher={isTeacher}
+              isTeacher={canManage}
               classStatus={activeClass.status}
               classId={activeClass.id}
               onClose={() => {
