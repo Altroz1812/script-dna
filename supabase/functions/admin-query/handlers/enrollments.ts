@@ -37,7 +37,8 @@ export async function handle(action: string, ctx: HandlerCtx, params: any): Prom
         }))
         break
       }
-      case 'list_teachers': {
+      case 'list_teachers':
+      case 'list_all_students': {
         if (!ctx.callerUserId) {
           return new Response(JSON.stringify({ error: 'Unauthorized' }), {
             status: 401,
