@@ -736,6 +736,39 @@ export default function BatchesPage() {
               <Label>Max Students (1-100)</Label>
               <Input type="number" min={1} max={100} value={editMaxStudents} onChange={e => setEditMaxStudents(Number(e.target.value))} />
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Start Time</Label>
+                <Input type="time" value={editStartTime} onChange={e => setEditStartTime(e.target.value)} />
+              </div>
+              <div>
+                <Label>End Time</Label>
+                <Input type="time" value={editEndTime} onChange={e => setEditEndTime(e.target.value)} />
+              </div>
+            </div>
+            <div>
+              <Label>Class Days</Label>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {DAYS.map((label, idx) => {
+                  const active = editWeekdays.includes(idx);
+                  return (
+                    <Button
+                      key={idx}
+                      type="button"
+                      size="sm"
+                      variant={active ? 'default' : 'outline'}
+                      className="h-8 px-2.5 text-xs"
+                      onClick={() => toggleEditWeekday(idx)}
+                    >
+                      {label.slice(0, 3)}
+                    </Button>
+                  );
+                })}
+              </div>
+              {loadingEditSchedules && (
+                <p className="text-xs text-muted-foreground mt-1">Loading current schedule…</p>
+              )}
+            </div>
             <Button onClick={handleEditBatch} disabled={editMutation.isPending} className="w-full">
               {editMutation.isPending ? 'Saving...' : 'Save Changes'}
             </Button>
