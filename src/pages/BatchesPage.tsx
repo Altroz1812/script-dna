@@ -77,6 +77,11 @@ export default function BatchesPage() {
   const [editBatch, setEditBatch] = useState<Batch | null>(null);
   const [editName, setEditName] = useState('');
   const [editMaxStudents, setEditMaxStudents] = useState(25);
+  const [editStartTime, setEditStartTime] = useState('16:00');
+  const [editEndTime, setEditEndTime] = useState('17:00');
+  const [editWeekdays, setEditWeekdays] = useState<number[]>([]);
+  const [editSchedules, setEditSchedules] = useState<any[]>([]);
+  const [loadingEditSchedules, setLoadingEditSchedules] = useState(false);
 
   // assign teacher dialog
   const [teacherDialogBatch, setTeacherDialogBatch] = useState<string | null>(null);
@@ -179,11 +184,54 @@ export default function BatchesPage() {
   });
 
   const editMutation = useMutation({
-    mutationFn: () => batchService.updateBatch(editBatch!.id, editName.trim(), editMaxStudents),
+    mutationFn: async () => {
+      const batchId = editBatch!.id;
+      await batchService.updateBatch(batchId, editName.trim(), editMaxStudents);
+
+      // Sync schedule rows: update times on existing rows, add rows for newly
+      // selected weekdays, delete rows for weekdays that were unchecked.
+      const existing = editSchedules ?? [];
+      const existingDays = new Set<number>(existing.map((s: any) => s.day_of_week));
+      const targetDays = new Set<number>(editWeekdays);
+
+      // Update times on kept rows
+      const keeps = existing.filter((s: any) => targetDays.has(s.day_of_week));
+      await Promise.all(
+        keeps.map((s: any) =>
+          scheduleService.updateSchedule(s.id, {
+            start_time: editStartTime,
+            end_time: editEndTime,
+          }),
+        ),
+      );
+
+      // Delete rows for removed weekdays
+      const removes = existing.filter((s: any) => !targetDays.has(s.day_of_week));
+      await Promise.all(removes.map((s: any) => scheduleService.deleteSchedule(s.id)));
+
+      // Insert rows for newly added weekdays
+      const additions = [...targetDays].filter((d) => !existingDays.has(d));
+      if (additions.length) {
+        const orgId = activeOrgId ?? editBatch!.organization_id ?? profile?.organizationId;
+        await scheduleService.bulkCreateSchedules(
+          additions.map((dow) => ({
+            batch_id: batchId,
+            title: editName.trim(),
+            day_of_week: dow,
+            start_time: editStartTime,
+            end_time: editEndTime,
+            room: null,
+            date: null as any,
+            organization_id: orgId,
+          })) as any,
+        );
+      }
+    },
     onSuccess: () => {
       toast.success('Batch updated');
       setEditBatch(null);
       invalidate();
+      queryClient.invalidateQueries({ queryKey: ['schedules'] });
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -191,13 +239,39 @@ export default function BatchesPage() {
   const handleEditBatch = () => {
     if (!editName.trim()) { toast.error('Batch name is required'); return; }
     if (editMaxStudents < 1 || editMaxStudents > 100) { toast.error('Max students must be 1-100'); return; }
+    if (!editStartTime || !editEndTime) { toast.error('Set start & end time'); return; }
+    if (editEndTime <= editStartTime) { toast.error('End time must be after start time'); return; }
+    if (!editWeekdays.length) { toast.error('Pick at least one weekday'); return; }
     editMutation.mutate();
   };
 
-  const openEditDialog = (batch: Batch) => {
+  const openEditDialog = async (batch: Batch) => {
     setEditBatch(batch);
     setEditName(batch.name);
     setEditMaxStudents(batch.max_students);
+    setEditStartTime('16:00');
+    setEditEndTime('17:00');
+    setEditWeekdays([]);
+    setEditSchedules([]);
+    setLoadingEditSchedules(true);
+    try {
+      const rows = await scheduleService.listSchedules(batch.id);
+      setEditSchedules(rows || []);
+      if (rows && rows.length) {
+        const first = rows[0];
+        setEditStartTime((first.start_time || '16:00').slice(0, 5));
+        setEditEndTime((first.end_time || '17:00').slice(0, 5));
+        setEditWeekdays([...new Set(rows.map((r: any) => r.day_of_week as number))]);
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to load schedule');
+    } finally {
+      setLoadingEditSchedules(false);
+    }
+  };
+
+  const toggleEditWeekday = (d: number) => {
+    setEditWeekdays((prev) => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
   };
 
   const assignTeacherMutation = useMutation({
@@ -661,6 +735,39 @@ export default function BatchesPage() {
             <div>
               <Label>Max Students (1-100)</Label>
               <Input type="number" min={1} max={100} value={editMaxStudents} onChange={e => setEditMaxStudents(Number(e.target.value))} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Start Time</Label>
+                <Input type="time" value={editStartTime} onChange={e => setEditStartTime(e.target.value)} />
+              </div>
+              <div>
+                <Label>End Time</Label>
+                <Input type="time" value={editEndTime} onChange={e => setEditEndTime(e.target.value)} />
+              </div>
+            </div>
+            <div>
+              <Label>Class Days</Label>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {DAYS.map((label, idx) => {
+                  const active = editWeekdays.includes(idx);
+                  return (
+                    <Button
+                      key={idx}
+                      type="button"
+                      size="sm"
+                      variant={active ? 'default' : 'outline'}
+                      className="h-8 px-2.5 text-xs"
+                      onClick={() => toggleEditWeekday(idx)}
+                    >
+                      {label.slice(0, 3)}
+                    </Button>
+                  );
+                })}
+              </div>
+              {loadingEditSchedules && (
+                <p className="text-xs text-muted-foreground mt-1">Loading current schedule…</p>
+              )}
             </div>
             <Button onClick={handleEditBatch} disabled={editMutation.isPending} className="w-full">
               {editMutation.isPending ? 'Saving...' : 'Save Changes'}
