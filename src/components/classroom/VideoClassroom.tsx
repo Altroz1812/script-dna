@@ -265,7 +265,8 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
       // Token cache (sessionStorage) — reuse until exp - 60s. Avoids
       // hammering livekit-token on reconnect storms when 100s of clients
       // are in the same room.
-      const cacheKey = `lk-tok:${roomName}:${displayName}`;
+      // v2 — publish rights broadened to viewers, invalidate old cached tokens.
+      const cacheKey = `lk-tok:v2:${roomName}:${displayName}`;
       try {
         const raw = sessionStorage.getItem(cacheKey);
         if (raw) {
