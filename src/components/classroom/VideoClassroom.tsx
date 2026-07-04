@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { X, Minimize2, Loader2, MessageSquare, WifiOff, AlertTriangle, RotateCw, CheckCircle2, Unplug, Radio } from 'lucide-react';
+import { X, Minimize2, Loader2, MessageSquare, WifiOff, AlertTriangle, RotateCw, CheckCircle2, Unplug, Radio, Users } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
@@ -25,6 +25,7 @@ import {
 import '@livekit/components-styles';
 import { StudentDataListener } from './StudentDataListener';
 import { ClassroomChat } from './ClassroomChat';
+import { ParticipantsPanel } from './ParticipantsPanel';
 import { RoleAwareControls } from './RoleAwareControls';
 import { MicOff, ScreenShare, User as UserIcon } from 'lucide-react';
 
@@ -235,6 +236,7 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
   const [connectionState, setConnectionState] = useState<ConnectionState>('idle');
   const [chatOpen, setChatOpen] = useState(false);
   const [unread, setUnread] = useState(0);
+  const [participantsOpen, setParticipantsOpen] = useState(false);
   const [waitingForTeacher, setWaitingForTeacher] = useState(!isTeacher && classStatus === 'scheduled');
   const [reconnecting, setReconnecting] = useState(false);
   const [livekitConnected, setLivekitConnected] = useState(false);
@@ -474,6 +476,9 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
               </Badge>
             )}
           </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setParticipantsOpen(o => !o)} title="Participants">
+            <Users className="h-4 w-4" />
+          </Button>
           {onMinimize && (
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onMinimize} title="Minimize">
               <Minimize2 className="h-4 w-4" />
@@ -560,6 +565,21 @@ export function VideoClassroom({ roomName, displayName, isTeacher, classStatus, 
               <ClassroomStage isTeacher={!!isTeacher} onLeave={handleLeave} />
               <RoomAudioRenderer />
               <StudentDataListener />
+              {participantsOpen && (
+                <>
+                  <div
+                    className="absolute inset-0 z-10 bg-black/50 sm:hidden"
+                    onClick={() => setParticipantsOpen(false)}
+                  />
+                  <div
+                    className="absolute z-20 shadow-2xl
+                      inset-x-0 bottom-0 h-[70vh] rounded-t-2xl overflow-hidden
+                      sm:relative sm:inset-auto sm:h-full sm:w-72 sm:rounded-none sm:shadow-none sm:shrink-0"
+                  >
+                    <ParticipantsPanel onClose={() => setParticipantsOpen(false)} />
+                  </div>
+                </>
+              )}
               {chatOpen && (
                 <>
                   {/* Backdrop (mobile fullscreen, desktop overlay-less) */}
