@@ -116,13 +116,15 @@ async function createLivekitToken(
     video: {
       roomJoin: true,
       room: roomName,
-      canPublish: isModerator,
+      // Everyone can publish their own mic/camera so students have working
+      // controls out-of-the-box. Screen share stays moderator-only.
+      canPublish: true,
       canSubscribe: true,
       // Viewers can send data so they can post chat too; flip to false to make chat read-only
       canPublishData: true,
       canPublishSources: isModerator
         ? ["camera", "microphone", "screen_share", "screen_share_audio"]
-        : [],
+        : ["camera", "microphone"],
       ...(isModerator ? { roomAdmin: true } : {}),
     },
     name: displayName || identity,
