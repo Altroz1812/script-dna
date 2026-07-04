@@ -72,8 +72,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let heartbeatTimer: number | null = null;
     const HEARTBEAT_MS = 5 * 60_000;
     const jitter = () => Math.floor((Math.random() - 0.5) * 60_000); // ±30s
-    const ping = () => {
+    const ping = async () => {
       if (typeof document !== "undefined" && document.hidden) return;
+      const { data } = await supabase.auth.getSession();
+      if (!data.session?.access_token) return; // skip when signed out
       supabase.functions.invoke("heartbeat", { body: {} }).catch(() => {});
     };
     const startHeartbeat = () => {
