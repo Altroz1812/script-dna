@@ -170,8 +170,8 @@ serve(async (req) => {
       });
     }
 
-    const token = authHeader.replace(/^Bearer\s+/i, "");
-    const { data: { user }, error: authError } = await adminClient.auth.getUser(token);
+    const accessToken = authHeader.replace(/^Bearer\s+/i, "");
+    const { data: { user }, error: authError } = await adminClient.auth.getUser(accessToken);
     if (authError || !user) {
       return new Response(JSON.stringify({ error: "Invalid token" }), {
         status: 401,
